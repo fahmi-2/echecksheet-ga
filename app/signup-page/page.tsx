@@ -1,0 +1,238 @@
+"use client"
+
+import type React from "react"
+
+import { useState, useEffect } from "react"
+import { useRouter } from "next/navigation"
+import Link from "next/link"
+import { NavbarFixed } from "@/components/navbar-fixed"
+import { useAuth } from "@/lib/auth-context"
+
+export default function SignupPage() {
+  const [formData, setFormData] = useState({
+    username: "",
+    fullName: "",
+    niki: "",
+    password: "",
+    confirmPassword: "",
+    department: "",
+    role: "" as "group-leader" | "inspector" | "inspector-ga" | "manager" | "",
+  })
+  const [error, setError] = useState("")
+  const [loading, setLoading] = useState(false)
+  const router = useRouter()
+  const { signup } = useAuth()
+
+  // 🔹 Auto-set department berdasarkan role (tanpa mengubah UI)
+  useEffect(() => {
+    if (formData.role === "inspector-ga") {
+      setFormData(prev => ({ ...prev, department: "general-affairs" }))
+    } else if (formData.role === "manager") {
+      setFormData(prev => ({ ...prev, department: "management" }))
+    } else if (formData.role === "group-leader" || formData.role === "inspector") {
+      setFormData(prev => ({ ...prev, department: "" }))
+    }
+  }, [formData.role])
+
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+    const { name, value } = e.target
+    setFormData((prev) => ({
+      ...prev,
+      [name]: value,
+    }))
+  }
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault()
+    setError("")
+    setLoading(true)
+
+    // Validasi role
+    if (!formData.role || !['group-leader', 'inspector', 'inspector-ga', 'manager'].includes(formData.role)) {
+      setError("Pilih role terlebih dahulu!")
+      setLoading(false)
+      return
+    }
+
+    const result = signup({
+      username: formData.username,
+      fullName: formData.fullName,
+      niki: formData.niki,
+      department: formData.department,
+      role: formData.role,
+      password: formData.password,
+      confirmPassword: formData.confirmPassword,
+    })
+    if (result.success) {
+      alert("Pendaftaran berhasil! Silakan login.")
+      router.push("/login-page")
+    } else {
+      setError(result.error || "Pendaftaran gagal!")
+    }
+
+    setLoading(false)
+  }
+
+  return (
+    <>
+      <NavbarFixed />
+      <div className="signup-container">
+        <div className="signup-wrapper">
+          <div className="signup-text-section">
+            <h1>Bergabunglah</h1>
+            <h2>Dengan E-Checksheet</h2>
+            <p>
+              Tingkatkan produktivitas tim Anda dengan sistem checklist yang modern dan terpadu. Kelola operasional
+              dengan lebih efisien dan profesional.
+            </p>
+            <Link href="/login-page" className="btn-outline">
+              Sudah Punya Akun?
+            </Link>
+          </div>
+
+          <div className="signup-form-section">
+            <div className="signup-card">
+              <h2>Daftar</h2>
+
+              <form className="auth-form" onSubmit={handleSubmit}>
+                <div className="input-wrapper">
+                  <label htmlFor="username">Username</label>
+                  <div className="input-field">
+                    <input
+                      id="username"
+                      type="text"
+                      name="username"
+                      placeholder="Username"
+                      value={formData.username}
+                      onChange={handleChange}
+                      disabled={loading}
+                      required
+                    />
+                  </div>
+                </div>
+
+                <div className="input-wrapper">
+                  <label htmlFor="fullName">Nama Lengkap</label>
+                  <div className="input-field">
+                    <input
+                      id="fullName"
+                      type="text"
+                      name="fullName"
+                      placeholder="Nama Lengkap"
+                      value={formData.fullName}
+                      onChange={handleChange}
+                      disabled={loading}
+                      required
+                    />
+                  </div>
+                </div>
+
+                <div className="input-wrapper">
+                  <label htmlFor="niki">NIKI</label>
+                  <div className="input-field">
+                    <input
+                      id="niki"
+                      type="text"
+                      name="niki"
+                      placeholder="NIKI"
+                      value={formData.niki}
+                      onChange={handleChange}
+                      disabled={loading}
+                      required
+                    />
+                  </div>
+                </div>
+
+                <div className="input-wrapper">
+                  <label htmlFor="department">Departemen</label>
+                  <div className="input-field">
+                    <select
+                      id="department"
+                      name="department"
+                      value={formData.department}
+                      onChange={handleChange}
+                      disabled={loading}
+                      required
+                    >
+                      <option value="">Pilih Departemen</option>
+                      <option value="operations">Operasional</option>
+                      <option value="maintenance">Perawatan</option>
+                      <option value="quality">Kualitas</option>
+                      <option value="admin">Admin</option>
+                      {/* 🔹 Tambahkan opsi baru tanpa mengubah tampilan */}
+                      <option value="general-affairs">General Affairs</option>
+                      <option value="management">Management</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div className="input-wrapper">
+                  <label htmlFor="role">Peran / Role</label>
+                  <div className="input-field">
+                    <select
+                      id="role"
+                      name="role"
+                      value={formData.role}
+                      onChange={handleChange}
+                      disabled={loading}
+                      required
+                    >
+                      <option value="">Pilih Peran</option>
+                      <option value="group-leader">Group Leader QA</option>
+                      <option value="inspector">Inspector QA</option>
+                      {/* 🔹 Tambahkan role baru */}
+                      <option value="inspector-ga">Inspector GA</option>
+                      <option value="manager">Manajer</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div className="input-wrapper">
+                  <label htmlFor="password">Password</label>
+                  <div className="input-field">
+                    <input
+                      id="password"
+                      type="password"
+                      name="password"
+                      placeholder="Password"
+                      value={formData.password}
+                      onChange={handleChange}
+                      disabled={loading}
+                      required
+                    />
+                  </div>
+                </div>
+
+                <div className="input-wrapper">
+                  <label htmlFor="confirmPassword">Konfirmasi Password</label>
+                  <div className="input-field">
+                    <input
+                      id="confirmPassword"
+                      type="password"
+                      name="confirmPassword"
+                      placeholder="Konfirmasi Password"
+                      value={formData.confirmPassword}
+                      onChange={handleChange}
+                      disabled={loading}
+                      required
+                    />
+                  </div>
+                </div>
+
+                {error && <div className="error-message">{error}</div>}
+
+                <button type="submit" className="auth-btn" disabled={loading}>
+                  {loading ? "Mendaftar..." : "Daftar"}
+                </button>
+              </form>
+
+              <div className="switch-link">
+                Sudah punya akun? <Link href="/login-page">Login di sini</Link>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </>
+  )
+}
