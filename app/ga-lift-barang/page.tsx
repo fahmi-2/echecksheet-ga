@@ -612,7 +612,7 @@ export default function GaLiftBarangPage() {
                                 </td>
                                 {getDaysInMonth(currentMonth).map((day) => {
                                   const dateKey = formatDateKey(day)
-                                  const value = checksheetData[dateKey]?.[fieldKey] || "-"
+                                  const value = (checksheetData[dateKey]?.[fieldKey as keyof ChecksheetData[string]]) || "-"
                                   const bgColor = value === "✓" ? "#c8e6c9" : value === "✗" ? "#ffcdd2" : "#fff"
                                   
                                   return (
