@@ -1,4 +1,4 @@
-// /app/status-ga-panel/page.tsx
+// /app/ga-panel/page.tsx
 "use client"
 import { useState, useEffect } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
