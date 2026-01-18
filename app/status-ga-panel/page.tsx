@@ -1,18 +1,12 @@
-// /app/ga-panel/page.tsx
-import { Suspense } from "react"
-import { GaPanelContent } from "./content"
+// /app/status-ga-panel/page.tsx
+"use client"
+import { useState, useEffect } from "react"
+import { useRouter, useSearchParams } from "next/navigation"
+import { useAuth } from "@/lib/auth-context"
+import { NavbarStatic } from "@/components/navbar-static"
 
-export default function GaPanelPage() {
-  return (
-    <Suspense fallback={
-      <div style={{ display: "flex", justifyContent: "center", alignItems: "center", minHeight: "100vh", background: "#f5f5f5" }}>
-        <p>Loading...</p>
-      </div>
-    }>
-      <GaPanelContent />
-    </Suspense>
-  )
-}
+// 🔹 Tipe Data Panel
+interface PanelItem {
   no: number
   namaPanel: string
   area: string
