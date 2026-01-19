@@ -3,6 +3,7 @@
 import { Suspense } from 'react';
 import { ExitLampChecklistContent } from './ExitLampChecklistContent';
 
+
 export default function ExitLampChecklistPage({
   searchParams,
 }: {
