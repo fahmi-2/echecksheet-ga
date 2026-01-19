@@ -1,74 +1,80 @@
 // app/status-ga/page.tsx
-"use client"
+"use client";
 
-import { useEffect, useState } from "react"
-import { useRouter } from "next/navigation"
-import { useAuth } from "@/lib/auth-context"
-import { NavbarStatic } from "@/components/navbar-static"
-import Link from "next/link"
+import { useEffect } from "react";
+import { useRouter } from "next/navigation";
+import { useAuth } from "@/lib/auth-context";
+import { NavbarStatic } from "@/components/navbar-static";
+import Link from "next/link";
 
 export default function StatusGA() {
-  const router = useRouter()
-  const { user } = useAuth()
+  const router = useRouter();
+  const { user } = useAuth();
 
   useEffect(() => {
     if (!user) {
-      router.push("/login-page")
+      router.push("/login-page");
+    } else if (user.role !== "inspector-ga") {
+      router.push("/home");
     }
-    // Pastikan hanya inspector-ga yang bisa akses
-    if (user?.role !== "inspector-ga") {
-      router.push("/home")
-    }
-  }, [user, router])
+  }, [user, router]);
 
-  if (!user) return null
+  if (!user) return null;
 
   const categories = [
     {
       title: "1. Sistem Proteksi Kebakaran & Evakuasi",
       items: [
         { name: "INSPEKSI HYDRANT.xlsx", desc: "Cek kondisi fisik dan fungsional hidran", link: "inspeksi-hydrant" },
-        { name: "INSPEKSI FUNGSI DAN SELANG HYDRANT.xlsx", desc: "Cek tekanan air, coupling, nozzle", link: "selang-hydrant" },
-        { name: "INSPEKSI FIRE ALARM.xlsx", desc: "Pastikan sistem alarm kebakaran siap siaga", link: "inspeksi-fire-alarm" },
-        { name: "INSPEKSI SMOKE DETECTOR.xlsx", desc: "Cek fungsi smoke & heat detector", link: "smoke-detector" },
+        { name: "INSPEKSI FUNGSI DAN SELANG HYDRANT.xlsx", desc: "Cek tekanan air, coupling, nozzle", link: "inspeksi-fungsi-selang-hydrant" },
+        { name: "INSPEKSI FIRE ALARM.xlsx", desc: "Pastikan sistem alarm kebakaran siap siaga", link: "fire-alarm" },
+        { name: "INSPEKSI SMOKE DETECTOR.xlsx", desc: "Cek fungsi smoke & heat detector", link: "inspeksi-smoke-detector" },
         { name: "INSPEKSI APAR.xlsx", desc: "Cek APAR: isi, kondisi, aksesibilitas", link: "inspeksi-apar" },
-        { name: "INSPEKSI EMERGENCY LAMP.xlsx", desc: "Cek lampu darurat & exit lamp", link: "inspeksi-emergency-lamp" },
+        { name: "INSPEKSI EMERGENCY LAMP.xlsx", desc: "Cek lampu darurat & exit lamp", link: "inspeksi-emergency" },
         { name: "EXIT LAMP, PINTU DARURAT, DAN JALUR EVAKUASI", desc: "Cek pintu darurat & kejelasan jalur evakuasi", link: "exit-lamp-pintu-darurat" },
-      ]
+      ],
     },
     {
       title: "2. Keselamatan dan Pemeliharaan Peralatan",
       items: [
-        { name: "PENGECEKAN LIFT BARANG DAILY.xlsx", desc: "Cek harian lift barang: limit switch, tombol, kabin", link: "lift-barang" },
-        { name: "INSPEKSI DAN PREVENTIF LIFT BARANG.xlsx", desc: "Pemeliharaan preventif lift barang", link: "lift-barang" },
-        { name: "TANGGA LISTRIK (AWP).xlsx", desc: "Cek hidrolik, rem darurat, outrigger, kontrol keselamatan", link: "tg-listrik" },
-      ]
+        { name: "PENGECEKAN LIFT BARANG DAILY.xlsx", desc: "Cek harian lift barang: limit switch, tombol, kabin", link: "pengecekan-lift-barang-daily" },
+        { name: "INSPEKSI DAN PREVENTIF LIFT BARANG.xlsx", desc: "Pemeliharaan preventif lift barang", link: "inspeksi-preventif-lift-barang" },
+        { name: "TANGGA LISTRIK (AWP).xlsx", desc: "Cek hidrolik, rem darurat, outrigger, kontrol keselamatan", link: "tangga-listrik-awp" },
+      ],
     },
     {
       title: "3. Keselamatan dan Instalasi Listrik",
       items: [
-        { name: "PANEL.xlsx", desc: "Inspeksi panel listrik: suhu, bau, suara, grounding, ELCB", link: "panel" },
-        { name: "4.10. Form Inspeksi Stop Kontak (REv 03) GAGS.xlsx", desc: "Cek stop kontak dan instalasi listrik di area kerja", link: "form-inspeksi-stop-kontak" },
-      ]
+        { name: "PANEL.xlsx", desc: "Inspeksi panel listrik: suhu, bau, suara, grounding, ELCB", link: "panel-listrik" },
+        { name: "FORM PENGECEKAN STOP KONTAK DAN INSTALASI LISTRIK", desc: "Cek stop kontak dan instalasi listrik di area kerja", link: "form-inspeksi-stop-kontak" },
+      ],
     },
     {
       title: "4. Keselamatan Personal dan Prasarana Umum",
       items: [
-        { 
-          name: "Form pengambilan APD", 
+        {
+          name: "Form pengambilan APD",
           desc: "Formulir distribusi & pengambilan APD",
-          link: "riwayat-apd" // 🔹 Diarahkan ke riwayat APD
+          link: "riwayat-apd",
         },
-        { name: "INSPEKSI INFRASTUKTUR JALAN.xlsx", desc: "Cek kondisi jalan, trotoar, boardess pabrik", link: "inf-jalan" },
-      ]
+        {
+          name: "INSPEKSI INFRASTRUKTUR JALAN.xlsx",
+          desc: "Cek kondisi jalan, trotoar, boardess pabrik",
+          link: "ga-inf-jalan",
+        },
+      ],
     },
     {
       title: "5. Kebersihan dan Kenyamanan Fasilitas",
       items: [
-        { name: "Checksheet Toilet.xlsx", desc: "Patroli harian kebersihan toilet (standar 5S)", link: "checksheet-toilet" },
-      ]
+        {
+          name: "Checksheet Toilet.xlsx",
+          desc: "Patroli harian kebersihan toilet (standar 5S)",
+          link: "checksheet-toilet",
+        },
+      ],
     },
-  ]
+  ];
 
   return (
     <div className="app-page">
@@ -88,9 +94,9 @@ export default function StatusGA() {
               <h2 className="category-title">{cat.title}</h2>
               <div className="checklist-grid">
                 {cat.items.map((item) => (
-                  <Link 
-                    key={item.name} 
-                    href={`/status-ga/${item.link}`} 
+                  <Link
+                    key={item.name}
+                    href={`/status-ga/${item.link}`}
                     className="checklist-card"
                   >
                     <div className="card-header">
@@ -101,7 +107,7 @@ export default function StatusGA() {
                     <div className="card-action">
                       <span className="btn-arrow">→</span>
                     </div>
-                  </Link> 
+                  </Link>
                 ))}
               </div>
             </div>
@@ -111,94 +117,146 @@ export default function StatusGA() {
 
       <style jsx>{`
         .page-content {
-          max-width: 1200px;
+          max-width: 1400px;
           margin: 0 auto;
-          padding: 24px;
+          padding: 32px 24px;
+          background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+          min-height: 100vh;
         }
 
         .header {
-          margin-bottom: 24px;
+          margin-bottom: 48px;
+          text-align: center;
+          padding-bottom: 24px;
+          border-bottom: 3px solid rgba(13, 71, 161, 0.1);
         }
 
         .header h1 {
-          margin: 0;
-          color: #0d47a1;
-          font-size: 2rem;
+          margin: 0 0 16px 0;
+          background: linear-gradient(135deg, #0d47a1 0%, #1565c0 100%);
+          -webkit-background-clip: text;
+          -webkit-text-fill-color: transparent;
+          background-clip: text;
+          font-size: 2.5rem;
+          font-weight: 700;
+          letter-spacing: -0.5px;
         }
 
         .user-info {
           display: flex;
           align-items: center;
+          justify-content: center;
           gap: 16px;
-          font-size: 0.95rem;
-          color: #666;
+          font-size: 1rem;
+          color: #555;
+          font-weight: 500;
         }
 
         .ga-checklist-container {
           display: flex;
           flex-direction: column;
-          gap: 40px;
+          gap: 48px;
         }
 
         .category-section {
           background: white;
-          border-radius: 12px;
-          box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
-          padding: 24px;
+          border-radius: 16px;
+          box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+          padding: 32px;
+          border-left: 6px solid #1e88e5;
+          transition: transform 0.3s ease, box-shadow 0.3s ease;
+        }
+
+        .category-section:hover {
+          transform: translateX(4px);
+          box-shadow: 0 12px 48px rgba(0, 0, 0, 0.15);
         }
 
         .category-title {
-          margin: 0 0 20px;
-          color: #1e88e5;
-          font-size: 1.4rem;
-          font-weight: 600;
-          border-bottom: 2px solid #e3f2fd;
-          padding-bottom: 8px;
+          margin: 0 0 28px;
+          color: #0d47a1;
+          font-size: 1.6rem;
+          font-weight: 700;
+          border-bottom: 3px solid #e3f2fd;
+          padding-bottom: 12px;
+          display: flex;
+          align-items: center;
+          gap: 12px;
+        }
+
+        .category-title::before {
+          content: "";
+          width: 8px;
+          height: 8px;
+          background: #1e88e5;
+          border-radius: 50%;
+          display: inline-block;
         }
 
         .checklist-grid {
           display: grid;
-          grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-          gap: 20px;
+          grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+          gap: 24px;
         }
 
         .checklist-card {
           display: block;
           text-decoration: none;
-          background: #f9f9f9;
-          border: 1px solid #eee;
-          border-radius: 8px;
-          padding: 16px;
-          transition: all 0.3s;
+          background: linear-gradient(135deg, #f8f9fa 0%, #ffffff 100%);
+          border: 2px solid #e8eef7;
+          border-radius: 12px;
+          padding: 20px;
+          transition: all 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94);
           position: relative;
           overflow: hidden;
         }
 
+        .checklist-card::before {
+          content: "";
+          position: absolute;
+          top: 0;
+          left: -100%;
+          width: 100%;
+          height: 100%;
+          background: linear-gradient(
+            90deg,
+            transparent,
+            rgba(255, 255, 255, 0.3),
+            transparent
+          );
+          transition: left 0.5s;
+        }
+
+        .checklist-card:hover::before {
+          left: 100%;
+        }
+
         .checklist-card:hover {
-          background: #e3f2fd;
+          background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%);
           border-color: #1e88e5;
-          transform: translateY(-2px);
-          box-shadow: 0 4px 12px rgba(30, 136, 229, 0.15);
+          transform: translateY(-8px);
+          box-shadow: 0 16px 40px rgba(30, 136, 229, 0.25);
         }
 
         .card-header {
           display: flex;
-          align-items: center;
+          align-items: flex-start;
           gap: 12px;
-          margin-bottom: 8px;
+          margin-bottom: 12px;
         }
 
         .card-icon {
-          font-size: 1.2rem;
+          font-size: 1.8rem;
           color: #1e88e5;
-          min-width: 24px;
+          min-width: 32px;
           text-align: center;
+          flex-shrink: 0;
         }
 
         .card-title {
-          font-size: 1rem;
-          color: #333;
-          font-weight: 600;
+          font-size: 1.05rem;
+          color: #1a237e;
+          font-weight: 700;
           line-height: 1.4;
           word-break: break-word;
         }
@@ -206,39 +264,80 @@ export default function StatusGA() {
         .card-desc {
           font-size: 0.9rem;
           color: #666;
-          line-height: 1.5;
-          margin-bottom: 8px;
+          line-height: 1.6;
+          margin-bottom: 12px;
+          margin-left: 44px;
         }
 
         .card-action {
           display: flex;
           justify-content: flex-end;
+          margin-left: 44px;
         }
 
         .btn-arrow {
-          font-size: 1.1rem;
+          font-size: 1.2rem;
           color: #1e88e5;
-          opacity: 0.7;
+          opacity: 0;
+          transform: translateX(-8px);
+          transition: all 0.3s ease;
         }
 
         .checklist-card:hover .btn-arrow {
           opacity: 1;
+          transform: translateX(0);
         }
 
         @media (max-width: 768px) {
+          .page-content {
+            padding: 24px 16px;
+          }
+          .header h1 {
+            font-size: 1.8rem;
+          }
           .checklist-grid {
             grid-template-columns: 1fr;
+            gap: 16px;
           }
-
+          .category-section {
+            padding: 20px;
+            border-radius: 12px;
+            border-left: 4px solid #1e88e5;
+          }
           .category-title {
-            font-size: 1.2rem;
+            font-size: 1.3rem;
+            margin-bottom: 20px;
           }
-
           .card-title {
             font-size: 0.95rem;
+          }
+          .card-desc {
+            font-size: 0.85rem;
+            margin-left: 40px;
+          }
+          .checklist-card {
+            padding: 16px;
+          }
+          .card-icon {
+            font-size: 1.4rem;
+          }
+        }
+
+        @media (max-width: 480px) {
+          .header h1 {
+            font-size: 1.5rem;
+          }
+          .category-title {
+            font-size: 1.1rem;
+          }
+          .card-title {
+            font-size: 0.9rem;
+          }
+          .user-info {
+            font-size: 0.9rem;
           }
         }
       `}</style>
     </div>
-  )
+  );
 }
