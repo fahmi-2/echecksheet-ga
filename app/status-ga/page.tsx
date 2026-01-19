@@ -1,80 +1,81 @@
 // app/status-ga/page.tsx
-"use client";
+"use client"
 
-import { useEffect } from "react";
-import { useRouter } from "next/navigation";
-import { useAuth } from "@/lib/auth-context";
-import { NavbarStatic } from "@/components/navbar-static";
-import Link from "next/link";
+import { useEffect } from "react"
+import { useRouter } from "next/navigation"
+import { useAuth } from "@/lib/auth-context"
+import { NavbarStatic } from "@/components/navbar-static"
+import Link from "next/link"
 
 export default function StatusGA() {
-  const router = useRouter();
-  const { user } = useAuth();
+  const router = useRouter()
+  const { user } = useAuth()
 
   useEffect(() => {
     if (!user) {
-      router.push("/login-page");
-    } else if (user.role !== "inspector-ga") {
-      router.push("/home");
+      router.push("/login-page")
     }
-  }, [user, router]);
+    if (user?.role !== "inspector-ga") {
+      router.push("/home")
+    }
+  }, [user, router])
 
-  if (!user) return null;
+  if (!user) return null
 
   const categories = [
     {
       title: "1. Sistem Proteksi Kebakaran & Evakuasi",
       items: [
-        { name: "INSPEKSI HYDRANT.xlsx", desc: "Cek kondisi fisik dan fungsional hidran", link: "inspeksi-hydrant" },
-        { name: "INSPEKSI FUNGSI DAN SELANG HYDRANT.xlsx", desc: "Cek tekanan air, coupling, nozzle", link: "inspeksi-fungsi-selang-hydrant" },
-        { name: "INSPEKSI FIRE ALARM.xlsx", desc: "Pastikan sistem alarm kebakaran siap siaga", link: "fire-alarm" },
-        { name: "INSPEKSI SMOKE DETECTOR.xlsx", desc: "Cek fungsi smoke & heat detector", link: "inspeksi-smoke-detector" },
-        { name: "INSPEKSI APAR.xlsx", desc: "Cek APAR: isi, kondisi, aksesibilitas", link: "inspeksi-apar" },
-        { name: "INSPEKSI EMERGENCY LAMP.xlsx", desc: "Cek lampu darurat & exit lamp", link: "inspeksi-emergency" },
+        { name: "INSPEKSI HYDRANT", desc: "Cek kondisi fisik dan fungsional hidran", link: "inspeksi-hydrant" },
+        { name: "INSPEKSI FUNGSI DAN SELANG HYDRANT", desc: "Cek tekanan air, coupling, nozzle", link: "selang-hydrant" },
+        { name: "INSPEKSI FIRE ALARM", desc: "Pastikan sistem alarm kebakaran siap siaga", link: "fire-alarm" },
+        { name: "INSPEKSI SMOKE DETECTOR.", desc: "Cek fungsi smoke & heat detector", link: "smoke-detector" },
+        { name: "INSPEKSI APAR", desc: "Cek APAR: isi, kondisi, aksesibilitas", link: "inspeksi-apar" },
+        { name: "INSPEKSI EMERGENCY LAMP", desc: "Cek lampu darurat & exit lamp", link: "inspeksi-emergency" },
         { name: "EXIT LAMP, PINTU DARURAT, DAN JALUR EVAKUASI", desc: "Cek pintu darurat & kejelasan jalur evakuasi", link: "exit-lamp-pintu-darurat" },
-      ],
+      ]
     },
     {
       title: "2. Keselamatan dan Pemeliharaan Peralatan",
       items: [
-        { name: "PENGECEKAN LIFT BARANG DAILY.xlsx", desc: "Cek harian lift barang: limit switch, tombol, kabin", link: "pengecekan-lift-barang-daily" },
-        { name: "INSPEKSI DAN PREVENTIF LIFT BARANG.xlsx", desc: "Pemeliharaan preventif lift barang", link: "inspeksi-preventif-lift-barang" },
-        { name: "TANGGA LISTRIK (AWP).xlsx", desc: "Cek hidrolik, rem darurat, outrigger, kontrol keselamatan", link: "tangga-listrik-awp" },
-      ],
+        { name: "PENGECEKAN LIFT BARANG DAILY", desc: "Cek harian lift barang: limit switch, tombol, kabin", link: "lift-barang" },
+        { name: "INSPEKSI DAN PREVENTIF LIFT BARANG", desc: "Pemeliharaan preventif lift barang", link: "inspeksi-preventif-lift-barang" },
+        { name: "TANGGA LISTRIK (AWP)", desc: "Cek hidrolik, rem darurat, outrigger, kontrol keselamatan", link: "tg-listrik" },
+      ]
     },
     {
       title: "3. Keselamatan dan Instalasi Listrik",
       items: [
-        { name: "PANEL.xlsx", desc: "Inspeksi panel listrik: suhu, bau, suara, grounding, ELCB", link: "panel-listrik" },
+        { name: "PANEL", desc: "Inspeksi panel listrik: suhu, bau, suara, grounding, ELCB", link: "panel" },
         { name: "FORM PENGECEKAN STOP KONTAK DAN INSTALASI LISTRIK", desc: "Cek stop kontak dan instalasi listrik di area kerja", link: "form-inspeksi-stop-kontak" },
-      ],
+      ]
     },
     {
       title: "4. Keselamatan Personal dan Prasarana Umum",
       items: [
-        {
-          name: "Form pengambilan APD",
+        { 
+          name: "Form pengambilan APD", 
           desc: "Formulir distribusi & pengambilan APD",
-          link: "riwayat-apd",
+          link: "e-checksheet-apd"
         },
-        {
-          name: "INSPEKSI INFRASTRUKTUR JALAN.xlsx",
-          desc: "Cek kondisi jalan, trotoar, boardess pabrik",
-          link: "ga-inf-jalan",
+        { 
+          name: "INSPEKSI INFRASTUKTUR JALAN", 
+          desc: "Cek kondisi jalan, trotoar, boardess pabrik", 
+          link: "inf-jalan" // 🔹 Sesuaikan dengan route baru
         },
-      ],
+      ]
     },
     {
       title: "5. Kebersihan dan Kenyamanan Fasilitas",
       items: [
-        {
-          name: "Checksheet Toilet.xlsx",
-          desc: "Patroli harian kebersihan toilet (standar 5S)",
-          link: "checksheet-toilet",
+        { 
+          name: "Checksheet Toilet", 
+          desc: "Patroli harian kebersihan toilet (standar 5S)", 
+          link: "checksheet-toilet" 
         },
-      ],
+      ]
     },
-  ];
+  ]
 
   return (
     <div className="app-page">
@@ -94,9 +95,9 @@ export default function StatusGA() {
               <h2 className="category-title">{cat.title}</h2>
               <div className="checklist-grid">
                 {cat.items.map((item) => (
-                  <Link
-                    key={item.name}
-                    href={`/status-ga/${item.link}`}
+                  <Link 
+                    key={item.name} 
+                    href={`/status-ga/${item.link}`} 
                     className="checklist-card"
                   >
                     <div className="card-header">
@@ -107,7 +108,7 @@ export default function StatusGA() {
                     <div className="card-action">
                       <span className="btn-arrow">→</span>
                     </div>
-                  </Link>
+                  </Link> 
                 ))}
               </div>
             </div>
@@ -185,7 +186,7 @@ export default function StatusGA() {
         }
 
         .category-title::before {
-          content: "";
+          content: '';
           width: 8px;
           height: 8px;
           background: #1e88e5;
@@ -212,18 +213,13 @@ export default function StatusGA() {
         }
 
         .checklist-card::before {
-          content: "";
+          content: '';
           position: absolute;
           top: 0;
           left: -100%;
           width: 100%;
           height: 100%;
-          background: linear-gradient(
-            90deg,
-            transparent,
-            rgba(255, 255, 255, 0.3),
-            transparent
-          );
+          background: linear-gradient(90deg, transparent, rgba(255,255,255,0.3), transparent);
           transition: left 0.5s;
         }
 
@@ -292,52 +288,23 @@ export default function StatusGA() {
           .page-content {
             padding: 24px 16px;
           }
-          .header h1 {
-            font-size: 1.8rem;
-          }
-          .checklist-grid {
-            grid-template-columns: 1fr;
-            gap: 16px;
-          }
-          .category-section {
-            padding: 20px;
-            border-radius: 12px;
-            border-left: 4px solid #1e88e5;
-          }
-          .category-title {
-            font-size: 1.3rem;
-            margin-bottom: 20px;
-          }
-          .card-title {
-            font-size: 0.95rem;
-          }
-          .card-desc {
-            font-size: 0.85rem;
-            margin-left: 40px;
-          }
-          .checklist-card {
-            padding: 16px;
-          }
-          .card-icon {
-            font-size: 1.4rem;
-          }
+          .header h1 { font-size: 1.8rem; }
+          .checklist-grid { grid-template-columns: 1fr; gap: 16px; }
+          .category-section { padding: 20px; border-radius: 12px; border-left: 4px solid #1e88e5; }
+          .category-title { font-size: 1.3rem; margin-bottom: 20px; }
+          .card-title { font-size: 0.95rem; }
+          .card-desc { font-size: 0.85rem; margin-left: 40px; }
+          .checklist-card { padding: 16px; }
+          .card-icon { font-size: 1.4rem; }
         }
 
         @media (max-width: 480px) {
-          .header h1 {
-            font-size: 1.5rem;
-          }
-          .category-title {
-            font-size: 1.1rem;
-          }
-          .card-title {
-            font-size: 0.9rem;
-          }
-          .user-info {
-            font-size: 0.9rem;
-          }
+          .header h1 { font-size: 1.5rem; }
+          .category-title { font-size: 1.1rem; }
+          .card-title { font-size: 0.9rem; }
+          .user-info { font-size: 0.9rem; }
         }
       `}</style>
     </div>
-  );
+  )
 }
