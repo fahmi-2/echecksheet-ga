@@ -1,5 +1,6 @@
 // ExitLampChecklistContent.tsx
 // app/exit-lamp-pintu-darurat/exit-lamp/ExitLampChecklistContent.tsx
+
 "use client";
 
 import { useState, useEffect } from "react";
