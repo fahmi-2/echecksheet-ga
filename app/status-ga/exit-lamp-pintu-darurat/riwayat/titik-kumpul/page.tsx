@@ -4,7 +4,7 @@
 import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { useAuth } from "@/lib/auth-context"
-import { NavbarStatic } from "@/components/navbar-static"
+import { Sidebar } from "@/components/Sidebar";
 import Link from "next/link"
 
 interface TitikKumpulItem {
@@ -111,7 +111,7 @@ export default function RiwayatTitikKumpul() {
 
   return (
     <div className="app-page">
-      <NavbarStatic userName={user.fullName} />
+      <Sidebar userName={user.fullName} />
 
       <div className="page-content">
         <div className="header">
@@ -259,7 +259,7 @@ export default function RiwayatTitikKumpul() {
 
         .header h1 {
           margin: 0;
-          color: #d32f2f;
+          color: #ffffff;
           font-size: 2rem;
         }
 

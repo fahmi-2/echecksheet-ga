@@ -1,9 +1,9 @@
-﻿"use client";
+"use client";
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
-import { NavbarStatic } from "@/components/navbar-static";
+import { Sidebar } from "@/components/Sidebar";
 
 type InspectionItem = {
   id: string;
@@ -32,16 +32,19 @@ const inspectionItems: InspectionItem[] = [
 
 export default function InspeksiLiftBarangListPage() {
   const router = useRouter();
-  const { user } = useAuth();
+  const { user } = useAuth()
+  const [redirected, setRedirected] = useState(false);
   const [fullImage, setFullImage] = useState<string | null>(null);
   const [imageLabel, setImageLabel] = useState<string>("");
 
   useEffect(() => {
+    if (redirected) return;
     if (!user) return;
     if (user.role !== "inspector-ga") {
+      setRedirected(true);
       router.push("/home");
     }
-  }, [user, router]);
+  }, [user, router, redirected]);
 
   if (!user) {
     return <div>Loading...</div>;
@@ -74,6 +77,7 @@ export default function InspeksiLiftBarangListPage() {
 
   // Tutup modal dengan tombol Esc
   useEffect(() => {
+    if (redirected) return;
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === "Escape") closeImage();
     };
@@ -83,7 +87,7 @@ export default function InspeksiLiftBarangListPage() {
 
   return (
     <div className="app-page">
-      <NavbarStatic userName={user.fullName} />
+      <Sidebar userName={user.fullName} />
 
       <div className="page-content">
         <div className="header">

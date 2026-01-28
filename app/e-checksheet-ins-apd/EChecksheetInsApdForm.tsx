@@ -4,257 +4,70 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
-import { NavbarStatic } from "@/components/navbar-static";
+import { Sidebar } from "@/components/Sidebar";
 
-interface ChecksheetEntry {
-  date: string;
+export function EChecksheetInsApdForm({
+  areaId,
+  areaName,
+}: {
+  areaId: number;
   areaName: string;
-  areaType: string;
-  data: {
-    proses: string;
-    standartAPD: string[];
-    r1: string;
-    r2: string;
-    r3: string;
-    r4: string;
-    r5: string;
-    r6: string;
-    persentaseOk: string;
-    problem: string;
-    tindakanPerbaikan: string;
-    pic: string;
-    verify: string;
-  }[];
-  inspector: string;
-}
-
-// Data dari cs-inspeksi-apd.xlsx
-const APD_AREAS = [
-  {
-    id: 1,
-    name: "PRE ASSY AREA GENBA C",
-    type: "Produksi",
-    proses: [
-      {
-        name: "BONDER",
-        standartAPD: ["- Masker kain"]
-      },
-      {
-        name: "RAYCHEM",
-        standartAPD: [
-          "- Sarung tangan nitrile",
-          "- Sarung tangan katun",
-          "- Masker 3M (Respiratory)",
-          "- Celemek",
-          "- Kacamata bening"
-        ]
-      },
-      {
-        name: "RAYCHEM (NON ALPHA)",
-        standartAPD: [
-          "- Masker FKA",
-          "- Sarung tangan nitrile"
-        ]
-      },
-      {
-        name: "HEAT SHRINK",
-        standartAPD: [
-          "- Masker kain",
-          "- Sarung tangan nitrile"
-        ]
-      },
-      {
-        name: "CASTING",
-        standartAPD: ["- Back support"]
-      },
-      {
-        name: "CUTTING",
-        standartAPD: ["- Back support"]
-      },
-      {
-        name: "CUTTING & RUBBER SEAL",
-        standartAPD: [
-          "- Back support",
-          "- Ear Plug"
-        ]
-      }
-    ]
-  },
-  {
-    id: 2,
-    name: "PRE ASSY GENBA A+B",
-    type: "Produksi",
-    proses: [
-      {
-        name: "RAYCHEM",
-        standartAPD: [
-          "- Sarung tangan nitrile",
-          "- Masker 3M (Respiratory)",
-          "- Celemek",
-          "- Kacamata bening"
-        ]
-      },
-      {
-        name: "RAYCHEM NON ALPHA",
-        standartAPD: [
-          "- Masker FKA",
-          "- Sarung tangan nitrile"
-        ]
-      },
-      {
-        name: "GUN SOLDER (AMERICAN BEAUTY)",
-        standartAPD: [
-          "- Kacamata bening",
-          "- Masker FKA",
-          "- Sarung tangan nitrile",
-          "- Celemek"
-        ]
-      },
-      {
-        name: "DIP SOLDER",
-        standartAPD: [
-          "- Sarung tangan kulit",
-          "- Sarung tangan katun",
-          "- Masker FKA",
-          "- Topeng Gerinda",
-          "- Celemek",
-          "- Sleave"
-        ]
-      },
-      {
-        name: "BONDER (200D)",
-        standartAPD: ["- Masker FKA"]
-      },
-      {
-        name: "BONDER (900B) + DFM",
-        standartAPD: ["- Masker FKA"]
-      },
-      {
-        name: "BONDER",
-        standartAPD: ["- Masker FKA"]
-      },
-      {
-        name: "BONDER MINIC MN20 (200D)",
-        standartAPD: ["- Masker FKA"]
-      },
-      {
-        name: "BONDER MINIC MN20 (900B)",
-        standartAPD: ["- Masker FKA"]
-      },
-      {
-        name: "ANTI KOROSI (EJ30 & EJ35)",
-        standartAPD: [
-          "- Sarung tangan Anti UV",
-          "- Masker FKA",
-          "- Kacamata/Face shield Anti UV",
-          "- Celemek"
-        ]
-      },
-      {
-        name: "HEAT SHRINK",
-        standartAPD: [
-          "- Masker FKA",
-          "- Sarung tangan nitrile"
-        ]
-      },
-      {
-        name: "CUTTING : Nissan (Genba A)",
-        standartAPD: ["- Back support"]
-      },
-      {
-        name: "CUTTING : Nissan (Genba B)",
-        standartAPD: ["- Back support"]
-      },
-      {
-        name: "CUTTING : Mazda",
-        standartAPD: ["- Back support"]
-      },
-      {
-        name: "CUTTING : 900B & 200D",
-        standartAPD: ["- Back support"]
-      },
-      {
-        name: "TRANSFORTER",
-        standartAPD: ["- Topi pelindung"]
-      },
-      {
-        name: "CASTING",
-        standartAPD: ["- Back support"]
-      }
-    ]
-  }
-];
-
-export function EChecksheetInsApdForm({ areaId: initialAreaId }: { areaId: number }) {
+}) {
   const router = useRouter();
   const { user, loading } = useAuth();
 
   const [isMounted, setIsMounted] = useState(false);
-  const [selectedDate, setSelectedDate] = useState<string>("");
-  const [areaId, setAreaId] = useState<number>(initialAreaId);
-  const [savedData, setSavedData] = useState<ChecksheetEntry[]>([]);
-  const [rows, setRows] = useState<any[]>([]);
-
-  const area = APD_AREAS.find(a => a.id === areaId) || APD_AREAS[0];
+  const [currentMonth, setCurrentMonth] = useState(new Date());
+  const [answers, setAnswers] = useState<Record<string, Record<string, string>>>({});
+  const [today] = useState(new Date());
 
   useEffect(() => {
     setIsMounted(true);
   }, []);
 
-  // Load saved data
+  const inspectionItems = [
+    { key: "limitSwitchBawah", no: 1, item: "Limit switch pintu pagar bawah", content: "Limit switch", method: "Dicoba" },
+    { key: "pintuKendorPecah1", no: 1, item: "Limit switch pintu pagar bawah", content: "Tidak kendor dan pecah", method: "Visual" },
+    { key: "pintuEngsel1", no: 1, item: "Limit switch pintu pagar bawah", content: "Engsel", method: "Dicoba" },
+    { key: "pintuPengunci1", no: 1, item: "Limit switch pintu pagar bawah", content: "Pengunci", method: "Dicoba" },
+    { key: "limitSwitchAtas", no: 2, item: "Kondisi pintu pagar atas", content: "Limit switch", method: "Dicoba" },
+    { key: "pintuKendorPecah2", no: 2, item: "Kondisi pintu pagar atas", content: "Tidak kendor dan pecah", method: "Visual" },
+    { key: "pintuEngsel2", no: 2, item: "Kondisi pintu pagar atas", content: "Engsel", method: "Dicoba" },
+    { key: "pintuPengunci2", no: 2, item: "Kondisi pintu pagar atas", content: "Pengunci", method: "Dicoba" },
+    { key: "limitSwitchPintuLift", no: 3, item: "Kondisi pintu lift", content: "Limit switch", method: "Dicoba" },
+    { key: "pintuKendorPecah3", no: 3, item: "Kondisi pintu lift", content: "Tidak kendor dan pecah", method: "Visual" },
+    { key: "pintuEngsel3", no: 3, item: "Kondisi pintu lift", content: "Engsel", method: "Dicoba" },
+    { key: "pintuPengunci3", no: 3, item: "Kondisi pintu lift", content: "Pengunci", method: "Dicoba" },
+    { key: "cabinLift", no: 4, item: "Cabin lift", content: "Rata dengan landasan saat berhenti", method: "Visual" },
+    { key: "pushButtonNaik", no: 5, item: "Push button Bawah", content: "Naik", method: "Dicoba" },
+    { key: "pushButtonTurun", no: 5, item: "Push button Bawah", content: "Turun", method: "Dicoba" },
+    { key: "pushButtonEmergency", no: 5, item: "Push button Bawah", content: "Emergency Stop", method: "Dicoba" },
+    { key: "pushButtonAtasNaik", no: 6, item: "Push button Atas", content: "Naik", method: "Dicoba" },
+    { key: "pushButtonAtasTurun", no: 6, item: "Push button Atas", content: "Turun", method: "Dicoba" },
+    { key: "pushButtonAtasEmergency", no: 6, item: "Push button Atas", content: "Emergency Stop", method: "Dicoba" },
+    { key: "sensorLiftTurun", no: 7, item: "Sensor Lift turun", content: "Proximity Switch", method: "Dicoba" },
+    { key: "sensorLiftNaik", no: 8, item: "Sensor Lift naik", content: "Proximity Switch", method: "Dicoba" },
+    { key: "bearingSliding", no: 9, item: "Kondisi Bearing sliding (All)", content: "Bearing Sliding", method: "Dicoba & di lihat" },
+    { key: "kawatSeling", no: 10, item: "Kondisi Kawat seling", content: "Kawat seling", method: "Dilihat" },
+    { key: "bunyiAbnormalNaik", no: 11, item: "Bunyi abnormal saat lift naik dan turun", content: "Bearing Sliding", method: "Dicoba" },
+    { key: "bunyiAbnormalLiftStopper", no: 12, item: "Bunyi abnormal saat lift berhenti di Stopper atas", content: "Keranjang Lift dengan Stopper atas", method: "Dicoba" },
+    { key: "bunyiAbnormalLiftBawah", no: 13, item: "Bunyi abnormal saat lift berhenti di bawah", content: "Keranjang Lift dengan stoper bawah", method: "Di coba" },
+  ];
+
   useEffect(() => {
     if (!isMounted) return;
+
     try {
       const key = `e-checksheet-apd-${areaId}`;
       const saved = localStorage.getItem(key);
       if (saved) {
         const parsed = JSON.parse(saved);
-        setSavedData(parsed);
+        setAnswers(parsed);
       }
     } catch (err) {
       console.warn("Failed to parse saved data");
     }
   }, [isMounted, areaId]);
-
-  // Inisialisasi rows
-  useEffect(() => {
-    const newRows = [];
-    for (const p of area.proses) {
-      newRows.push({
-        type: "proses",
-        proses: p.name,
-        r1: "",
-        r2: "",
-        r3: "",
-        r4: "",
-        r5: "",
-        r6: "",
-        persentaseOk: "",
-        problem: "",
-        tindakanPerbaikan: "",
-        pic: "",
-        verify: ""
-      });
-      for (const apd of p.standartAPD) {
-        newRows.push({
-          type: "apd",
-          proses: apd,
-          r1: "",
-          r2: "",
-          r3: "",
-          r4: "",
-          r5: "",
-          r6: "",
-          persentaseOk: "",
-          problem: "",
-          tindakanPerbaikan: "",
-          pic: "",
-          verify: ""
-        });
-      }
-    }
-    setRows(newRows);
-  }, [areaId]);
 
   useEffect(() => {
     if (!isMounted || loading) return;
@@ -263,7 +76,9 @@ export function EChecksheetInsApdForm({ areaId: initialAreaId }: { areaId: numbe
     }
   }, [user, loading, router, isMounted]);
 
-  if (!isMounted) return null;
+  if (!isMounted) {
+    return null;
+  }
 
   if (loading) {
     return (
@@ -277,447 +92,538 @@ export function EChecksheetInsApdForm({ areaId: initialAreaId }: { areaId: numbe
     return null;
   }
 
+  const getDaysInMonth = (date: Date) => {
+    const year = date.getFullYear();
+    const month = date.getMonth();
+    const days = new Date(year, month + 1, 0).getDate();
+    return Array.from({ length: days }, (_, i) => i + 1);
+  };
+
+  const formatDateKey = (day: number) => {
+    const year = currentMonth.getFullYear();
+    const month = String(currentMonth.getMonth() + 1).padStart(2, "0");
+    const d = String(day).padStart(2, "0");
+    return `${year}-${month}-${d}`;
+  };
+
+  const getMonthYear = () => {
+    return currentMonth.toLocaleDateString("id-ID", { month: "long", year: "numeric" });
+  };
+
+  const changeMonth = (direction: number) => {
+    setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() + direction, 1));
+  };
+
+  const isDateEditable = (day: number): boolean => {
+    const cellDate = new Date(currentMonth.getFullYear(), currentMonth.getMonth(), day);
+    const todayDate = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+    cellDate.setHours(0, 0, 0, 0);
+    todayDate.setHours(0, 0, 0, 0);
+    return cellDate.getTime() === todayDate.getTime();
+  };
+
+  const getDateStatus = (day: number): 'past' | 'today' | 'future' => {
+    const cellDate = new Date(currentMonth.getFullYear(), currentMonth.getMonth(), day);
+    const todayDate = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+    cellDate.setHours(0, 0, 0, 0);
+    todayDate.setHours(0, 0, 0, 0);
+    if (cellDate.getTime() < todayDate.getTime()) return 'past';
+    if (cellDate.getTime() === todayDate.getTime()) return 'today';
+    return 'future';
+  };
+
+  const handleInputChange = (dateKey: string, itemKey: string, value: string, day: number) => {
+    if (!isDateEditable(day)) {
+      alert("Anda hanya dapat mengisi data untuk hari ini!");
+      return;
+    }
+
+    setAnswers((prev) => ({
+      ...prev,
+      [dateKey]: {
+        ...prev[dateKey],
+        [itemKey]: value,
+      },
+    }));
+  };
+
   const handleSave = () => {
-    if (!selectedDate) {
-      alert("Please select an inspection date");
-      return;
-    }
-
-    const updatedRows = rows.map(row => {
-      if (row.type === "proses") {
-        return { ...row, persentaseOk: "" };
-      }
-      const responses = [row.r1, row.r2, row.r3, row.r4, row.r5, row.r6];
-      const okCount = responses.filter(r => r === "✓").length;
-      const percentage = ((okCount / 6) * 100).toFixed(0) + "%";
-      return { ...row, persentaseOk: percentage };
-    });
-
     try {
-      const entry: ChecksheetEntry = {
-        date: selectedDate,
-        areaName: area.name,
-        areaType: area.type,
-        data: updatedRows,
-        inspector: user.fullName || ""
-      };
-
-      const newData = [...savedData];
-      const existingIndex = newData.findIndex(e => e.date === selectedDate);
-
-      if (existingIndex >= 0) {
-        newData[existingIndex] = entry;
-      } else {
-        newData.unshift(entry);
-      }
-
-      newData.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-
       const key = `e-checksheet-apd-${areaId}`;
-      localStorage.setItem(key, JSON.stringify(newData));
-      alert(`Inspection data saved for ${new Date(selectedDate).toLocaleDateString("en-US")}`);
-      router.push(`/ga-inspeksi-apd`);
+      localStorage.setItem(key, JSON.stringify(answers));
+      alert("Data berhasil disimpan!");
+      router.push(`/status-ga?areaId=${encodeURIComponent(areaId)}`);
     } catch (err) {
-      console.error("Save failed:", err);
-      alert("Failed to save data");
+      console.error("Gagal menyimpan:", err);
+      alert("Gagal menyimpan data.");
     }
   };
 
-  const handleLoadExisting = () => {
-    if (!selectedDate) {
-      alert("Please select a date first");
-      return;
-    }
-
-    const entry = savedData.find(e => e.date === selectedDate);
-
-    if (entry) {
-      setRows(entry.data);
-      alert("Data loaded successfully");
-    } else {
-      alert("No data found for this date");
-      const newRows = [];
-      for (const p of area.proses) {
-        newRows.push({ type: "proses", proses: p.name, r1: "", r2: "", r3: "", r4: "", r5: "", r6: "", persentaseOk: "", problem: "", tindakanPerbaikan: "", pic: "", verify: "" });
-        for (const apd of p.standartAPD) {
-          newRows.push({ type: "apd", proses: apd, r1: "", r2: "", r3: "", r4: "", r5: "", r6: "", persentaseOk: "", problem: "", tindakanPerbaikan: "", pic: "", verify: "" });
-        }
-      }
-      setRows(newRows);
-    }
-  };
-
-  const generateMonthlyDates = () => {
-    const today = new Date();
-    const year = today.getFullYear();
-    const currentMonth = today.getMonth();
-    const nextMonth = currentMonth + 1 > 11 ? 0 : currentMonth + 1;
-    const nextYear = currentMonth + 1 > 11 ? year + 1 : year;
-
-    return [
-      new Date(year, currentMonth, 1).toISOString().split('T')[0],
-      new Date(nextYear, nextMonth, 1).toISOString().split('T')[0]
-    ];
-  };
-
-  const inspectionSchedule = generateMonthlyDates();
-
-  const updateRowField = (index: number, field: string, value: string) => {
-    setRows(prev => {
-      const newRows = [...prev];
-      newRows[index] = { ...newRows[index], [field]: value };
-      return newRows;
-    });
-  };
+  const days = getDaysInMonth(currentMonth);
 
   return (
-    <div style={{ minHeight: "100vh", background: "#f7f9fc" }}>
-      <NavbarStatic userName={user.fullName} />
-      <div style={{ padding: "24px 20px", maxWidth: "100%", margin: "0 auto" }}>        
-        <div style={{ marginBottom: "28px" }}>
+    <div style={{ minHeight: "100vh", background: "#f8f9fa" }}>
+      <Sidebar userName={user.fullName} />
+      <div style={{ padding: "32px 24px", maxWidth: "100%", margin: "0 auto" }}>
+        <div style={{ marginBottom: "32px" }}>
           <div style={{
-            background: "#1976d2",
-            borderRadius: "8px",
-            padding: "24px 28px",
-            boxShadow: "0 2px 8px rgba(0,0,0,0.1)"
+            background: "linear-gradient(135deg, #0d47a1 0%, #1e88e5 100%)",
+            borderRadius: "12px",
+            padding: "24px 32px",
+            boxShadow: "0 4px 12px rgba(13, 71, 161, 0.15)"
           }}>
-            <h1 style={{ margin: "0 0 6px 0", color: "white", fontSize: "26px", fontWeight: "600", letterSpacing: "-0.5px" }}>
-              APD Inspection Form
+            <h1 style={{ margin: "0 0 8px 0", color: "white", fontSize: "28px", fontWeight: "700", letterSpacing: "-0.5px" }}>
+              Check Sheet Inspeksi APD
             </h1>
-            <p style={{ margin: 0, color: "#e3f2fd", fontSize: "14px" }}>
-              Monthly APD compliance checklist for {area.name} ({area.type})
+            <p style={{ margin: 0, color: "rgba(255, 255, 255, 0.9)", fontSize: "14px", fontWeight: "400" }}>
+              Form Pemeriksaan Alat Pelindung Diri (Monthly Calendar View)
             </p>
           </div>
         </div>
+
         <div style={{
           background: "white",
-          border: "1px solid #e0e0e0",
-          borderRadius: "8px",
+          border: "1px solid #e8e8e8",
+          borderRadius: "10px",
           padding: "20px 24px",
-          boxShadow: "0 1px 3px rgba(0,0,0,0.08)",
-          marginBottom: "24px"
+          boxShadow: "0 2px 6px rgba(0, 0, 0, 0.05)",
+          marginBottom: "28px"
         }}>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))", gap: "16px" }}>
-            <div>
-              <span style={{ fontSize: "13px", color: "#757575", display: "block", marginBottom: "4px" }}>Area ID</span>
-              <span style={{ fontSize: "15px", fontWeight: "500", color: "#212121" }}>{areaId}</span>
-            </div>
-            <div> 
-              <span style={{ fontSize: "13px", color: "#757575", display: "block", marginBottom: "4px" }}>Area Name</span>
-              <span style={{ fontSize: "15px", fontWeight: "500", color: "#212121" }}>{area.name}</span>
-            </div>
-            <div>
-              <span style={{ fontSize: "13px", color: "#757575", display: "block", marginBottom: "4px" }}>Area Type</span>
-              <span style={{ fontSize: "15px", fontWeight: "500", color: "#212121" }}>{area.type}</span>
-            </div>
-            <div>
-              <span style={{ fontSize: "13px", color: "#757575", display: "block", marginBottom: "4px" }}>Inspector</span>
-              <span style={{ fontSize: "15px", fontWeight: "500", color: "#212121" }}>{user.fullName}</span>
-            </div>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "12px 0", borderBottom: "1px solid #f0f0f0" }}>
+            <span style={{ fontWeight: "600", color: "#0d47a1", fontSize: "13px", textTransform: "uppercase", letterSpacing: "0.5px", minWidth: "150px" }}>
+              Area ID
+            </span>
+            <span style={{ color: "#333", fontSize: "14px", fontWeight: "500", textAlign: "right", flex: 1 }}>
+              {areaId}
+            </span>
+          </div>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "12px 0", borderBottom: "1px solid #f0f0f0" }}>
+            <span style={{ fontWeight: "600", color: "#0d47a1", fontSize: "13px", textTransform: "uppercase", letterSpacing: "0.5px", minWidth: "150px" }}>
+              Area Name
+            </span>
+            <span style={{ color: "#333", fontSize: "14px", fontWeight: "500", textAlign: "right", flex: 1 }}>
+              {areaName}
+            </span>
+          </div>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "12px 0", borderBottom: "1px solid #f0f0f0" }}>
+            <span style={{ fontWeight: "600", color: "#0d47a1", fontSize: "13px", textTransform: "uppercase", letterSpacing: "0.5px", minWidth: "150px" }}>
+              Bulan Pemeriksaan
+            </span>
+            <span style={{ color: "#333", fontSize: "14px", fontWeight: "500", textAlign: "right", flex: 1 }}>
+              {getMonthYear()}
+            </span>
+          </div>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "12px 0" }}>
+            <span style={{ fontWeight: "600", color: "#0d47a1", fontSize: "13px", textTransform: "uppercase", letterSpacing: "0.5px", minWidth: "150px" }}>
+              Tanggal Hari Ini
+            </span>
+            <span style={{ color: "#e65100", fontSize: "14px", fontWeight: "700", textAlign: "right", flex: 1 }}>
+              {today.toLocaleDateString("id-ID", { day: "numeric", month: "long", year: "numeric" })}
+            </span>
+          </div>
+        </div>
+
+        {/* Info Box */}
+        <div style={{
+          background: "#e3f2fd",
+          border: "1px solid #1e88e5",
+          borderRadius: "8px",
+          padding: "16px 20px",
+          marginBottom: "20px",
+          display: "flex",
+          alignItems: "center",
+          gap: "12px"
+        }}>
+          <span style={{ fontSize: "20px" }}>ℹ️</span>
+          <div style={{ flex: 1 }}>
+            <p style={{ margin: "0 0 4px 0", fontWeight: "600", color: "#01579b", fontSize: "13px" }}>
+              Perhatian: Real-Time Access
+            </p>
+            <p style={{ margin: 0, color: "#01579b", fontSize: "12px", lineHeight: "1.5" }}>
+              Anda hanya dapat mengisi checksheet untuk <strong>hari ini ({today.getDate()} {getMonthYear()})</strong>. 
+              Kolom hari ini berwarna <strong style={{ color: "#2e7d32" }}>putih</strong>, 
+              hari sebelumnya dan sesudahnya berwarna <strong style={{ color: "#757575" }}>abu-abu</strong> (tidak dapat diubah).
+            </p>
           </div>
         </div>
 
         <div style={{
-          background: "white",
-          border: "1px solid #e0e0e0",
-          borderRadius: "8px",
-          padding: "20px 24px",
-          boxShadow: "0 1px 3px rgba(0,0,0,0.08)",
-          marginBottom: "24px"
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          marginBottom: "20px",
+          gap: "16px",
+          flexWrap: "wrap"
         }}>
-          <div style={{ marginBottom: "16px" }}>
-            <span style={{ fontWeight: "500", color: "#212121", fontSize: "15px" }}>Inspection Schedule</span>
-            <span style={{ fontSize: "13px", color: "#757575", marginLeft: "8px" }}>• Every month</span>
-          </div>
-          <div style={{ display: "flex", gap: "10px", flexWrap: "wrap", marginBottom: "16px" }}>
-            {inspectionSchedule.map(date => (
-              <button
-                key={date}
-                type="button"
-                onClick={() => setSelectedDate(date)}
-                style={{
-                  padding: "8px 16px",
-                  background: selectedDate === date ? "#1976d2" : "white",
-                  color: selectedDate === date ? "white" : "#424242",
-                  border: "1px solid #d0d0d0",
-                  borderRadius: "6px",
-                  fontSize: "14px",
-                  cursor: "pointer",
-                  fontWeight: "500"
-                }}
-              >
-                {new Date(date).toLocaleDateString("en-US", { month: "short", year: "numeric" })}
-              </button>
-            ))}
-          </div>
-          <div style={{ display: "flex", alignItems: "center", gap: "12px", flexWrap: "wrap" }}>
-            <label style={{ fontWeight: "500", color: "#424242", fontSize: "14px" }}>Pilih Tanggal:</label>
-            <input
-              type="date"
-              value={selectedDate}
-              onChange={(e) => setSelectedDate(e.target.value)}
-              max={new Date().toISOString().split('T')[0]}
-              style={{
-                color: "#212121",
-                padding: "7px 12px",
-                border: "1px solid #d0d0d0",
-                borderRadius: "5px",
-                fontSize: "14px",
-                outline: "none"
-              }}
-            />
-            <button
-              onClick={handleLoadExisting}
-              disabled={!selectedDate}
-              style={{
-                padding: "7px 16px",
-                background: selectedDate ? "#ff9800" : "#e0e0e0",
-                color: selectedDate ? "white" : "#9e9e9e",
-                border: "none",
-                borderRadius: "5px",
-                cursor: selectedDate ? "pointer" : "not-allowed",
-                fontWeight: "500",
-                fontSize: "14px"
-              }}
-            >
-              Load Existing
-            </button>
-          </div>
+          <button
+            onClick={() => changeMonth(-1)}
+            style={{
+              padding: "10px 20px",
+              background: "#1e88e5",
+              color: "white",
+              border: "none",
+              borderRadius: "8px",
+              cursor: "pointer",
+              fontSize: "14px",
+              fontWeight: "600",
+              transition: "all 0.3s ease",
+              boxShadow: "0 2px 8px rgba(30, 136, 229, 0.2)"
+            }}
+          >
+            ← Bulan Lalu
+          </button>
+          <h3 style={{ margin: 0, color: "#0d47a1", fontSize: "20px", fontWeight: "700" }}>
+            {getMonthYear()}
+          </h3>
+          <button
+            onClick={() => changeMonth(1)}
+            style={{
+              padding: "10px 20px",
+              background: "#1e88e5",
+              color: "white",
+              border: "none",
+              borderRadius: "8px",
+              cursor: "pointer",
+              fontSize: "14px",
+              fontWeight: "600",
+              transition: "all 0.3s ease",
+              boxShadow: "0 2px 8px rgba(30, 136, 229, 0.2)"
+            }}
+          >
+            Bulan Depan →
+          </button>
         </div>
 
-        {/* Tabel APD */}
         <div style={{
           background: "white",
-          borderRadius: "8px",
-          boxShadow: "0 1px 3px rgba(0,0,0,0.08)",
+          borderRadius: "12px",
+          boxShadow: "0 2px 8px rgba(0, 0, 0, 0.06)",
           overflow: "hidden",
-          border: "1px solid #e0e0e0",
-          marginBottom: "24px"
+          border: "2px solid #0d47a1",
+          marginBottom: "28px"
         }}>
           <div style={{ overflowX: "auto" }}>
-            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "12px", minWidth: "1600px" }}>
+            <table style={{
+              width: "100%",
+              borderCollapse: "collapse",
+              fontSize: "12px",
+              minWidth: "1200px"
+            }}>
               <thead>
-                <tr style={{ background: "#fafafa", borderBottom: "2px solid #ccc" }}>
-                  <th rowSpan={2} style={{ padding: "10px 8px", border: "1px solid #ddd", fontWeight: "600", textAlign: "center", width: "4%" }}>NO</th>
-                  <th style={{ padding: "10px 8px", border: "1px solid #ddd", fontWeight: "600", textAlign: "center", width: "12%" }}>PROSES</th>
-                  <th rowSpan={2} colSpan={5} style={{ padding: "8px", border: "1px solid #ddd", fontWeight: "600", textAlign: "center", width: "30%" }}>NO. MESIN/NIK</th>
-                  <th rowSpan={2} style={{ padding: "10px 8px", border: "1px solid #ddd", fontWeight: "600", textAlign: "center", width: "8%" }}>PROSENTASE OK</th>
-                  <th rowSpan={2} colSpan={4} style={{ padding: "10px 8px", border: "1px solid #ddd", fontWeight: "600", textAlign: "center", width: "16%" }}>PROBLEM</th>
-                  <th rowSpan={2} colSpan={4} style={{ padding: "10px 8px", border: "1px solid #ddd", fontWeight: "600", textAlign: "center", width: "16%" }}>TINDAKAN PERBAIKAN</th>
-                  <th rowSpan={2} style={{ padding: "10px 8px", border: "1px solid #ddd", fontWeight: "600", textAlign: "center", width: "8%" }}>PIC</th>
-                  <th rowSpan={2} style={{ padding: "10px 8px", border: "1px solid #ddd", fontWeight: "600", textAlign: "center", width: "8%" }}>VERIFY</th>
+                <tr>
+                  <th rowSpan={2} style={{
+                    background: "#e3f2fd",
+                    fontWeight: "600",
+                    color: "#01579b",
+                    fontSize: "11px",
+                    textTransform: "uppercase",
+                    letterSpacing: "0.5px",
+                    padding: "14px 10px",
+                    textAlign: "center",
+                    border: "1px solid #0d47a1",
+                    minWidth: "50px"
+                  }}>
+                    NO
+                  </th>
+                  <th rowSpan={2} style={{
+                    background: "#e3f2fd",
+                    fontWeight: "600",
+                    color: "#01579b",
+                    fontSize: "11px",
+                    textTransform: "uppercase",
+                    letterSpacing: "0.5px",
+                    padding: "14px 10px",
+                    textAlign: "center",
+                    border: "1px solid #0d47a1",
+                    minWidth: "200px"
+                  }}>
+                    ITEM
+                  </th>
+                  <th rowSpan={2} style={{
+                    background: "#e3f2fd",
+                    fontWeight: "600",
+                    color: "#01579b",
+                    fontSize: "11px",
+                    textTransform: "uppercase",
+                    letterSpacing: "0.5px",
+                    padding: "14px 10px",
+                    textAlign: "center",
+                    border: "1px solid #0d47a1",
+                    minWidth: "160px"
+                  }}>
+                    CONTENT
+                  </th>
+                  <th rowSpan={2} style={{
+                    background: "#e3f2fd",
+                    fontWeight: "600",
+                    color: "#01579b",
+                    fontSize: "11px",
+                    textTransform: "uppercase",
+                    letterSpacing: "0.5px",
+                    padding: "14px 10px",
+                    textAlign: "center",
+                    border: "1px solid #0d47a1",
+                    minWidth: "90px"
+                  }}>
+                    METHODE
+                  </th>
+                  <th colSpan={days.length} style={{
+                    background: "#e3f2fd",
+                    fontWeight: "600",
+                    color: "#01579b",
+                    fontSize: "11px",
+                    textTransform: "uppercase",
+                    letterSpacing: "0.5px",
+                    padding: "14px 10px",
+                    textAlign: "center",
+                    border: "1px solid #0d47a1"
+                  }}>
+                    Bulan: {getMonthYear()}
+                  </th>
                 </tr>
-                <tr style={{ background: "#fafafa", borderBottom: "2px solid #ccc" }}>
-                  <th style={{ padding: "10px 8px", border: "1px solid #ddd", fontWeight: "600", textAlign: "center", width: "18%" }}>STANDART APD</th>
+                <tr>
+                  {days.map((day) => {
+                    const dateStatus = getDateStatus(day);
+                    const isToday = dateStatus === 'today';
+                    
+                    return (
+                      <th key={day} style={{
+                        background: isToday ? "#fff9c4" : "#e3f2fd",
+                        fontWeight: isToday ? "700" : "600",
+                        color: isToday ? "#e65100" : "#01579b",
+                        fontSize: "11px",
+                        padding: "12px 6px",
+                        textAlign: "center",
+                        border: isToday ? "2px solid #ff6f00" : "1px solid #0d47a1",
+                        minWidth: "50px"
+                      }}>
+                        {day}
+                        {isToday && <div style={{ fontSize: "9px", marginTop: "2px" }}>HARI INI</div>}
+                      </th>
+                    );
+                  })}
                 </tr>
               </thead>
               <tbody>
-                {rows.map((row, idx) => (
-                  <tr key={idx}>
-                    <td style={{ 
-                      padding: "8px", 
-                      border: "1px solid #ddd", 
-                      textAlign: "center", 
+                {inspectionItems.map((item, idx) => (
+                  <tr key={item.key}>
+                    <td style={{
+                      padding: "10px",
+                      borderBottom: "1px solid #0d47a1",
+                      borderRight: "1px solid #0d47a1",
+                      borderLeft: "1px solid #0d47a1",
                       fontWeight: "600",
-                      background: row.type === "proses" ? "#f5f5f5" : "white"
+                      color: "#333",
+                      textAlign: "center",
+                      background: "white",
+                      fontSize: "11px"
                     }}>
-                      {idx + 1}
+                      {item.no}
                     </td>
-                    <td style={{ 
-                      padding: "8px", 
-                      border: "1px solid #ddd", 
-                      textAlign: "left", 
-                      fontWeight: row.type === "proses" ? "600" : "normal",
-                      background: row.type === "proses" ? "#f5f5f5" : "white"
+                    <td style={{
+                      padding: "10px",
+                      borderBottom: "1px solid #0d47a1",
+                      borderRight: "1px solid #0d47a1",
+                      fontWeight: "500",
+                      color: "#333",
+                      background: "white",
+                      fontSize: "11px"
                     }}>
-                      <input
-                        value={row.proses}
-                        disabled
-                        style={{
-                          width: "100%",
-                          padding: "4px",
-                          fontSize: "12px",
-                          border: "none",
-                          background: "transparent",
-                          outline: "none",
-                          fontWeight: row.type === "proses" ? "600" : "normal"
-                        }}
-                      />
+                      {item.item}
                     </td>
-                    {[...Array(5)].map((_, i) => {
-                      const field = `r${i + 1}` as keyof typeof row;
+                    <td style={{
+                      padding: "10px",
+                      borderBottom: "1px solid #0d47a1",
+                      borderRight: "1px solid #0d47a1",
+                      fontWeight: "400",
+                      color: "#555",
+                      background: "white",
+                      fontSize: "11px"
+                    }}>
+                      {item.content}
+                    </td>
+                    <td style={{
+                      padding: "10px",
+                      borderBottom: "1px solid #0d47a1",
+                      borderRight: "1px solid #0d47a1",
+                      textAlign: "center",
+                      fontWeight: "400",
+                      color: "#555",
+                      background: "white",
+                      fontSize: "11px"
+                    }}>
+                      {item.method}
+                    </td>
+                    {days.map((day) => {
+                      const dateKey = formatDateKey(day);
+                      const value = answers[dateKey]?.[item.key] || "";
+                      const dateStatus = getDateStatus(day);
+                      const isEditable = dateStatus === 'today';
+                      
+                      let cellBgColor = "#e0e0e0";
+                      if (isEditable) {
+                        cellBgColor = value === "✓" ? "#c8e6c9" : value === "✗" ? "#ffcdd2" : "white";
+                      }
+
                       return (
-                        <td key={i} style={{ 
-                          padding: "6px", 
-                          border: "1px solid #ddd", 
+                        <td key={day} style={{
+                          padding: "4px",
+                          borderBottom: "1px solid #0d47a1",
+                          borderRight: "1px solid #0d47a1",
                           textAlign: "center",
-                          background: "white"
+                          verticalAlign: "middle",
+                          background: cellBgColor
                         }}>
-                          {row.type === "proses" ? (
-                            <input
-                              value={row[field]}
-                              onChange={(e) => updateRowField(idx, String(field), e.target.value)}
-                              disabled={!selectedDate}
-                              placeholder="NIK/Mesin"
-                              style={{
-                                width: "100%",
-                                padding: "4px",
-                                fontSize: "12px",
-                                border: "1px solid #ccc",
-                                borderRadius: "3px",
-                                background: "#f9f9f9"
-                              }}
-                            />
-                          ) : (
+                          {isEditable ? (
                             <select
-                              value={row[field]}
-                              onChange={(e) => updateRowField(idx, String(field), e.target.value)}
-                              disabled={!selectedDate}
+                              value={value}
+                              onChange={(e) => handleInputChange(dateKey, item.key, e.target.value, day)}
                               style={{
                                 width: "100%",
-                                padding: "4px",
+                                padding: "6px 4px",
+                                border: "1px solid #1e88e5",
+                                borderRadius: "4px",
                                 fontSize: "12px",
-                                border: "1px solid #ccc",
-                                borderRadius: "3px"
+                                fontWeight: "600",
+                                color: value === "✓" ? "#2e7d32" : value === "✗" ? "#c62828" : "#333",
+                                background: value === "✓" ? "#c8e6c9" : value === "✗" ? "#ffcdd2" : "white",
+                                cursor: "pointer",
+                                transition: "all 0.3s ease"
                               }}
                             >
                               <option value="">-</option>
                               <option value="✓">✓</option>
                               <option value="✗">✗</option>
                             </select>
+                          ) : (
+                            <div style={{
+                              padding: "6px 4px",
+                              fontSize: "13px",
+                              fontWeight: "700",
+                              color: value ? (value === "✓" ? "#2e7d32" : "#c62828") : "#000000",
+                              cursor: "not-allowed",
+                              opacity: 0.7
+                            }}>
+                              {value || "-"}
+                            </div>
                           )}
                         </td>
                       );
                     })}
-                    <td style={{ 
-                      padding: "8px", 
-                      border: "1px solid #ddd", 
-                      textAlign: "center",
-                      background: "white"
-                    }}>
-                      {row.persentaseOk}
-                    </td>
-                    <td colSpan={4} style={{ 
-                      padding: "6px", 
-                      border: "1px solid #ddd",
-                      background: "white"
-                    }}>
-                      <textarea
-                        value={row.problem}
-                        onChange={(e) => updateRowField(idx, "problem", e.target.value)}
-                        disabled={!selectedDate}
-                        placeholder="Alasan tidak memakai APD..."
-                        rows={1}
-                        style={{
-                          width: "100%",
-                          padding: "4px",
-                          fontSize: "12px",
-                          resize: "vertical",
-                          border: "1px solid #ccc",
-                          borderRadius: "3px"
-                        }}
-                      />
-                    </td>
-                    <td colSpan={4} style={{ 
-                      padding: "6px", 
-                      border: "1px solid #ddd",
-                      background: "white"
-                    }}>
-                      <textarea
-                        value={row.tindakanPerbaikan}
-                        onChange={(e) => updateRowField(idx, "tindakanPerbaikan", e.target.value)}
-                        disabled={!selectedDate}
-                        placeholder="Tindakan perbaikan..."
-                        rows={1}
-                        style={{
-                          width: "100%",
-                          padding: "4px",
-                          fontSize: "12px",
-                          resize: "vertical",
-                          border: "1px solid #ccc",
-                          borderRadius: "3px"
-                        }}
-                      />
-                    </td>
-                    <td style={{ 
-                      padding: "6px", 
-                      border: "1px solid #ddd",
-                      background: "white"
-                    }}>
-                      <input
-                        type="text"
-                        value={row.pic}
-                        onChange={(e) => updateRowField(idx, "pic", e.target.value)}
-                        disabled={!selectedDate}
-                        placeholder="PIC"
-                        style={{
-                          width: "100%",
-                          padding: "4px",
-                          fontSize: "12px",
-                          border: "1px solid #ccc",
-                          borderRadius: "3px"
-                        }}
-                      />
-                    </td>
-                    <td style={{ 
-                      padding: "6px", 
-                      border: "1px solid #ddd",
-                      background: "white"
-                    }}>
-                      <input
-                        type="text"
-                        value={row.verify}
-                        onChange={(e) => updateRowField(idx, "verify", e.target.value)}
-                        disabled={!selectedDate}
-                        placeholder="Verify"
-                        style={{
-                          width: "100%",
-                          padding: "4px",
-                          fontSize: "12px",
-                          border: "1px solid #ccc",
-                          borderRadius: "3px"
-                        }}
-                      />
-                    </td>
                   </tr>
                 ))}
+                <tr style={{ background: "#e3f2fd" }}>
+                  <td colSpan={4} style={{
+                    padding: "12px",
+                    textAlign: "right",
+                    fontWeight: "600",
+                    color: "#01579b",
+                    background: "#e3f2fd",
+                    border: "1px solid #0d47a1",
+                    fontSize: "11px",
+                    textTransform: "uppercase",
+                    letterSpacing: "0.5px"
+                  }}>
+                    NAMA (INISIAL) / NIK
+                  </td>
+                  {days.map((day) => {
+                    const dateKey = formatDateKey(day);
+                    const inspector = answers[dateKey]?.inspector || "";
+                    const dateStatus = getDateStatus(day);
+                    const isEditable = dateStatus === 'today';
+                    
+                    const cellBgColor = isEditable ? "white" : "#e0e0e0";
+
+                    return (
+                      <td key={day} style={{
+                        padding: "4px",
+                        border: "1px solid #0d47a1",
+                        textAlign: "center",
+                        background: cellBgColor
+                      }}>
+                        {isEditable ? (
+                          <input
+                            type="text"
+                            value={inspector}
+                            onChange={(e) => handleInputChange(dateKey, "inspector", e.target.value, day)}
+                            placeholder="NIK"
+                            style={{
+                              width: "100%",
+                              padding: "6px 4px",
+                              border: "1px solid #1e88e5",
+                              borderRadius: "4px",
+                              fontSize: "11px",
+                              color: "#333",
+                              textAlign: "center",
+                              transition: "all 0.3s ease"
+                            }}
+                          />
+                        ) : (
+                          <div style={{
+                            padding: "6px 4px",
+                            fontSize: "11px",
+                            color: inspector ? "#333" : "#333",
+                            cursor: "not-allowed",
+                            opacity: 0.7
+                          }}>
+                            {inspector || "-"}
+                          </div>
+                        )}
+                      </td>
+                    );
+                  })}
+                </tr>
               </tbody>
             </table>
           </div>
         </div>
 
-        <div style={{ display: "flex", gap: "12px", justifyContent: "center", padding: "20px 0" }}>
+        <div style={{
+          display: "flex",
+          gap: "12px",
+          justifyContent: "center",
+          padding: "20px 0",
+          flexWrap: "wrap"
+        }}>
           <button
-            onClick={() => router.push("/ga-inspeksi-apd")}
+            onClick={() => router.push("/ga-lift-barang")}
             style={{
-              padding: "11px 28px",
-              background: "#757575",
-              color: "white",
+              padding: "10px 28px",
               border: "none",
-              borderRadius: "6px",
-              fontWeight: "500",
-              fontSize: "15px",
-              cursor: "pointer"
+              borderRadius: "8px",
+              fontSize: "13px",
+              cursor: "pointer",
+              fontWeight: "600",
+              transition: "all 0.3s ease",
+              textTransform: "uppercase",
+              letterSpacing: "0.5px",
+              minWidth: "140px",
+              background: "#bdbdbd",
+              color: "white",
+              boxShadow: "0 2px 8px rgba(0, 0, 0, 0.1)"
             }}
           >
             ← Kembali
           </button>
           <button
             onClick={handleSave}
-            disabled={!selectedDate}
             style={{
-              padding: "11px 28px",
-              background: selectedDate ? "#1976d2" : "#e0e0e0",
-              color: selectedDate ? "white" : "#9e9e9e",
+              padding: "10px 28px",
               border: "none",
-              borderRadius: "6px",
-              fontWeight: "500",
-              fontSize: "15px",
-              opacity: selectedDate ? 1 : 0.6,
-              cursor: selectedDate ? "pointer" : "not-allowed"
+              borderRadius: "8px",
+              fontSize: "13px",
+              cursor: "pointer",
+              fontWeight: "600",
+              transition: "all 0.3s ease",
+              textTransform: "uppercase",
+              letterSpacing: "0.5px",
+              minWidth: "140px",
+              background: "linear-gradient(135deg, #1e88e5, #0d47a1)",
+              color: "white",
+              boxShadow: "0 2px 8px rgba(13, 71, 161, 0.2)"
             }}
           >
-            ✓ Simpan Data
+            ✓ Simpan
           </button>
         </div>
       </div>

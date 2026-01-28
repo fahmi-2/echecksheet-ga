@@ -1,25 +1,30 @@
-﻿// app/status-ga/page.tsx
-//
+// app/status-ga/page.tsx
 "use client"
 
-import { useEffect } from "react"
+import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
 import { useAuth } from "@/lib/auth-context"
-import { NavbarStatic } from "@/components/navbar-static"
+import { Sidebar } from "@/components/Sidebar";
 import Link from "next/link"
+import { QrCode } from "lucide-react"
 
 export default function StatusGA() {
   const router = useRouter()
   const { user } = useAuth()
+  const [redirected, setRedirected] = useState(false)
 
   useEffect(() => {
+    // Prevent infinite loops
+    if (redirected) return;
+
     if (!user) {
+      setRedirected(true);
       router.push("/login-page")
-    }
-    if (user?.role !== "inspector-ga") {
+    } else if (user?.role !== "inspector-ga") {
+      setRedirected(true);
       router.push("/home")
     }
-  }, [user, router])
+  }, [user, router, redirected])
 
   if (!user) return null
 
@@ -34,7 +39,7 @@ export default function StatusGA() {
         { name: "INSPEKSI APAR", desc: "Cek APAR: isi, kondisi, aksesibilitas", link: "inspeksi-apar" },
         { name: "INSPEKSI EMERGENCY LAMP", desc: "Cek lampu darurat & exit lamp", link: "inspeksi-emergency" },
         { name: "EXIT LAMP, PINTU DARURAT, DAN JALUR EVAKUASI", desc: "Cek pintu darurat & kejelasan jalur evakuasi", link: "exit-lamp-pintu-darurat" },
-      ]
+      ] 
     },
     {
       title: "2. Keselamatan dan Pemeliharaan Peralatan",
@@ -57,12 +62,17 @@ export default function StatusGA() {
         { 
           name: "Form pengambilan APD", 
           desc: "Formulir distribusi & pengambilan APD",
-          link: "e-checksheet-apd"
+          link: "e-checksheet-apd/riwayat-apd"
         },
         { 
           name: "INSPEKSI INFRASTUKTUR JALAN", 
           desc: "Cek kondisi jalan, trotoar, boardess pabrik", 
-          link: "inf-jalan" // 🔹 Sesuaikan dengan route baru
+          link: "ga-inf-jalan" // 🔹 Sesuaikan dengan route baru
+        },
+        { 
+          name: "INSPEKSI APD", 
+          desc: "Inspeksi pengecekan penggunaan APD",
+          link: "inspeksi-apd"
         },
       ]
     },
@@ -80,13 +90,21 @@ export default function StatusGA() {
 
   return (
     <div className="app-page">
-      <NavbarStatic userName={user.fullName} />
+      <Sidebar userName={user.fullName} />
 
       <div className="page-content">
         <div className="header">
-          <h1>📋 Checklist General Affairs</h1>
+          <h1 className="page-title">📋 Checklist General Affairs</h1>
           <div className="user-info">
             <span>Selamat datang, {user.fullName}</span>
+            <button
+              onClick={() => router.push("/scan")}
+              className="btn-scan-qr"
+              title="Buka scanner QR"
+            >
+              <QrCode size={20} />
+              Scan QR
+            </button>
           </div>
         </div>
 
@@ -120,38 +138,80 @@ export default function StatusGA() {
       <style jsx>{`
         .page-content {
           max-width: 1400px;
-          margin: 0 auto;
+          margin: 0 00 0 120px;
           padding: 32px 24px;
           background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
           min-height: 100vh;
         }
 
         .header {
-          margin-bottom: 48px;
-          text-align: center;
-          padding-bottom: 24px;
-          border-bottom: 3px solid rgba(13, 71, 161, 0.1);
-        }
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 48px;
+  padding-bottom: 24px;
+  border-bottom: 3px solid rgba(255, 255, 255, 0.1);
+  flex-wrap: wrap;
+  gap: 16px;
+}
+.page-title {
+  margin: 0;
+  color: white; /* ✅ Warna putih */
+  font-size: 2.5rem;
+  font-weight: 700;
+  letter-spacing: -0.5px;
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3); /* ✅ Tambahkan shadow agar lebih jelas */
+}
 
-        .header h1 {
-          margin: 0 0 16px 0;
-          background: linear-gradient(135deg, #0d47a1 0%, #1565c0 100%);
-          -webkit-background-clip: text;
-          -webkit-text-fill-color: transparent;
-          background-clip: text;
-          font-size: 2.5rem;
-          font-weight: 700;
-          letter-spacing: -0.5px;
-        }
+        .header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 48px;
+  padding-bottom: 24px;
+  border-bottom: 3px solid rgba(255, 255, 255, 0.1);
+  flex-wrap: wrap;
+  gap: 16px;
+  background: linear-gradient(135deg, #0d47a1 0%, #1565c0 100%); /* ✅ Pastikan background biru */
+}
 
         .user-info {
           display: flex;
           align-items: center;
-          justify-content: center;
-          gap: 16px;
+          gap: 12px;
           font-size: 1rem;
-          color: #555;
+          color: white;
           font-weight: 500;
+          margin-left: auto !important;
+          white-space: nowrap;
+          flex-wrap: wrap;
+        }
+
+        .btn-scan-qr {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          padding: 8px 16px;
+          background: rgba(255, 255, 255, 0.25);
+          color: white;
+          border: 2px solid rgba(255, 255, 255, 0.4);
+          border-radius: 8px;
+          cursor: pointer;
+          font-weight: 600;
+          font-size: 0.95rem;
+          transition: all 0.3s ease;
+          white-space: nowrap;
+        }
+
+        .btn-scan-qr:hover {
+          background: rgba(255, 255, 255, 0.35);
+          border-color: rgba(255, 255, 255, 0.6);
+          transform: translateY(-2px);
+          box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+        }
+
+        .btn-scan-qr:active {
+          transform: translateY(0);
         }
 
         .ga-checklist-container {
@@ -298,7 +358,17 @@ export default function StatusGA() {
           .checklist-card { padding: 16px; }
           .card-icon { font-size: 1.4rem; }
         }
+@media (max-width: 768px) {
+  .header {
+    flex-direction: column;
+    align-items: flex-start;
+    text-align: left;
+  }
 
+  .page-title {
+    font-size: 1.8rem;
+    text-align: left;
+  }
         @media (max-width: 480px) {
           .header h1 { font-size: 1.5rem; }
           .category-title { font-size: 1.1rem; }

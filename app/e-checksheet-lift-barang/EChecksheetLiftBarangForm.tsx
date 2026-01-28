@@ -4,7 +4,7 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
-import { NavbarStatic } from "@/components/navbar-static";
+import { Sidebar } from "@/components/Sidebar";
 
 export function EChecksheetLiftBarangForm({
   liftName,
@@ -165,8 +165,14 @@ export function EChecksheetLiftBarangForm({
 
   return (
     <div style={{ minHeight: "100vh", background: "#f8f9fa" }}>
-      <NavbarStatic userName={user.fullName} />
-      <div style={{ padding: "32px 24px", maxWidth: "100%", margin: "0 auto" }}>
+      <Sidebar userName={user.fullName} />
+      <div style={{ 
+        paddingLeft: "95px",
+        paddingRight: "25px",
+        paddingBottom: "25px",
+        paddingTop: "25px",
+        maxWidth: "100%", 
+        margin: "0 auto" }}>
         <div style={{ marginBottom: "32px" }}>
           <div style={{
             background: "linear-gradient(135deg, #0d47a1 0%, #1e88e5 100%)",

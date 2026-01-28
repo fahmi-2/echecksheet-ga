@@ -4,7 +4,7 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
-import { NavbarStatic } from "@/components/navbar-static";
+import { Sidebar } from "@/components/Sidebar";
 
 interface ChecksheetEntry {
   date: string;
@@ -183,7 +183,7 @@ export function EChecksheetSmokeDetectorForm({
 
   return (
     <div style={{ minHeight: "100vh", background: "#f7f9fc" }}>
-      <NavbarStatic userName={user.fullName} />
+      <Sidebar userName={user.fullName} />
       <div style={{ padding: "24px 20px", maxWidth: "100%", margin: "0 auto" }}>
         
         <div style={{ marginBottom: "28px" }}>

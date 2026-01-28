@@ -4,7 +4,7 @@
 import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { useAuth } from "@/lib/auth-context"
-import { NavbarStatic } from "@/components/navbar-static"
+import { Sidebar } from "@/components/Sidebar";
 import Link from "next/link"
 
 export default function InspeksiEmergencyPage() {
@@ -42,7 +42,7 @@ export default function InspeksiEmergencyPage() {
 
   return (
     <div className="app-page">
-      <NavbarStatic userName={user.fullName} />
+      <Sidebar userName={user.fullName} />
 
       <div className="page-content">
         <div className="header">
@@ -66,12 +66,12 @@ export default function InspeksiEmergencyPage() {
                 >
                   {checkIfFilled(area.id) ? "✅ Sudah Diisi" : "📝 Isi Checklist"}
                 </Link>
-                <Link 
-                  href={`/status-ga/inspeksi-emergency/riwayat/${area.id}`} 
-                  className="btn-view"
-                >
-                  📊 Riwayat
-                </Link>
+                <Link
+  href={`/status-ga/inspeksi-emergency/riwayat/${area.id}`}
+  className="btn-riwayat"
+>
+  📊 Riwayat
+</Link>
               </div>
             </div>
           ))}
@@ -92,7 +92,7 @@ export default function InspeksiEmergencyPage() {
 
         .header h1 {
           margin: 0;
-          color: #d32f2f;
+          color: #ffffff;
           font-size: 2.2rem;
         }
 
@@ -180,16 +180,55 @@ export default function InspeksiEmergencyPage() {
           color: white;
           cursor: not-allowed;
         }
+.btn-riwayat {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
 
+  padding: 10px 16px;
+  border-radius: 10px;
+
+  background: #f5faff;
+  border: 1.5px solid #90caf9;
+  color: #1e88e5;
+
+  font-weight: 600;
+  text-decoration: none;
+  cursor: pointer;
+
+  transition: all 0.25s ease;
+}
+
+.btn-riwayat:hover {
+  background: #e3f2fd;
+  border-color: #42a5f5;
+  transform: translateY(-1px);
+}
         .btn-view {
-          background: #1e88e5;
-          color: white;
-          padding: 10px 16px;
-        }
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
 
-        .btn-view:hover {
-          background: #1565c0;
-        }
+  padding: 10px 14px;
+  border-radius: 10px;
+
+  background: #f5faff;
+  border: 1.5px solid #90caf9;
+  color: #1e88e5;
+
+  font-weight: 600;
+  text-decoration: none;
+
+  transition: all 0.25s ease;
+}
+
+.btn-view:hover {
+  background: #e3f2fd;
+  border-color: #42a5f5;
+  transform: translateY(-1px);
+}
 
         @media (max-width: 768px) {
           .categories-grid {

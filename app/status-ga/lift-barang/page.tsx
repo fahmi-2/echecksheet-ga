@@ -1,15 +1,14 @@
 // app/ga-lift-barang/page.tsx
 import { Suspense } from 'react';
 import { GaLiftBarangContent } from './GaLiftBarangContent';
-export default function GaLiftBarangPage({
-  searchParams,
+export default async function GaLiftBarangPage({
+    searchParams,
 }: {
-  searchParams: {
-    openLift?: string;
-  };
+  searchParams?: Promise<{ openLift?: string }>; // ← searchParams adalah Promise
 }) {
-  const openLift = searchParams?.openLift || '';
-
+  // ✅ TUNGGU NILAI searchParams
+  const resolvedSearchParams = await searchParams;
+  const openLift = resolvedSearchParams?.openLift || '';
   return (
     <Suspense fallback={
       <div style={{

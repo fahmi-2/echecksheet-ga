@@ -32,10 +32,15 @@ interface CheckResult {
 export default function FinalAssyStatusPage() {
   const router = useRouter()
   const { user } = useAuth()
+  const [redirected, setRedirected] = useState(false)
 
   useEffect(() => {
-    if (!user) router.push("/login-page")
-  }, [user, router])
+    if (redirected) return;
+    if (!user) {
+      setRedirected(true)
+      router.push("/login-page")
+    }
+  }, [user, router, redirected])
 
   const [subType, setSubType] = useState<"group-leader" | "inspector">("group-leader")
 
@@ -74,6 +79,7 @@ export default function FinalAssyStatusPage() {
   })
 
   useEffect(() => {
+    if (redirected) return;
     const loadResults = () => {
       if (typeof window !== "undefined") {
         const saved = localStorage.getItem(storageKey)
@@ -251,6 +257,14 @@ export default function FinalAssyStatusPage() {
           font-size: 0.95rem;
         }
 
+        .month-header {
+          text-align: center;
+          font-size: 1.1rem;
+          font-weight: 700;
+          color: #0d47a1;
+          background: #e3f2fd;
+          padding: 12px 0;
+        }
         .table-wrapper {
           overflow-x: auto;
           border-radius: 8px;
@@ -264,20 +278,12 @@ export default function FinalAssyStatusPage() {
         }
         .status-table th, .status-table td {
           padding: 8px 6px;
-          text-align: center;
+          text-align: left;
           border: 1px solid #e0e0e0;
         }
-          
         .status-table th {
-          background: #f5f9ff;  
-        }
-        .month-header {
-          text-align: center;
-          font-size: 1.1rem;
-          font-weight: bold;
-          color: #0d47a1;
-          background: #e3f2fd;
-          padding: 12px 0;
+          background: #f5f9ff;
+          font-weight: 600;
         }
         .col-checkpoint { min-width: 300px; word-break: break-word; }
         .col-date { min-width: 36px; text-align: center; }

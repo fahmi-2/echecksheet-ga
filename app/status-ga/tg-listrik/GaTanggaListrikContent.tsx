@@ -4,7 +4,7 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
-import { NavbarStatic } from "@/components/navbar-static";
+import { Sidebar } from "@/components/Sidebar";
 
 interface TanggaListrikItem {
   no: number;
@@ -137,7 +137,7 @@ export function GaTanggaListrikContent({ openArea }: { openArea: string }) {
 
   return (
     <div style={{ minHeight: "100vh", background: "#f8f9fa" }}>
-      <NavbarStatic userName={user?.fullName || "User"} />
+      <Sidebar userName={user?.fullName || "User"} />
       <div style={{ padding: "20px 16px", maxWidth: "1400px", margin: "0 auto" }}>
         {/* Header */}
         <div style={{ marginBottom: "24px" }}>

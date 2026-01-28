@@ -10,6 +10,7 @@ export default function EChecksheetInsApdPage({
   };
 }) {
   const areaId = Number(searchParams?.areaId) || 1;
+  const areaName = `Area ${areaId}`;
 
   return (
     <Suspense fallback={
@@ -24,7 +25,7 @@ export default function EChecksheetInsApdPage({
         Loading APD inspection form...
       </div>
     }>
-      <EChecksheetInsApdForm areaId={areaId} />
+      <EChecksheetInsApdForm areaId={areaId} areaName={areaName} />
     </Suspense>
   );
 }

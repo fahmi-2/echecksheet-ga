@@ -1,43 +1,47 @@
-// app/exit-lamp-pintu-darurat/pintu-darurat/page.tsx
+// app/exit-lamp-pintu-darurat/riwayat/pintu-darurat/page.tsx
 "use client"
 
 import { useState, useEffect } from "react"
-import { useRouter, useSearchParams } from "next/navigation"
+import { useRouter } from "next/navigation"
 import { useAuth } from "@/lib/auth-context"
-import { NavbarStatic } from "@/components/navbar-static"
+import { Sidebar } from "@/components/Sidebar";
+import Link from "next/link"
 
-export default function PintuDaruratChecklist() {
+interface PintuDaruratItem {
+  no: number
+  lokasi: string
+  kondisiPintu: string
+  areaSekitar: string
+  paluAlatBantu: string
+  identitasPintu: string
+  idPeringatan: string
+  doorCloser: string
+  keterangan: string
+  tindakanPerbaikan: string
+  pic: string
+  dueDate: string
+  verifikasi: string
+  ttdPic: string
+}
+
+interface PintuDaruratRecord {
+  id: string
+  date: string
+  category: string
+  items: PintuDaruratItem[]
+  checker: string
+  submittedAt: string
+}
+
+export default function RiwayatPintuDarurat() {
   const router = useRouter()
-  const searchParams = useSearchParams()
   const { user } = useAuth()
 
-  const date = searchParams.get("date") || new Date().toISOString().split('T')[0]
-
-  // Data lokasi dari Excel
-  const locations = [
-    { no: 1, lokasi: "Auditorium" },
-    { no: 2, lokasi: "Training Room" },
-    { no: 3, lokasi: "CNC Room" },
-    { no: 4, lokasi: "Gel sheet" },
-    { no: 5, lokasi: "Genba B" },
-  ]
-
-  const [items, setItems] = useState<Array<{
-    no: number
-    lokasi: string
-    kondisiPintu: string
-    areaSekitar: string
-    paluAlatBantu: string
-    identitasPintu: string
-    idPeringatan: string
-    doorCloser: string
-    keterangan: string
-    tindakanPerbaikan: string
-    pic: string
-    dueDate: string
-    verifikasi: string
-    ttdPic: string
-  }>>([])
+  const [records, setRecords] = useState<PintuDaruratRecord[]>([])
+  const [filteredRecords, setFilteredRecords] = useState<PintuDaruratRecord[]>([])
+  const [loading, setLoading] = useState(true)
+  const [filterDate, setFilterDate] = useState("")
+  const [filterLocation, setFilterLocation] = useState("")
 
   // Validasi akses
   useEffect(() => {
@@ -46,319 +50,301 @@ export default function PintuDaruratChecklist() {
     }
   }, [user, router])
 
+  // Load data
   useEffect(() => {
-    const initialItems = locations.map(loc => ({
-      no: loc.no,
-      lokasi: loc.lokasi,
-      kondisiPintu: "",
-      areaSekitar: "",
-      paluAlatBantu: "",
-      identitasPintu: "",
-      idPeringatan: "",
-      doorCloser: "",
-      keterangan: "",
-      tindakanPerbaikan: "",
-      pic: "",
-      dueDate: "",
-      verifikasi: "",
-      ttdPic: ""
-    }))
-    setItems(initialItems)
-  }, [])
-
-  const handleInputChange = (index: number, field: string, value: string) => {
-    const newItems = [...items]
-    newItems[index] = { ...newItems[index], [field]: value }
-    setItems(newItems)
-  }
-
-  const handleSubmit = () => {
-    const storageKey = `ga_exit_pintu-darurat_${date}`
-    const result = {
-      id: `pintu-darurat-${Date.now()}`,
-      date,
-      category: "pintu-darurat",
-      items,
-      checker: user?.fullName || "",
-      submittedAt: new Date().toISOString(),
+    const loadRecords = () => {
+      try {
+        const historyKey = "ga_exit_history_pintu-darurat"
+        const saved = localStorage.getItem(historyKey)
+        if (saved) {
+          const parsed = JSON.parse(saved)
+          setRecords(parsed)
+          setFilteredRecords(parsed)
+        }
+      } catch (e) {
+        console.error("Gagal memuat riwayat Pintu Darurat:", e)
+      } finally {
+        setLoading(false)
+      }
     }
 
-    localStorage.setItem(storageKey, JSON.stringify(result))
+    loadRecords()
+  }, [])
 
-    // Update history
-    const historyKey = "ga_exit_history_pintu-darurat"
-    const existing = localStorage.getItem(historyKey) || "[]"
-    const history = JSON.parse(existing)
-    history.push({ ...result, id: storageKey })
-    localStorage.setItem(historyKey, JSON.stringify(history))
+  // Terapkan filter
+  useEffect(() => {
+    let filtered = records
 
-    alert("✅ Data berhasil disimpan!")
-    router.push("/exit-lamp-pintu-darurat")
-  }
+    if (filterDate) {
+      filtered = filtered.filter(r => r.date === filterDate)
+    }
+
+    if (filterLocation) {
+      filtered = filtered.filter(r => 
+        r.items.some(item => item.lokasi === filterLocation)
+      )
+    }
+
+    setFilteredRecords(filtered)
+  }, [filterDate, filterLocation, records])
+
+  // Ambil daftar lokasi unik
+  const locations = Array.from(
+    new Set(records.flatMap(r => r.items.map(i => i.lokasi)))
+  ).sort()
 
   if (!user) return null
 
   return (
     <div className="app-page">
-      <NavbarStatic userName={user.fullName} />
+      <Sidebar userName={user.fullName} />
 
       <div className="page-content">
         <div className="header">
-          <h1>🚪 Pintu Darurat</h1>
-          <p className="subtitle">Tanggal: {date}</p>
+          <h1>🚪 Riwayat Pintu Darurat</h1>
+          <div className="user-info">
+            <span>Selamat datang, {user.fullName}</span>
+          </div>
         </div>
 
-        <div className="form-container">
-          <table className="checklist-table">
-            <thead>
-              <tr>
-                <th>No</th>
-                <th>Lokasi</th>
-                <th>Kondisi Pintu</th>
-                <th>Area Sekitar</th>
-                <th>Palu/Alat Bantu</th>
-                <th>Identitas Pintu</th>
-                <th>ID Peringatan</th>
-                <th>Door Closer</th>
-                <th>Keterangan N-OK</th>
-                <th>Tindakan Perbaikan</th>
-                <th>PIC</th>
-                <th>Due Date</th>
-                <th>Verifikasi</th>
-                <th>Ttd PIC</th>
-              </tr>
-            </thead>
-            <tbody>
-              {items.map((item, index) => (
-                <tr key={index}>
-                  <td>{item.no}</td>
-                  <td>{item.lokasi}</td>
-                  <td>
-                    <select 
-                      value={item.kondisiPintu} 
-                      onChange={(e) => handleInputChange(index, "kondisiPintu", e.target.value)}
-                      className="status-select"
-                    >
-                      <option value="">Pilih</option>
-                      <option value="OK">OK</option>
-                      <option value="NG">NG</option>
-                    </select>
-                  </td>
-                  <td>
-                    <select 
-                      value={item.areaSekitar} 
-                      onChange={(e) => handleInputChange(index, "areaSekitar", e.target.value)}
-                      className="status-select"
-                    >
-                      <option value="">Pilih</option>
-                      <option value="OK">OK</option>
-                      <option value="NG">NG</option>
-                    </select>
-                  </td>
-                  <td>
-                    <select 
-                      value={item.paluAlatBantu} 
-                      onChange={(e) => handleInputChange(index, "paluAlatBantu", e.target.value)}
-                      className="status-select"
-                    >
-                      <option value="">Pilih</option>
-                      <option value="OK">OK</option>
-                      <option value="NG">NG</option>
-                    </select>
-                  </td>
-                  <td>
-                    <select 
-                      value={item.identitasPintu} 
-                      onChange={(e) => handleInputChange(index, "identitasPintu", e.target.value)}
-                      className="status-select"
-                    >
-                      <option value="">Pilih</option>
-                      <option value="OK">OK</option>
-                      <option value="NG">NG</option>
-                    </select>
-                  </td>
-                  <td>
-                    <select 
-                      value={item.idPeringatan} 
-                      onChange={(e) => handleInputChange(index, "idPeringatan", e.target.value)}
-                      className="status-select"
-                    >
-                      <option value="">Pilih</option>
-                      <option value="OK">OK</option>
-                      <option value="NG">NG</option>
-                    </select>
-                  </td>
-                  <td>
-                    <select 
-                      value={item.doorCloser} 
-                      onChange={(e) => handleInputChange(index, "doorCloser", e.target.value)}
-                      className="status-select"
-                    >
-                      <option value="">Pilih</option>
-                      <option value="OK">OK</option>
-                      <option value="NG">NG</option>
-                    </select>
-                  </td>
-                  <td>
-                    <input
-                      type="text"
-                      value={item.keterangan}
-                      onChange={(e) => handleInputChange(index, "keterangan", e.target.value)}
-                      placeholder="Catatan..."
-                      className="notes-input"
-                    />
-                  </td>
-                  <td>
-                    <input
-                      type="text"
-                      value={item.tindakanPerbaikan}
-                      onChange={(e) => handleInputChange(index, "tindakanPerbaikan", e.target.value)}
-                      placeholder="Tindakan perbaikan..."
-                      className="notes-input"
-                    />
-                  </td>
-                  <td>
-                    <input
-                      type="text"
-                      value={item.pic}
-                      onChange={(e) => handleInputChange(index, "pic", e.target.value)}
-                      placeholder="PIC"
-                      className="notes-input"
-                    />
-                  </td>
-                  <td>
-                    <input
-                      type="date"
-                      value={item.dueDate}
-                      onChange={(e) => handleInputChange(index, "dueDate", e.target.value)}
-                      className="date-input"
-                    />
-                  </td>
-                  <td>
-                    <select 
-                      value={item.verifikasi} 
-                      onChange={(e) => handleInputChange(index, "verifikasi", e.target.value)}
-                      className="status-select"
-                    >
-                      <option value="">Pilih</option>
-                      <option value="OK">OK</option>
-                      <option value="NG">NG</option>
-                    </select>
-                  </td>
-                  <td>
-                    <input
-                      type="text"
-                      value={item.ttdPic}
-                      onChange={(e) => handleInputChange(index, "ttdPic", e.target.value)}
-                      placeholder="Tanda tangan"
-                      className="notes-input"
-                    />
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-
-          <div className="form-actions">
-            <button onClick={() => router.back()} className="btn-cancel">
-              Batal
-            </button>
-            <button onClick={handleSubmit} className="btn-submit">
-              💾 Simpan Data
-            </button>
+        {/* Filter */}
+        <div className="date-filter">
+          <div className="filter-group">
+            <label>Tanggal:</label>
+            <input
+              type="date"
+              value={filterDate}
+              onChange={(e) => setFilterDate(e.target.value)}
+              className="date-input"
+            />
           </div>
+          <div className="filter-group">
+            <label>Lokasi:</label>
+            <select
+              value={filterLocation}
+              onChange={(e) => setFilterLocation(e.target.value)}
+              className="location-select"
+            >
+              <option value="">Semua Lokasi</option>
+              {locations.map(loc => (
+                <option key={loc} value={loc}>{loc}</option>
+              ))}
+            </select>
+          </div>
+          <button
+            onClick={() => {
+              setFilterDate("")
+              setFilterLocation("")
+            }}
+            className="clear-filter"
+          >
+            Reset Filter
+          </button>
+          <Link href="/exit-lamp-pintu-darurat/pintu-darurat" className="btn-add">
+            ➕ Tambah Data
+          </Link>
+        </div>
+
+        {/* Daftar Riwayat */}
+        <div className="riwayat-container">
+          {filteredRecords.length === 0 ? (
+            <div className="empty-state">
+              Belum ada data Pintu Darurat.
+            </div>
+          ) : (
+            <div className="data-tables">
+              {filteredRecords.map((record) => (
+                <div key={record.id} className="data-section">
+                  <div className="section-header">
+                    <span>Tanggal: {record.date}</span>
+                    <span>Petugas: {record.checker}</span>
+                  </div>
+                  <table className="apd-table">
+                    <thead>
+                      <tr>
+                        <th>No</th>
+                        <th>Lokasi</th>
+                        <th>Kondisi Pintu</th>
+                        <th>Area Sekitar</th>
+                        <th>Palu/Alat Bantu</th>
+                        <th>Identitas Pintu</th>
+                        <th>ID Peringatan</th>
+                        <th>Door Closer</th>
+                        <th>Keterangan</th>
+                        <th>Tindakan Perbaikan</th>
+                        <th>PIC</th>
+                        <th>Due Date</th>
+                        <th>Verifikasi</th>
+                        <th>Ttd PIC</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {record.items.map((item) => (
+                        <tr key={`${record.id}-${item.no}`}>
+                          <td>{item.no}</td>
+                          <td>{item.lokasi}</td>
+                          <td>{item.kondisiPintu}</td>
+                          <td>{item.areaSekitar}</td>
+                          <td>{item.paluAlatBantu}</td>
+                          <td>{item.identitasPintu}</td>
+                          <td>{item.idPeringatan}</td>
+                          <td>{item.doorCloser}</td>
+                          <td>{item.keterangan || "-"}</td>
+                          <td>{item.tindakanPerbaikan || "-"}</td>
+                          <td>{item.pic || "-"}</td>
+                          <td>{item.dueDate || "-"}</td>
+                          <td>{item.verifikasi || "-"}</td>
+                          <td>{item.ttdPic || "-"}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       </div>
 
       <style jsx>{`
         .page-content {
-          max-width: 1200px;
+          max-width: 1400px;
           margin: 0 auto;
           padding: 24px;
         }
 
         .header h1 {
           margin: 0;
-          color: #d32f2f;
+          color: #ffffff;
           font-size: 2rem;
         }
 
-        .subtitle {
+        .user-info {
+          display: flex;
+          align-items: center;
+          gap: 16px;
+          font-size: 0.95rem;
           color: #666;
-          margin-top: 8px;
         }
 
-        .form-container {
+        .date-filter {
+          display: flex;
+          gap: 16px;
+          margin-bottom: 24px;
+          padding: 16px;
+          background: #f5f9ff;
+          border-radius: 8px;
+          flex-wrap: wrap;
+          align-items: center;
+        }
+
+        .filter-group {
+          display: flex;
+          flex-direction: column;
+          gap: 6px;
+        }
+
+        .filter-group label {
+          font-weight: 600;
+          font-size: 0.9rem;
+          color: #333;
+        }
+
+        .date-input,
+        .location-select {
+          padding: 8px 12px;
+          border: 1px solid #ccc;
+          border-radius: 6px;
+          font-size: 0.95rem;
+          min-width: 180px;
+        }
+
+        .clear-filter {
+          padding: 8px 16px;
+          background: #f44336;
+          color: white;
+          border: none;
+          border-radius: 6px;
+          cursor: pointer;
+          font-size: 0.9rem;
+        }
+
+        .btn-add {
+          padding: 8px 16px;
+          background: #1e88e5;
+          color: white;
+          text-decoration: none;
+          border-radius: 6px;
+          font-weight: 600;
+          margin-left: auto;
+        }
+
+        .riwayat-container {
           background: white;
           border-radius: 12px;
           box-shadow: 0 4px 12px rgba(0,0,0,0.08);
           padding: 24px;
-          overflow-x: auto;
         }
 
-        .checklist-table {
+        .empty-state {
+          text-align: center;
+          padding: 40px 20px;
+          color: #666;
+          font-size: 1.1rem;
+        }
+
+        .data-tables {
+          display: flex;
+          flex-direction: column;
+          gap: 24px;
+        }
+
+        .data-section {
+          border: 1px solid #eee;
+          border-radius: 8px;
+          overflow: hidden;
+        }
+
+        .section-header {
+          background: #f5f9ff;
+          padding: 12px 16px;
+          display: flex;
+          justify-content: space-between;
+          font-size: 0.9rem;
+          color: #666;
+        }
+
+        .apd-table {
           width: 100%;
           border-collapse: collapse;
-          margin-bottom: 24px;
+          font-size: 0.8rem;
         }
 
-        .checklist-table th,
-        .checklist-table td {
-          padding: 12px;
+        .apd-table th,
+        .apd-table td {
+          padding: 8px;
           text-align: left;
-          border: 1px solid #eee;
+          border-bottom: 1px solid #eee;
         }
 
-        .checklist-table th {
-          background: #f5f9ff;
+        .apd-table th {
+          background: #f9f9f9;
           font-weight: 600;
-          position: sticky;
-          top: 0;
         }
 
-        .status-select,
-        .notes-input,
-        .date-input {
-          width: 100%;
-          padding: 6px;
-          border: 1px solid #ddd;
-          border-radius: 4px;
-          font-size: 0.9rem;
-        }
-
-        .form-actions {
-          display: flex;
-          gap: 16px;
-          justify-content: flex-end;
-        }
-
-        .btn-cancel,
-        .btn-submit {
-          padding: 10px 24px;
-          border: none;
-          border-radius: 6px;
-          font-weight: 600;
-          cursor: pointer;
-        }
-
-        .btn-cancel {
-          background: #f5f5f5;
-          color: #333;
-        }
-
-        .btn-submit {
-          background: #d32f2f;
-          color: white;
-        }
-
-        @media (max-width: 768px) {
-          .checklist-table {
-            font-size: 0.8rem;
+        @media (max-width: 1024px) {
+          .date-filter {
+            flex-direction: column;
+            align-items: flex-start;
           }
 
-          .checklist-table th,
-          .checklist-table td {
-            padding: 8px 4px;
+          .apd-table {
+            font-size: 0.7rem;
+          }
+
+          .apd-table th,
+          .apd-table td {
+            padding: 4px;
           }
         }
       `}</style>

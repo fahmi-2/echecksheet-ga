@@ -3,7 +3,7 @@
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
-import { NavbarStatic } from "@/components/navbar-static";
+import { Sidebar } from "@/components/Sidebar";
 
 export default function FormInspeksiStopKontakSelector() {
   const router = useRouter();
@@ -21,7 +21,7 @@ export default function FormInspeksiStopKontakSelector() {
 
   return (
     <div className="app-page">
-      <NavbarStatic userName={user.fullName} />
+      <Sidebar userName={user.fullName} />
 
       <div className="page-content">
         <h1 className="title">🔌 Form Inspeksi Stop Kontak</h1>

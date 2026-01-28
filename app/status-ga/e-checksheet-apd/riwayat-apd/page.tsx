@@ -4,7 +4,7 @@
 import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { useAuth } from "@/lib/auth-context"
-import { NavbarStatic } from "@/components/navbar-static"
+import { Sidebar } from "@/components/Sidebar";
 import Link from "next/link"
 
 interface ApdItem {
@@ -183,7 +183,7 @@ export default function RiwayatApdPage() {
 
   return (
     <div className="app-page">
-      <NavbarStatic userName={user.fullName} />
+      <Sidebar userName={user.fullName} />
 
       <div className="page-content">
         <div className="header">

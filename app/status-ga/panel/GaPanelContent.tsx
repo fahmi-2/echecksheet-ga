@@ -1,10 +1,10 @@
-// app/ga-panel/GaPanelContent.tsx
+    // app/ga-panel/GaPanelContent.tsx
 "use client";
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
-import { NavbarStatic } from "@/components/navbar-static";
+import { Sidebar } from "@/components/Sidebar";
 
 interface PanelItem {
   no: number;
@@ -157,7 +157,7 @@ export function GaPanelContent({ openPanel }: { openPanel: string }) {
 
   return (
     <div className="app-page">
-      <NavbarStatic userName={user?.fullName || "User"} />
+      <Sidebar userName={user?.fullName || "User"} />
       <div className="page-content">
         <div className="header-section">
           <div className="header-content">

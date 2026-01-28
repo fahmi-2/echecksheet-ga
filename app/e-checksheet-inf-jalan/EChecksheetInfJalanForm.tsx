@@ -4,7 +4,7 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
-import { NavbarStatic } from "@/components/navbar-static";
+import { Sidebar } from "@/components/Sidebar";
 
 interface ChecksheetEntry {
   date: string;
@@ -215,7 +215,7 @@ export function EChecksheetInfJalanForm({
 
   return (
     <div style={{ minHeight: "100vh", background: "#f8f9fa" }}>
-      <NavbarStatic userName={user.fullName} />
+      <Sidebar userName={user.fullName} />
       <div style={{ padding: "20px 16px", maxWidth: "100%", margin: "0 auto" }}>
         {/* Header */}
         <div style={{ marginBottom: "24px" }}>

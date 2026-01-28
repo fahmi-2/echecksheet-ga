@@ -2,16 +2,16 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { useRouter, useSearchParams } from "next/navigation"
+import { useRouter } from "next/navigation"
 import { useAuth } from "@/lib/auth-context"
-import { NavbarStatic } from "@/components/navbar-static"
+import { Sidebar } from "@/components/Sidebar";
 
 export default function PintuDaruratChecklist() {
   const router = useRouter()
-  const searchParams = useSearchParams()
   const { user } = useAuth()
 
-  const date = searchParams.get("date") || new Date().toISOString().split('T')[0]
+  const today = new Date().toISOString().split('T')[0]
+  const date = today
 
   // Data lokasi dari Excel
   const locations = [
@@ -100,7 +100,7 @@ export default function PintuDaruratChecklist() {
 
   return (
     <div className="app-page">
-      <NavbarStatic userName={user.fullName} />
+      <Sidebar userName={user.fullName} />
 
       <div className="page-content">
         <div className="header">
@@ -279,7 +279,7 @@ export default function PintuDaruratChecklist() {
 
         .header h1 {
           margin: 0;
-          color: #d32f2f;
+          color: #ffffff;
           font-size: 2rem;
         }
 

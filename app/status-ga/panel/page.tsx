@@ -1,15 +1,15 @@
 // app/ga-panel/page.tsx
 import { Suspense } from 'react';
-import { GaPanelContent } from './GaPanelContent';
+import { GaPanelContent } from '@/app/status-ga/panel/GaPanelContent';
 
-export default function GaPanelPage({
+export default async function GaPanelPage({
   searchParams,
 }: {
-  searchParams: {
-    openPanel?: string;
-  };
+  searchParams?: Promise<{ openPanel?: string }>; // ← searchParams adalah Promise
 }) {
-  const openPanel = searchParams?.openPanel || '';
+  // ✅ TUNGGU NILAI searchParams
+  const resolvedSearchParams = await searchParams;
+  const openPanel = resolvedSearchParams?.openPanel || '';
 
   return (
     <Suspense fallback={

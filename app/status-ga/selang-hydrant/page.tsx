@@ -2,14 +2,14 @@
 import { Suspense } from 'react';
 import { GaSelangHydrantContent } from './GaSelangHydrantContent';
 
-export default function GaSelangHydrantPage({
-  searchParams,
+export default async function GaSelangHydrantPage({
+    searchParams,
 }: {
-  searchParams: {
-    openArea?: string;
-  };
+  searchParams?: Promise<{ openArea?: string }>; // ← searchParams adalah Promise
 }) {
-  const openArea = searchParams?.openArea || '';
+  // ✅ TUNGGU NILAI searchParams
+  const resolvedSearchParams = await searchParams;
+  const openArea = resolvedSearchParams?.openArea || '';
 
   return (
     <Suspense fallback={

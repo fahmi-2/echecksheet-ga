@@ -4,7 +4,7 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
-import { NavbarStatic } from "@/components/navbar-static";
+import { Sidebar } from "@/components/Sidebar";
 
 interface DetectorItem {
   no: number;
@@ -269,7 +269,7 @@ export function GaSmokeDetectorContent({ openArea }: { openArea: string }) {
 
   return (
     <div style={{ minHeight: "100vh", background: "#f7f9fc" }}>
-      <NavbarStatic userName={user?.fullName || "User"} />
+      <Sidebar userName={user?.fullName || "User"} />
       <div style={{ padding: "24px 20px", maxWidth: "1400px", margin: "0 auto" }}>
         <div style={{ marginBottom: "28px" }}>
           <div style={{

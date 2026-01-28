@@ -1,9 +1,9 @@
-﻿  "use client";
+  "use client";
 
-  import { useEffect, useMemo } from "react";
+  import { useEffect, useMemo, useState } from "react";
   import { useRouter } from "next/navigation";
   import { useAuth } from "@/lib/auth-context";
-  import { NavbarStatic } from "@/components/navbar-static";
+import { Sidebar } from "@/components/Sidebar";
   import { aparDataBySlug } from "@/lib/apar-data";
 
   const AREAS = [
@@ -42,13 +42,16 @@
   export default function InspeksiAparPage() {
     const router = useRouter();
     const { user } = useAuth();
+    const [redirected, setRedirected] = useState(false);
 
     useEffect(() => {
+      if (redirected) return;
       if (!user) return;
       if (user.role !== "inspector-ga") {
+        setRedirected(true);
         router.push("/home");
       }
-    }, [user, router]);
+    }, [user, router, redirected]);
 
     if (!user) return <div className="loading">Memuat...</div>;
     if (user.role !== "inspector-ga") return null;
@@ -59,7 +62,7 @@
 
     return (
       <div className="app-page">
-        <NavbarStatic userName={user.fullName} />
+        <Sidebar userName={user.fullName} />
 
         <div className="page-content">
           <h1 className="title">🧯 Status Inspeksi APAR</h1>
@@ -116,7 +119,7 @@
             min-height: calc(100vh - 80px);
           }
           .title {
-            color: #c62828;
+            color: #3228c6;
             font-size: 2rem;
             margin-bottom: 8px;
             font-weight: 700;

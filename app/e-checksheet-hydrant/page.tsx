@@ -1,21 +1,22 @@
 // app/e-checksheet-hydrant/page.tsx
-import { Suspense } from 'react';
+import { Suspense, use } from 'react';
 import { EChecksheetHydrantForm } from './EChecksheetHydrantForm';
 
 export default function EChecksheetHydrantPage({
   searchParams,
 }: {
-  searchParams: {
+  searchParams: Promise<{
     no?: string;
     lokasi?: string;
     zona?: string;
     jenisHydrant?: string;
-  };
+  }>;
 }) {
-  const no = searchParams?.no || '0';
-  const lokasi = searchParams?.lokasi || 'Hydrant Location';
-  const zona = searchParams?.zona || 'Zone';
-  const jenisHydrant = searchParams?.jenisHydrant || 'HYDRANT TYPE';
+  const params = use(searchParams);
+  const no = params?.no || '0';
+  const lokasi = params?.lokasi || 'Hydrant Location';
+  const zona = params?.zona || 'Zone';
+  const jenisHydrant = params?.jenisHydrant || 'HYDRANT TYPE';
 
   return (
     <Suspense fallback={

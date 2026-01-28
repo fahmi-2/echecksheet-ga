@@ -1,9 +1,9 @@
-﻿  "use client";
+  "use client";
 
   import { useEffect, useState } from "react";
   import { useRouter } from "next/navigation";
   import { useAuth } from "@/lib/auth-context";
-  import { NavbarStatic } from "@/components/navbar-static";
+  import { Sidebar } from "@/components/Sidebar";
 
   type HistoryEntry = {
     id: string;
@@ -82,7 +82,7 @@
 
     return (
       <div className="app-page">
-        <NavbarStatic userName={user.fullName} />
+        <Sidebar userName={user.fullName} />
 
         <div className="page-content">
           <button onClick={() => router.back()} className="back-btn">

@@ -5,7 +5,7 @@
 import { useState, useEffect, use } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
-import { NavbarStatic } from "@/components/navbar-static";
+import { Sidebar } from "@/components/Sidebar";
 import { format, parse, isBefore, isValid } from "date-fns";
 import { aparDataBySlug } from "@/lib/apar-data";
 
@@ -126,12 +126,15 @@ export default function InspeksiAparForm({ params }: { params: Promise<{ slug: s
   const [items, setItems] = useState<any[]>([]);
   const [showPreview, setShowPreview] = useState(false);
   const [hasNg, setHasNg] = useState(false);
+  const [redirected, setRedirected] = useState(false);
 
   useEffect(() => {
+    if (redirected) return;
     if (!user || user.role !== "inspector-ga") {
+      setRedirected(true);
       router.push("/home");
     }
-  }, [user, router]);
+  }, [user, router, redirected]);
 
   useEffect(() => {
     const areaName = areaNames[slug];
@@ -267,7 +270,7 @@ export default function InspeksiAparForm({ params }: { params: Promise<{ slug: s
 
   return (
     <div className="app-page">
-      <NavbarStatic userName={user.fullName} />
+      <Sidebar userName={user.fullName} />
 
       <div className="page-content">
         <div className="header">
@@ -449,7 +452,7 @@ export default function InspeksiAparForm({ params }: { params: Promise<{ slug: s
         }
         .header h1 {
           margin: 0;
-          color: #b71c1c;
+          color: #ffffff;
           font-size: 2rem;
         }
         .header-top {

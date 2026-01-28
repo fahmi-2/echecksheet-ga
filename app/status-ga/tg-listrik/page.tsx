@@ -2,14 +2,14 @@
 import { Suspense } from 'react';
 import { GaTanggaListrikContent } from './GaTanggaListrikContent';
 
-export default function GaTanggaListrikPage({
-  searchParams,
+export default async function GaTanggaListrikPage({
+    searchParams,
 }: {
-  searchParams: {
-    openArea?: string;
-  };
+  searchParams?: Promise<{ openArea?: string }>; // ← searchParams adalah Promise
 }) {
-  const openArea = searchParams?.openArea || '';
+  // ✅ TUNGGU NILAI searchParams
+  const resolvedSearchParams = await searchParams;
+  const openArea = resolvedSearchParams?.openArea || '';
 
   return (
     <Suspense fallback={

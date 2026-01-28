@@ -2,14 +2,16 @@
 import { Suspense } from 'react';
 import { GaInfJalanContent } from './GaInfJalanContent';
 
-export default function GaInfJalanPage({
+
+// ✅ JADIKAN SERVER COMPONENT ASYNC
+export default async function GaInfJalanPage({
   searchParams,
 }: {
-  searchParams: {
-    openArea?: string;
-  };
+  searchParams?: Promise<{ openArea?: string }>; // ← searchParams adalah Promise
 }) {
-  const openArea = searchParams?.openArea || '';
+  // ✅ TUNGGU NILAI searchParams
+  const resolvedSearchParams = await searchParams;
+  const openArea = resolvedSearchParams?.openArea || '';
 
   return (
     <Suspense fallback={
