@@ -1,4 +1,8 @@
 // app/status-ga/page.tsx
+<<<<<<< HEAD
+=======
+//
+>>>>>>> 4e122d36b5329b903ff02db0e1e9cdbcb4134941
 "use client"
 
 import { useEffect } from "react"
@@ -307,4 +311,8 @@ export default function StatusGA() {
       `}</style>
     </div>
   )
+<<<<<<< HEAD
 }
+=======
+}
+>>>>>>> 4e122d36b5329b903ff02db0e1e9cdbcb4134941
