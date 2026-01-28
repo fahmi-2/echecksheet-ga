@@ -1,14 +1,16 @@
 // app/ga-smoke-detector/page.tsx
-import { Suspense } from 'react';
+"use client";
+
+import { Suspense, use } from 'react';
 import { GaSmokeDetectorContent } from './GaSmokeDetectorContent';
+
 export default function GaSmokeDetectorPage({
   searchParams,
 }: {
-  searchParams: {
-    openArea?: string;
-  };
+  searchParams: Promise<{ openArea?: string }>;
 }) {
-  const openArea = searchParams?.openArea || '';
+  const params = use(searchParams);
+  const openArea = params?.openArea || '';
 
   return (
     <Suspense fallback={

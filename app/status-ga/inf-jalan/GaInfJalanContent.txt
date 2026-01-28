@@ -1,9 +1,10 @@
-// app/status-ga/inf-jalan/GaInfJalanContent.tsx
+// app/ga-inf-jalan/GaInfJalanContent.tsx
 "use client";
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
+import { NavbarStatic } from "@/components/navbar-static";
 import { Sidebar } from "@/components/Sidebar";
 
 interface InfJalanItem {
@@ -22,7 +23,6 @@ interface ChecksheetEntry {
   dueDate: string;
   verify: string;
   inspector: string;
-  images?: string[]; // ✅ Support array gambar
 }
 
 interface ChecksheetData {
@@ -32,15 +32,10 @@ interface ChecksheetData {
 export function GaInfJalanContent({ openArea }: { openArea: string }) {
   const router = useRouter();
   const { user, loading } = useAuth();
-
   const [isMounted, setIsMounted] = useState(false);
   const [showModal, setShowModal] = useState(false);
   const [filterKategori, setFilterKategori] = useState<string>("all");
   const [searchTerm, setSearchTerm] = useState("");
-
-  // ✅ State untuk modal gambar
-  const [showImageModal, setShowImageModal] = useState(false);
-  const [currentImageUrl, setCurrentImageUrl] = useState("");
 
   useEffect(() => {
     setIsMounted(true);
@@ -48,7 +43,7 @@ export function GaInfJalanContent({ openArea }: { openArea: string }) {
 
   useEffect(() => {
     if (loading) return;
-    if (!user || (user.role !== "inspector-ga")) {
+    if (!user || (user.role !== "group-leader" && user.role !== "inspector-ga")) {
       router.push("/login-page");
     }
   }, [user, loading, router]);
@@ -130,17 +125,6 @@ export function GaInfJalanContent({ openArea }: { openArea: string }) {
     setShowModal(false);
   };
 
-  // ✅ Fungsi buka modal gambar
-  const openImageModal = (url: string) => {
-    setCurrentImageUrl(url);
-    setShowImageModal(true);
-  };
-
-  const closeImageModal = () => {
-    setShowImageModal(false);
-    setCurrentImageUrl("");
-  };
-
   const getDaysInMonth = (date: Date) => {
     const year = date.getFullYear();
     const month = date.getMonth();
@@ -209,13 +193,41 @@ export function GaInfJalanContent({ openArea }: { openArea: string }) {
   };
 
   const inspectionItems = [
-    { key: "jalanRata", no: 1, item: "Jalan Rata, tidak bergelombang. Tidak rusak, tidak licin dan tidak berpotensi menyebabkan kecelakaan kerja lainnya" },
-    { key: "jalanTidakLicin", no: 2, item: "Jalan Tidak licin/ berlumut" },
-    { key: "pencahayaanMemadai", no: 3, item: "Pencahayaan memadai (cukup terang menyinari area jalan dan sekitarnya)" },
-    { key: "trotoarTidakRusak", no: 4, item: "Trotuar tidak rusak, dan bentuk masih utuh dan sesuai, warna masih bisa terlihat" },
-    { key: "boardessTrotuar", no: 5, item: "Boardess trotuar tidak berkarat, tidak keropos dan visualisasi jelas" },
-    { key: "tidakAdaTumpukan", no: 6, item: "Tidak ada tumpukan diatas boardess / Boardess cor" },
-    { key: "boardessCor", no: 7, item: "Boardess cor bentukan masih utuh, masih terlihat warnanya dan tidak licin" },
+    { 
+      key: "jalanRata", 
+      no: 1, 
+      item: "Jalan Rata, tidak bergelombang. Tidak rusak, tidak licin dan tidak berpotensi menyebabkan kecelakaan kerja lainnya"
+    },
+    { 
+      key: "jalanTidakLicin", 
+      no: 2, 
+      item: "Jalan Tidak licin/ berlumut"
+    },
+    { 
+      key: "pencahayaanMemadai", 
+      no: 3, 
+      item: "Pencahayaan memadai (cukup terang menyinari area jalan dan sekitarnya)"
+    },
+    { 
+      key: "trotoarTidakRusak", 
+      no: 4, 
+      item: "Trotuar tidak rusak, dan bentuk masih utuh dan sesuai, warna masih bisa terlihat"
+    },
+    { 
+      key: "boardessTrotuar", 
+      no: 5, 
+      item: "Boardess trotuar tidak berkarat, tidak keropos dan visualisasi jelas"
+    },
+    { 
+      key: "tidakAdaTumpukan", 
+      no: 6, 
+      item: "Tidak ada tumpukan diatas boardess / Boardess cor"
+    },
+    { 
+      key: "boardessCor", 
+      no: 7, 
+      item: "Boardess cor bentukan masih utuh, masih terlihat warnanya dan tidak licin"
+    }
   ];
 
   const fieldKeys = [
@@ -230,7 +242,9 @@ export function GaInfJalanContent({ openArea }: { openArea: string }) {
     return matchKategori && matchSearch;
   });
 
-  if (!isMounted) return null;
+  if (!isMounted) {
+    return null;
+  }
 
   if (loading) {
     return (
@@ -240,7 +254,7 @@ export function GaInfJalanContent({ openArea }: { openArea: string }) {
     );
   }
 
-  if (!user || (user.role !== "inspector-ga")) {
+  if (!user || (user.role !== "inspector-ga" && user.role !== "group-leader")) {
     return null;
   }
 
@@ -712,16 +726,6 @@ export function GaInfJalanContent({ openArea }: { openArea: string }) {
                               fontSize: "10px",
                               minWidth: "180px"
                             }}>Tindakan<br/>Perbaikan</th>
-                            {/* ✅ Kolom Dokumentasi */}
-                            <th style={{
-                              padding: "12px 10px",
-                              border: "1px solid #0d47a1",
-                              fontWeight: "700",
-                              color: "#01579b",
-                              textAlign: "center",
-                              fontSize: "10px",
-                              minWidth: "120px"
-                            }}>Dokumentasi</th>
                             <th style={{
                               padding: "12px 10px",
                               border: "1px solid #0d47a1",
@@ -764,7 +768,6 @@ export function GaInfJalanContent({ openArea }: { openArea: string }) {
                           {inspectionItems.map((row) => {
                             const entries = (checksheetData?.[row.key] as ChecksheetEntry[]) || [];
                             const entryForDate = entries.find(e => e.date === selectedDateInModal);
-                            const images = entryForDate?.images || [];
 
                             return (
                               <tr key={row.key}>
@@ -829,45 +832,6 @@ export function GaInfJalanContent({ openArea }: { openArea: string }) {
                                   lineHeight: "1.4"
                                 }}>
                                   {entryForDate?.tindakanPerbaikan || "-"}
-                                </td>
-                                {/* ✅ Kolom Dokumentasi */}
-                                <td style={{
-                                  padding: "8px 6px",
-                                  border: "1px solid #0d47a1",
-                                  textAlign: "center",
-                                  verticalAlign: "top",
-                                  background: "white"
-                                }}>
-                                  {images.length > 0 ? (
-                                    <div style={{ display: "flex", flexWrap: "wrap", gap: "4px", justifyContent: "center" }}>
-                                      {images.map((imgUrl, idx) => (
-                                        <div
-                                          key={idx}
-                                          onClick={() => openImageModal(imgUrl)}
-                                          style={{
-                                            width: "50px",
-                                            height: "50px",
-                                            borderRadius: "4px",
-                                            overflow: "hidden",
-                                            cursor: "pointer",
-                                            border: "1px solid #ccc"
-                                          }}
-                                        >
-                                          <img
-                                            src={imgUrl}
-                                            alt={`Dok ${idx + 1}`}
-                                            style={{
-                                              width: "100%",
-                                              height: "100%",
-                                              objectFit: "cover"
-                                            }}
-                                          />
-                                        </div>
-                                      ))}
-                                    </div>
-                                  ) : (
-                                    "-"
-                                  )}
                                 </td>
                                 <td style={{
                                   padding: "8px 6px",
@@ -950,43 +914,6 @@ export function GaInfJalanContent({ openArea }: { openArea: string }) {
                 >
                   Tutup
                 </button>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* ✅ Modal Gambar Dokumentasi */}
-        {showImageModal && (
-          <div
-            onClick={closeImageModal}
-            style={{
-              position: "fixed",
-              top: 0,
-              left: 0,
-              right: 0,
-              bottom: 0,
-              background: "rgba(0,0,0,0.8)",
-              display: "flex",
-              justifyContent: "center",
-              alignItems: "center",
-              zIndex: 2000,
-              padding: "20px"
-            }}
-          >
-            <div onClick={(e) => e.stopPropagation()} style={{ textAlign: "center" }}>
-              <img
-                src={currentImageUrl}
-                alt="Dokumentasi"
-                style={{
-                  maxHeight: "90vh",
-                  maxWidth: "90vw",
-                  objectFit: "contain",
-                  borderRadius: "8px",
-                  border: "3px solid white"
-                }}
-              />
-              <div style={{ marginTop: "16px", color: "white", fontSize: "14px" }}>
-                Click outside to close
               </div>
             </div>
           </div>

@@ -32,7 +32,7 @@ export default function ModernHomePage() {
 
   // Ambil data dari context
   const userName = user?.fullName;
-  const currentRole = user?.role || "inspector-ga" || "inspector-qa" || "group-leader-qa";
+  const currentRole = user?.role || "inspector-ga";
 
   // Statistik
   const stats = [
@@ -70,7 +70,7 @@ export default function ModernHomePage() {
         href: "/status-ga",
       },
     ],
-    "group-leader-qa": [
+    "group-leader": [
       {
         id: "final-assy",
         icon: Wrench,
@@ -88,7 +88,7 @@ export default function ModernHomePage() {
         href: "/status-pre-assy?subType=group-leader",
       },
     ],
-    "inspector-qa": [
+    inspector: [
       {
         id: "final-assy",
         icon: Wrench,

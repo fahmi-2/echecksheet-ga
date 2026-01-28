@@ -1,19 +1,22 @@
 // app/e-checksheet-lift-barang/page.tsx
-import { Suspense } from 'react';
+'use client';
+
+import { Suspense, use } from 'react';
 import { EChecksheetLiftBarangForm } from './EChecksheetLiftBarangForm';
 
 export default function EChecksheetLiftBarangPage({
   searchParams,
 }: {
-  searchParams: {
+  searchParams: Promise<{
     liftName?: string;
     area?: string;
     lokasi?: string;
-  };
+  }>;
 }) {
-  const liftName = searchParams?.liftName || 'Lift Barang';
-  const area = searchParams?.area || 'Area';
-  const lokasi = searchParams?.lokasi || 'Lokasi';
+  const params = use(searchParams);
+  const liftName = params?.liftName || 'Lift Barang';
+  const area = params?.area || 'Area';
+  const lokasi = params?.lokasi || 'Lokasi';
 
   return (
     <Suspense fallback={

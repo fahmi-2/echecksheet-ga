@@ -121,7 +121,7 @@ export function EChecksheetSmokeDetectorForm({
       const key = `e-checksheet-smoke-detector-${no}`;
       localStorage.setItem(key, JSON.stringify(newData));
       alert(`Inspection data saved for ${new Date(selectedDate).toLocaleDateString("en-US")}`);
-      router.push(`/ga-smoke-detector?openArea=${encodeURIComponent(lokasi)}`);
+      router.push(`/status-ga/smoke-detector?openArea=${encodeURIComponent(lokasi)}`);
     } catch (err) {
       console.error("Save failed:", err);
       alert("Failed to save data");
@@ -159,27 +159,7 @@ export function EChecksheetSmokeDetectorForm({
     }
   };
 
-  const generateBiMonthlyDates = () => {
-    const today = new Date();
-    const year = today.getFullYear();
-    const currentMonth = today.getMonth();
-    const biMonthlyMonths = [0, 2, 4, 6, 8, 10]; // Jan, Mar, Mei, Jul, Sep, Nov
-
-    let nextInspectionMonth = biMonthlyMonths.find(m => m >= currentMonth);
-    if (nextInspectionMonth === undefined) {
-      nextInspectionMonth = 0;
-      return [new Date(year + 1, 0, 1).toISOString().split('T')[0]];
-    }
-
-    const dates = [
-      new Date(year, nextInspectionMonth, 1),
-      ...(nextInspectionMonth + 2 <= 11 ? [new Date(year, nextInspectionMonth + 2, 1)] : [])
-    ].map(d => d.toISOString().split('T')[0]);
-
-    return dates;
-  };
-
-  const inspectionSchedule = generateBiMonthlyDates();
+  // ❌ HAPUS fungsi generateBiMonthlyDates() — tidak digunakan lagi
 
   return (
     <div style={{ minHeight: "100vh", background: "#f7f9fc" }}>
@@ -230,6 +210,7 @@ export function EChecksheetSmokeDetectorForm({
           </div>
         </div>
 
+        {/* 🔁 Bagian Inspection Schedule yang Dimodifikasi */}
         <div style={{
           background: "white",
           border: "1px solid #e0e0e0",
@@ -242,8 +223,10 @@ export function EChecksheetSmokeDetectorForm({
             <span style={{ fontWeight: "500", color: "#212121", fontSize: "15px" }}>Inspection Schedule</span>
             <span style={{ fontSize: "13px", color: "#757575", marginLeft: "8px" }}>• Every 2 months (Jan, Mar, May, Jul, Sep, Nov)</span>
           </div>
-          <div style={{ display: "flex", alignItems: "center", gap: "12px", flexWrap: "wrap" }}>
-            <label style={{ fontWeight: "500", color: "#424242", fontSize: "14px" }}>Pilih Tanggal:</label>
+
+          {/* Input Tanggal Manual */}
+          <div style={{ display: "flex", alignItems: "center", gap: "12px", flexWrap: "wrap", marginBottom: "12px" }}>
+            <label style={{ fontWeight: "500", color: "#424242", fontSize: "14px" }}>Tanggal Inspeksi:</label>
             <input
               type="date"
               value={selectedDate}
@@ -255,28 +238,68 @@ export function EChecksheetSmokeDetectorForm({
                 border: "1px solid #d0d0d0",
                 borderRadius: "5px",
                 fontSize: "14px",
-                outline: "none"
+                outline: "none",
+                minWidth: "160px"
               }}
             />
-            <button
-              onClick={handleLoadExisting}
-              disabled={!selectedDate}
-              style={{
-                padding: "7px 16px",
-                background: selectedDate ? "#ff9800" : "#e0e0e0",
-                color: selectedDate ? "white" : "#9e9e9e",
-                border: "none",
-                borderRadius: "5px",
-                cursor: selectedDate ? "pointer" : "not-allowed",
-                fontWeight: "500",
-                fontSize: "14px"
-              }}
-            >
-              Load Existing
-            </button>
           </div>
+
+          {/* Dropdown Riwayat Pengisian */}
+          {savedData.length > 0 && (
+            <div style={{ display: "flex", alignItems: "center", gap: "12px", flexWrap: "wrap" }}>
+              <label style={{ fontWeight: "500", color: "#424242", fontSize: "14px" }}>Riwayat Isian:</label>
+              <select
+                value=""
+                onChange={(e) => {
+                  const date = e.target.value;
+                  if (date) {
+                    setSelectedDate(date);
+                  }
+                }}
+                style={{
+                  color: "#212121",
+                  padding: "7px 12px",
+                  border: "1px solid #d0d0d0",
+                  borderRadius: "5px",
+                  fontSize: "14px",
+                  outline: "none",
+                  minWidth: "180px"
+                }}
+              >
+                <option value="">— Pilih tanggal lama —</option>
+                {savedData
+                  .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+                  .map((entry) => (
+                    <option key={entry.date} value={entry.date}>
+                      {new Date(entry.date).toLocaleDateString("en-US", {
+                        day: "2-digit",
+                        month: "short",
+                        year: "numeric"
+                      })}
+                    </option>
+                  ))}
+              </select>
+              <button
+                onClick={handleLoadExisting}
+                disabled={!selectedDate}
+                style={{
+                  padding: "7px 16px",
+                  background: selectedDate ? "#ff9800" : "#e0e0e0",
+                  color: selectedDate ? "white" : "#9e9e9e",
+                  border: "none",
+                  borderRadius: "5px",
+                  cursor: selectedDate ? "pointer" : "not-allowed",
+                  fontWeight: "500",
+                  fontSize: "14px"
+                }}
+              >
+                Load Existing
+              </button>
+            </div>
+          )}
         </div>
 
+        {/* ... (Sisa kode tabel, form, dan keterangan tetap sama) */}
         <div style={{
           background: "white",
           borderRadius: "8px",
@@ -460,7 +483,7 @@ export function EChecksheetSmokeDetectorForm({
 
         <div style={{ display: "flex", gap: "12px", justifyContent: "center", padding: "20px 0" }}>
           <button
-            onClick={() => router.push("/ga-smoke-detector")}
+            onClick={() => router.push("/status-ga/smoke-detector")}
             style={{
               padding: "11px 28px",
               background: "#757575",

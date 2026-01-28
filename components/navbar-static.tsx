@@ -53,17 +53,8 @@ export function NavbarStatic({ userName = "User" }: NavbarStaticProps) {
         <Link href="/dashboard" onClick={closeMenu}>
           Dashboard
         </Link>
-        <Link href="/ga-inspeksi-apd" onClick={closeMenu}>
-          Ga-inspeksi-apd
-        </Link>
-        <Link href="/e-checksheet-panel" onClick={closeMenu}>
-          E-Checksheet
-        </Link>
-        <Link href="/status-inspector-pre-assy" onClick={closeMenu}>
-          Pre-Assy
-        </Link>
-        <Link href="/cs-remove-tool" onClick={closeMenu}>
-          Remove-Tool
+        <Link href="#" onClick={closeMenu}>
+          Laporan
         </Link>
       </div>
 

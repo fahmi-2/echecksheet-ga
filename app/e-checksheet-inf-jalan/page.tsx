@@ -1,19 +1,22 @@
 // app/e-checksheet-inf-jalan/page.tsx
-import { Suspense } from 'react';
+'use client';
+
+import { Suspense, use } from 'react';
 import { EChecksheetInfJalanForm } from './EChecksheetInfJalanForm';
 
 export default function EChecksheetInfJalanPage({
   searchParams,
 }: {
-  searchParams: {
+  searchParams: Promise<{
     areaName?: string;
     kategori?: string;
     lokasi?: string;
-  };
+  }>;
 }) {
-  const areaName = searchParams?.areaName || 'Area Jalan';
-  const kategori = searchParams?.kategori || 'Kategori';
-  const lokasi = searchParams?.lokasi || 'Lokasi';
+  const params = use(searchParams);
+  const areaName = params?.areaName || 'Area Jalan';
+  const kategori = params?.kategori || 'Kategori';
+  const lokasi = params?.lokasi || 'Lokasi';
 
   return (
     <Suspense fallback={

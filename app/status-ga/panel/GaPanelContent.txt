@@ -1,4 +1,4 @@
-// app/status-ga/GaPanelContent.tsx
+// app/status-ga/panel/GaPanelContent.tsx
 "use client";
 
 import { useState, useEffect } from "react";

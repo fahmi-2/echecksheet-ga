@@ -5,6 +5,7 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
 import { NavbarStatic } from "@/components/navbar-static";
+import { Sidebar } from "@/components/Sidebar";
 
 interface LiftItem {
   no: number;
@@ -181,7 +182,7 @@ export function GaLiftBarangContent({ openLift }: { openLift: string }) {
 
   return (
     <div style={{ minHeight: "100vh", background: "#f8f9fa" }}>
-      <NavbarStatic userName={user?.fullName || "User"} />
+      <Sidebar userName={user?.fullName} />
       <div style={{ padding: "32px 24px", maxWidth: "1400px", margin: "0 auto" }}>
         <div style={{ marginBottom: "32px" }}>
           <div style={{

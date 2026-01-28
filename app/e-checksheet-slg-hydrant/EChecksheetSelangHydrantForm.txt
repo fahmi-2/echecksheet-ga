@@ -1,11 +1,10 @@
 // app/e-checksheet-slg-hydrant/EChecksheetSelangHydrantForm.tsx
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
 import { NavbarStatic } from "@/components/navbar-static";
-import { Sidebar } from "@/components/Sidebar";
 
 interface ChecksheetEntry {
   date: string;
@@ -16,7 +15,6 @@ interface ChecksheetEntry {
   dueDate: string;
   verify: string;
   inspector: string;
-  images: string[]; // ✅ Tambahkan array gambar
 }
 
 interface SavedData {
@@ -37,28 +35,25 @@ export function EChecksheetSelangHydrantForm({
   const router = useRouter();
   const { user, loading } = useAuth();
 
-  // ✅ SEMUA HOOKS DI ATAS — TANPA KONDISI
   const [isMounted, setIsMounted] = useState(false);
   const [selectedDate, setSelectedDate] = useState<string>("");
   const [answers, setAnswers] = useState<Record<string, string>>({});
   const [savedData, setSavedData] = useState<SavedData>({});
-  const [images, setImages] = useState<{ key: string; url: string }[]>([]);
 
-  // Modal gambar
-  const [showImageModal, setShowImageModal] = useState(false);
-  const [currentImage, setCurrentImage] = useState<string>("");
-
-  // Modal kamera
-  const [showCameraModal, setShowCameraModal] = useState(false);
-  const [cameraStream, setCameraStream] = useState<MediaStream | null>(null);
-  const [currentItemKey, setCurrentItemKey] = useState<string>("");
-  const videoRef = useRef<HTMLVideoElement>(null);
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-
-  // ✅ Semua useEffect di atas
   useEffect(() => {
     setIsMounted(true);
   }, []);
+
+  const inspectionItems = [
+    { key: "pressureTank", label: "PRESSURE TANK (STD : 7 kg/cm2)" },
+    { key: "hasilTekananDgPitot", label: "HASIL TEKANAN DG PITOT (STD : titik terjauh min. 4.5 kg/cm2)" },
+    { key: "tekananEnginePump", label: "TEKANAN ENGINE PUMP" },
+    { key: "fireHose", label: "FIRE HOSE / SELANG" },
+    { key: "valve", label: "VALVE (TIDAK SERET)" },
+    { key: "couplingNozzle", label: "COUPLING NOZZLE" },
+    { key: "couplingHydrant", label: "COUPLING HYDRANT" },
+    { key: "seal", label: "SEAL" },
+  ];
 
   useEffect(() => {
     if (!isMounted) return;
@@ -81,31 +76,6 @@ export function EChecksheetSelangHydrantForm({
     }
   }, [user, loading, router, isMounted]);
 
-  // ✅ useEffect untuk kamera
-  useEffect(() => {
-    if (!showCameraModal) return;
-
-    navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } })
-      .then(stream => {
-        setCameraStream(stream);
-        if (videoRef.current) {
-          videoRef.current.srcObject = stream;
-        }
-      })
-      .catch(err => {
-        console.error("Gagal membuka kamera:", err);
-        alert("Tidak bisa mengakses kamera. Pastikan izin kamera diaktifkan.");
-        setShowCameraModal(false);
-      });
-
-    return () => {
-      if (cameraStream) {
-        cameraStream.getTracks().forEach(track => track.stop());
-      }
-    };
-  }, [showCameraModal]);
-
-  // ✅ Baru di sini boleh ada conditional return
   if (!isMounted) return null;
 
   if (loading) {
@@ -120,78 +90,8 @@ export function EChecksheetSelangHydrantForm({
     return null;
   }
 
-  const inspectionItems = [
-    { key: "pressureTank", label: "PRESSURE TANK (STD : 7 kg/cm2)" },
-    { key: "hasilTekananDgPitot", label: "HASIL TEKANAN DG PITOT (STD : titik terjauh min. 4.5 kg/cm2)" },
-    { key: "tekananEnginePump", label: "TEKANAN ENGINE PUMP" },
-    { key: "fireHose", label: "FIRE HOSE / SELANG" },
-    { key: "valve", label: "VALVE (TIDAK SERET)" },
-    { key: "couplingNozzle", label: "COUPLING NOZZLE" },
-    { key: "couplingHydrant", label: "COUPLING HYDRANT" },
-    { key: "seal", label: "SEAL" },
-  ];
-
   const handleInputChange = (field: string, value: string) => {
     setAnswers((prev) => ({ ...prev, [field]: value }));
-  };
-
-  // ✅ Fungsi upload gambar
-  const handleImageUpload = (event: React.ChangeEvent<HTMLInputElement>, itemKey: string) => {
-    const files = event.target.files;
-    if (!files) return;
-
-    Array.from(files).forEach(file => {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setImages(prev => [...prev, { key: itemKey, url: reader.result as string }]);
-      };
-      reader.readAsDataURL(file);
-    });
-  };
-
-  // ✅ Ambil foto dari kamera
-  const captureImage = () => {
-    if (!videoRef.current || !canvasRef.current) return;
-
-    const video = videoRef.current;
-    const canvas = canvasRef.current;
-    const context = canvas.getContext('2d');
-
-    if (!context) return;
-
-    canvas.width = video.videoWidth;
-    canvas.height = video.videoHeight;
-    context.drawImage(video, 0, 0, canvas.width, canvas.height);
-
-    const imageUrl = canvas.toDataURL('image/jpeg', 0.8);
-    setImages(prev => [...prev, { key: currentItemKey, url: imageUrl }]);
-    setShowCameraModal(false);
-    if (cameraStream) {
-      cameraStream.getTracks().forEach(track => track.stop());
-    }
-  };
-
-  // ✅ Buka kamera
-  const openCamera = (itemKey: string) => {
-    setCurrentItemKey(itemKey);
-    setShowCameraModal(true);
-  };
-
-  // ✅ Hapus gambar
-  const removeImage = (index: number) => {
-    setImages(prev => prev.filter((_, i) => i !== index));
-  };
-
-  // ✅ Buka modal gambar
-  const openImageModal = (imgUrl: string) => {
-    setCurrentImage(imgUrl);
-    setShowImageModal(true);
-  };
-
-  // ✅ Tutup modal gambar
-  const closeImageModal = () => {
-    setShowImageModal(false);
-    setCurrentImage("");
   };
 
   const handleSave = () => {
@@ -219,7 +119,6 @@ export function EChecksheetSelangHydrantForm({
           dueDate: answers[`${item.key}_dueDate`] || "",
           verify: answers[`${item.key}_verify`] || "",
           inspector: user.fullName || "",
-          images: images.filter(img => img.key === item.key).map(img => img.url)
         };
 
         if (!newData[item.key]) newData[item.key] = [];
@@ -267,53 +166,39 @@ export function EChecksheetSelangHydrantForm({
 
     if (found) {
       setAnswers(existingData);
-      // ✅ Muat gambar
-      const loadedImages: { key: string; url: string }[] = [];
-      inspectionItems.forEach(item => {
-        const entries = savedData[item.key] || [];
-        const entry = entries.find(e => e.date === selectedDate);
-        if (entry?.images) {
-          entry.images.forEach(url => {
-            loadedImages.push({ key: item.key, url });
-          });
-        }
-      });
-      setImages(loadedImages);
       alert("Data berhasil dimuat!");
     } else {
       alert("Tidak ada data untuk tanggal ini.");
       setAnswers({});
-      setImages([]);
     }
   };
 
-  // ❌ HAPUS fungsi generateBiMonthlyDates — tidak digunakan
+  const generateBiMonthlyDates = () => {
+    const today = new Date();
+    const year = today.getFullYear();
+    const currentMonth = today.getMonth();
+    const biMonthlyMonths = [0, 2, 4, 6, 8, 10]; // Jan, Mar, Mei, Jul, Sep, Nov
 
-  // ✅ Ambil semua tanggal tersedia
-  const getAllSavedDates = (): string[] => {
-    const dates = new Set<string>();
-    Object.values(savedData).forEach((entries: ChecksheetEntry[]) => {
-      if (Array.isArray(entries)) {
-        entries.forEach(entry => {
-          if (entry?.date) dates.add(entry.date);
-        });
-      }
-    });
-    return Array.from(dates).sort((a, b) => new Date(b).getTime() - new Date(a).getTime());
+    let nextInspectionMonth = biMonthlyMonths.find((m) => m >= currentMonth);
+    if (nextInspectionMonth === undefined) {
+      nextInspectionMonth = 0;
+      return [new Date(year + 1, 0, 1).toISOString().split("T")[0]];
+    }
+
+    const dates = [
+      new Date(year, nextInspectionMonth, 1),
+      ...(nextInspectionMonth + 2 <= 11 ? [new Date(year, nextInspectionMonth + 2, 1)] : []),
+    ].map((d) => d.toISOString().split("T")[0]);
+
+    return dates;
   };
 
-  const availableDates = getAllSavedDates();
+  const inspectionSchedule = generateBiMonthlyDates();
 
   return (
     <div style={{ minHeight: "100vh", background: "#f8f9fa" }}>
-      <Sidebar userName={user.fullName} />
-      <div style={{ 
-        paddingLeft : "95px",
-        paddingRight : "25px",
-        paddingBottom : "32px",
-        paddingTop : "32px", 
-        maxWidth: "100%", 
-        margin: "0 auto" }}>
+      <NavbarStatic userName={user.fullName} />
+      <div style={{ padding: "20px 16px", maxWidth: "100%", margin: "0 auto" }}>
         {/* Header */}
         <div style={{ marginBottom: "24px" }}>
           <div style={{
@@ -341,15 +226,15 @@ export function EChecksheetSelangHydrantForm({
           marginBottom: "20px"
         }}>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: "12px" }}>
-            <div className="text-black"><strong>Zona:</strong> {zona}</div>
-            <div className="text-black"><strong>Jenis Hydrant:</strong> {jenisHydrant}</div>
-            <div className="text-black"><strong>Lokasi:</strong> {lokasi}</div>
-            <div className="text-black"><strong>PIC Default:</strong> {picDefault}</div>
-            <div className="text-black"><strong>Inspector:</strong> {user.fullName}</div>
+            <div><strong>Zona:</strong> {zona}</div>
+            <div><strong>Jenis Hydrant:</strong> {jenisHydrant}</div>
+            <div><strong>Lokasi:</strong> {lokasi}</div>
+            <div><strong>PIC Default:</strong> {picDefault}</div>
+            <div><strong>Inspector:</strong> {user.fullName}</div>
           </div>
         </div>
 
-        {/* Date Selection */}
+        {/* Date Selection — 2 Bulan Sekali */}
         <div style={{
           background: "white",
           border: "2px solid #1e88e5",
@@ -361,70 +246,55 @@ export function EChecksheetSelangHydrantForm({
           <div style={{ marginBottom: "12px" }}>
             <strong style={{ color: "#0d47a1" }}>📅 Jadwal Inspeksi: Setiap 2 Bulan (Jan, Mar, Mei, Jul, Sep, Nov)</strong>
           </div>
-
-          {/* Input Tanggal Manual */}
-          <div style={{ display: "flex", alignItems: "center", gap: "12px", flexWrap: "wrap", marginBottom: "12px" }}>
-            <label style={{ fontWeight: "700", color: "#0d47a1" }}>Tanggal Inspeksi:</label>
+          <div style={{ display: "flex", gap: "12px", flexWrap: "wrap", marginBottom: "16px" }}>
+            {inspectionSchedule.map((date) => (
+              <button
+                key={date}
+                type="button"
+                onClick={() => setSelectedDate(date)}
+                style={{
+                  padding: "6px 12px",
+                  background: selectedDate === date ? "#1e88e5" : "#e3f2fd",
+                  color: selectedDate === date ? "white" : "#0d47a1",
+                  border: "1px solid #1e88e5",
+                  borderRadius: "6px",
+                  fontSize: "13px",
+                  cursor: "pointer"
+                }}
+              >
+                {new Date(date).toLocaleDateString("id-ID", { month: "short", year: "numeric" })}
+              </button>
+            ))}
+          </div>
+          <div style={{ display: "flex", alignItems: "center", gap: "12px", flexWrap: "wrap" }}>
+            <label style={{ fontWeight: "700", color: "#0d47a1" }}>Atau pilih manual:</label>
             <input
               type="date"
               value={selectedDate}
               onChange={(e) => setSelectedDate(e.target.value)}
               max={new Date().toISOString().split('T')[0]}
               style={{
-                color : "black",
                 padding: "8px 12px",
                 border: "2px solid #1e88e5",
                 borderRadius: "6px",
-                fontSize: "14px",
-                minWidth: "160px"
+                fontSize: "14px"
               }}
             />
+            <button
+              onClick={handleLoadExisting}
+              disabled={!selectedDate}
+              style={{
+                padding: "8px 16px",
+                background: selectedDate ? "#ff9800" : "#bdbdbd",
+                color: "white",
+                border: "none",
+                borderRadius: "6px",
+                cursor: selectedDate ? "pointer" : "not-allowed"
+              }}
+            >
+              Muat Data
+            </button>
           </div>
-
-          {/* Dropdown Riwayat Pengisian */}
-          {availableDates.length > 0 && (
-            <div style={{ display: "flex", alignItems: "center", gap: "12px", flexWrap: "wrap" }}>
-              <label style={{ fontWeight: "700", color: "#0d47a1" }}>Riwayat Isian:</label>
-              <select
-                value=""
-                onChange={(e) => {
-                  const date = e.target.value;
-                  if (date) {
-                    setSelectedDate(date);
-                  }
-                }}
-                style={{
-                  color : "black",
-                  padding: "8px 12px",
-                  border: "2px solid #1e88e5",
-                  borderRadius: "6px",
-                  fontSize: "14px",
-                  minWidth: "180px"
-                }}
-              >
-                <option value="">— Pilih tanggal lama —</option>
-                {availableDates.map(date => (
-                  <option key={date} value={date}>
-                    {new Date(date).toLocaleDateString("id-ID", { day: "2-digit", month: "short", year: "numeric" })}
-                  </option>
-                ))}
-              </select>
-              <button
-                onClick={handleLoadExisting}
-                disabled={!selectedDate}
-                style={{
-                  padding: "8px 16px",
-                  background: selectedDate ? "#ff9800" : "#bdbdbd",
-                  color: "white",
-                  border: "none",
-                  borderRadius: "6px",
-                  cursor: selectedDate ? "pointer" : "not-allowed"
-                }}
-              >
-                Muat Data
-              </button>
-            </div>
-          )}
         </div>
 
         {/* Checksheet Table */}
@@ -444,8 +314,6 @@ export function EChecksheetSelangHydrantForm({
                   <th style={{ padding: "12px 8px", border: "1px solid #0d47a1", fontWeight: "700", color: "#01579b", textAlign: "left", minWidth: "250px" }}>ITEM</th>
                   <th style={{ padding: "12px 8px", border: "1px solid #0d47a1", fontWeight: "700", color: "#01579b", textAlign: "center", width: "100px" }}>HASIL</th>
                   <th style={{ padding: "12px 8px", border: "1px solid #0d47a1", fontWeight: "700", color: "#01579b", textAlign: "center", minWidth: "180px" }}>KETERANGAN N-OK</th>
-                  {/* ✅ Kolom Dokumentasi */}
-                  <th style={{ padding: "12px 8px", border: "1px solid #0d47a1", fontWeight: "700", color: "#01579b", textAlign: "center", minWidth: "180px" }}>DOKUMENTASI</th>
                   <th style={{ padding: "12px 8px", border: "1px solid #0d47a1", fontWeight: "700", color: "#01579b", textAlign: "center", minWidth: "180px" }}>TINDAKAN PERBAIKAN</th>
                   <th style={{ padding: "12px 8px", border: "1px solid #0d47a1", fontWeight: "700", color: "#01579b", textAlign: "center", width: "100px" }}>PIC</th>
                   <th style={{ padding: "12px 8px", border: "1px solid #0d47a1", fontWeight: "700", color: "#01579b", textAlign: "center", width: "120px" }}>DUE DATE</th>
@@ -478,88 +346,6 @@ export function EChecksheetSelangHydrantForm({
                         rows={2}
                         style={{ width: "100%", padding: "6px", fontSize: "12px", resize: "vertical" }}
                       />
-                    </td>
-                    {/* ✅ Kolom Dokumentasi */}
-                    <td style={{ padding: "8px", border: "1px solid #0d47a1" }}>
-                      <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
-                        <button
-                          onClick={() => openCamera(item.key)}
-                          style={{
-                            padding: "4px 8px",
-                            background: "#1e88e5",
-                            color: "white",
-                            borderRadius: "4px",
-                            fontSize: "11px",
-                            cursor: "pointer",
-                            textAlign: "center",
-                            whiteSpace: "nowrap"
-                          }}
-                        >
-                          📷 Kamera
-                        </button>
-                        <label
-                          htmlFor={`file-${item.key}`}
-                          style={{
-                            padding: "4px 8px",
-                            background: "#4caf50",
-                            color: "white",
-                            borderRadius: "4px",
-                            fontSize: "11px",
-                            cursor: "pointer",
-                            textAlign: "center",
-                            whiteSpace: "nowrap"
-                          }}
-                        >
-                          🖼️ File
-                        </label>
-                        <input
-                          id={`file-${item.key}`}
-                          type="file"
-                          accept="image/*"
-                          multiple
-                          onChange={(e) => handleImageUpload(e, item.key)}
-                          style={{ display: "none" }}
-                        />
-                        <div style={{ display: "flex", flexWrap: "wrap", gap: "4px", marginTop: "4px" }}>
-                          {images.filter(img => img.key === item.key).map((img, idx) => (
-                            <div key={idx} style={{ position: "relative", width: "60px", height: "60px", borderRadius: "4px", overflow: "hidden", cursor: "pointer" }}>
-                              <img
-                                src={img.url}
-                                alt={`Dokumentasi ${item.key} ${idx + 1}`}
-                                onClick={() => openImageModal(img.url)}
-                                style={{
-                                  width: "100%",
-                                  height: "100%",
-                                  objectFit: "cover",
-                                  borderRadius: "4px"
-                                }}
-                              />
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  removeImage(images.findIndex(i => i.key === item.key && i.url === img.url));
-                                }}
-                                style={{
-                                  position: "absolute",
-                                  top: "2px",
-                                  right: "2px",
-                                  background: "rgba(0,0,0,0.5)",
-                                  color: "white",
-                                  border: "none",
-                                  borderRadius: "50%",
-                                  width: "16px",
-                                  height: "16px",
-                                  fontSize: "10px",
-                                  cursor: "pointer",
-                                  padding: "0"
-                                }}
-                              >
-                                ×
-                              </button>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
                     </td>
                     <td style={{ padding: "8px", border: "1px solid #0d47a1" }}>
                       <textarea
@@ -771,132 +557,6 @@ export function EChecksheetSelangHydrantForm({
           </div>
         </div>
       </div>
-
-      {/* ✅ Modal Gambar */}
-      {showImageModal && (
-        <div
-          onClick={closeImageModal}
-          style={{
-            position: "fixed",
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
-            background: "rgba(0,0,0,0.8)",
-            display: "flex",
-            justifyContent: "center",
-            alignItems: "center",
-            zIndex: 2000,
-            padding: "20px"
-          }}
-        >
-          <div
-            onClick={(e) => e.stopPropagation()}
-            style={{
-              textAlign: "center"
-            }}
-          >
-            <img
-              src={currentImage}
-              alt="Dokumentasi"
-              style={{
-                maxHeight: "90vh",
-                maxWidth: "90vw",
-                objectFit: "contain",
-                borderRadius: "8px",
-                border: "3px solid white",
-              }}
-            />
-            <div style={{ marginTop: "16px", color: "white", fontSize: "14px" }}>Click outside to close</div>
-          </div>
-        </div>
-      )}
-
-      {/* ✅ Modal Kamera */}
-      {showCameraModal && (
-        <div
-          onClick={() => {
-            setShowCameraModal(false);
-            if (cameraStream) {
-              cameraStream.getTracks().forEach(track => track.stop());
-            }
-          }}
-          style={{
-            position: "fixed",
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
-            background: "rgba(0,0,0,0.8)",
-            display: "flex",
-            justifyContent: "center",
-            alignItems: "center",
-            zIndex: 2000,
-          }}
-        >
-          <div
-            onClick={(e) => e.stopPropagation()}
-            style={{
-              background: "white",
-              borderRadius: "8px",
-              padding: "16px 20px",
-              textAlign: "center",
-              maxWidth: "90vw",
-              width: "100%",
-            }}
-          >
-            <h3 style={{ margin: "0 0 12px 0", color: "#212121" }}>Ambil Foto</h3>
-            <video
-              ref={videoRef}
-              autoPlay
-              playsInline
-              style={{
-                width: "100%",
-                maxHeight: "60vh",
-                borderRadius: "6px",
-                background: "#000",
-                transform: "scaleX(-1)"
-              }}
-            />
-            <canvas ref={canvasRef} style={{ display: "none" }} />
-            <div style={{ marginTop: "16px", display: "flex", gap: "12px", justifyContent: "center" }}>
-              <button
-                onClick={captureImage}
-                style={{
-                  padding: "10px 20px",
-                  background: "#4caf50",
-                  color: "white",
-                  border: "none",
-                  borderRadius: "6px",
-                  fontWeight: "600",
-                  cursor: "pointer"
-                }}
-              >
-                📸 Ambil Foto
-              </button>
-              <button
-                onClick={() => {
-                  setShowCameraModal(false);
-                  if (cameraStream) {
-                    cameraStream.getTracks().forEach(track => track.stop());
-                  }
-                }}
-                style={{
-                  padding: "10px 20px",
-                  background: "#757575",
-                  color: "white",
-                  border: "none",
-                  borderRadius: "6px",
-                  fontWeight: "600",
-                  cursor: "pointer"
-                }}
-              >
-                Batal
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

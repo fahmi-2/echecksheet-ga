@@ -12,11 +12,11 @@ export default function SignupPage() {
   const [formData, setFormData] = useState({
     username: "",
     fullName: "",
-    niki: "",
+    nik: "",
     password: "",
     confirmPassword: "",
     department: "",
-    role: "" as "group-leader" | "inspector" | "inspector-ga" | "manager" | "",
+    role: "" as "group-leader-qa" | "inspector-qa" | "inspector-ga" | "manager" | "",
   })
   const [error, setError] = useState("")
   const [loading, setLoading] = useState(false)
@@ -27,10 +27,8 @@ export default function SignupPage() {
   useEffect(() => {
     if (formData.role === "inspector-ga") {
       setFormData(prev => ({ ...prev, department: "general-affairs" }))
-    } else if (formData.role === "manager") {
-      setFormData(prev => ({ ...prev, department: "management" }))
-    } else if (formData.role === "group-leader" || formData.role === "inspector") {
-      setFormData(prev => ({ ...prev, department: "" }))
+    } else if (formData.role === "group-leader-qa" || formData.role === "inspector-qa") {
+      setFormData(prev => ({ ...prev, department: "quality-assurance" }))
     }
   }, [formData.role])
 
@@ -48,7 +46,7 @@ export default function SignupPage() {
     setLoading(true)
 
     // Validasi role
-    if (!formData.role || !['group-leader', 'inspector', 'inspector-ga', 'manager'].includes(formData.role)) {
+    if (!formData.role || !['group-leader-qa', 'inspector-qa', 'inspector-ga', 'manager'].includes(formData.role)) {
       setError("Pilih role terlebih dahulu!")
       setLoading(false)
       return
@@ -57,7 +55,7 @@ export default function SignupPage() {
     const result = signup({
       username: formData.username,
       fullName: formData.fullName,
-      niki: formData.niki,
+      nik: formData.nik,
       department: formData.department,
       role: formData.role,
       password: formData.password,
@@ -128,14 +126,14 @@ export default function SignupPage() {
                 </div>
 
                 <div className="input-wrapper">
-                  <label htmlFor="niki">NIKI</label>
+                  <label htmlFor="nik">NIK</label>
                   <div className="input-field">
                     <input
-                      id="niki"
+                      id="nik"
                       type="text"
-                      name="niki"
-                      placeholder="NIKI"
-                      value={formData.niki}
+                      name="nik"
+                      placeholder="NIK"
+                      value={formData.nik}
                       onChange={handleChange}
                       disabled={loading}
                       required
@@ -155,13 +153,9 @@ export default function SignupPage() {
                       required
                     >
                       <option value="">Pilih Departemen</option>
-                      <option value="operations">Operasional</option>
-                      <option value="maintenance">Perawatan</option>
-                      <option value="quality">Kualitas</option>
-                      <option value="admin">Admin</option>
                       {/* 🔹 Tambahkan opsi baru tanpa mengubah tampilan */}
-                      <option value="general-affairs">General Affairs</option>
-                      <option value="management">Management</option>
+                      <option value="general-affairs">General Affairs (GA)</option>
+                      <option value="quality-assurance">Quality Assurance (QA)</option>
                     </select>
                   </div>
                 </div>
@@ -174,15 +168,21 @@ export default function SignupPage() {
                       name="role"
                       value={formData.role}
                       onChange={handleChange}
-                      disabled={loading}
+                      disabled={loading || !formData.department }
                       required
                     >
                       <option value="">Pilih Peran</option>
-                      <option value="group-leader">Group Leader QA</option>
-                      <option value="inspector">Inspector QA</option>
-                      {/* 🔹 Tambahkan role baru */}
-                      <option value="inspector-ga">Inspector GA</option>
-                      <option value="manager">Manajer</option>
+                      {formData.department == "quality-assurance" && (
+                        <>
+                          <option value="group-leader-qa">Group Leader QA</option>
+                          <option value="inspector-qa">Inspector QA</option>
+                        </>
+                      )}
+                      {formData.department == "general-affairs" && (
+                        <>
+                          <option value="inspector-ga">Inspector GA</option>
+                        </>
+                      )}
                     </select>
                   </div>
                 </div>
@@ -225,7 +225,6 @@ export default function SignupPage() {
                   {loading ? "Mendaftar..." : "Daftar"}
                 </button>
               </form>
-
               <div className="switch-link">
                 Sudah punya akun? <Link href="/login-page">Login di sini</Link>
               </div>

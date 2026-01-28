@@ -1,10 +1,11 @@
-// app/ga-inspeksi-hydrant/GaInspeksiHydrantContent.tsx
+// app/status-ga/GaInspeksiHydrantContent.tsx
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
-import { NavbarStatic } from "@/components/navbar-static";
+import { Sidebar } from "@/components/Sidebar";
+import QrScanner from 'qr-scanner';
 
 interface HydrantItem {
   no: number;
@@ -12,6 +13,29 @@ interface HydrantItem {
   zona: string;
   jenisHydrant: string;
 }
+
+const ITEM_LABELS: string[] = [
+  "1. kondisi tidak berkarat",
+  "2. posisi tidak terhalang benda apapun",
+  "3. kondisi bagus tidak berkarat",
+  "4. tidak keropos",
+  "5. ada nomor id & papan petunjuk",
+  "6. posisi tidak terhalang benda apapun",
+  "7. pada posisi Normally open",
+  "8. saat posisi tertutup aliran air tidak keluar",
+  "9. tidak ada kebocoran pada seal",
+  "10. Tersedia",
+  "11. Pengunci coupling berfungsi (ditekan)",
+  "12. Seal tidak rusak",
+  "13. Dapat diputar/dibuka dengan mudah",
+  "14. saat posisi tertutup aliran air tidak keluar",
+  "15. penutup tersedia & dapat diputar/dibuka dengan mudah",
+  "16. Ulir bagian dalam terlumasi",
+  "17. Tersedia",
+  "18. Layout Jelas",
+  "19. Tidak Bocor / pecah, Cat tidak pudar",
+  "20. Terpasang dengan rapi & Jelas",
+];
 
 const HYDRANT_LIST: HydrantItem[] = [
   { no: 1, lokasi: "KANTIN", zona: "BARAT", jenisHydrant: "HYDRANT INDOOR" },
@@ -52,6 +76,21 @@ const HYDRANT_LIST: HydrantItem[] = [
   { no: 36, lokasi: "DEPAN POWER HOUSE A", zona: "UTARA", jenisHydrant: "HYDRANT OUTDOOR" },
 ];
 
+interface ChecksheetEntry {
+  date: string;
+  item1: string; item2: string; item3: string; item4: string; item5: string;
+  item6: string; item7: string; item8: string; item9: string; item10: string;
+  item11: string; item12: string; item13: string; item14: string; item15: string;
+  item16: string; item17: string; item18: string; item19: string; item20: string;
+  keteranganKondisi: string;
+  tindakanPerbaikan: string;
+  pic: string;
+  dueDate: string;
+  verify: string;
+  inspector: string;
+  imageUrls?: string[]; // ✅ TAMBAHKAN INI
+}
+
 export function GaInspeksiHydrantContent() {
   const router = useRouter();
   const { user, loading } = useAuth();
@@ -61,13 +100,22 @@ export function GaInspeksiHydrantContent() {
   const [selectedCategory, setSelectedCategory] = useState<string>("HYDRANT INDOOR");
   const [searchTerm, setSearchTerm] = useState("");
 
+  const [selectedArea, setSelectedArea] = useState<HydrantItem | null>(null);
+  const [selectedDateInModal, setSelectedDateInModal] = useState<string>("");
+  const [availableDates, setAvailableDates] = useState<string[]>([]);
+
+  // QR Scanner state
+  const [isScanning, setIsScanning] = useState(false);
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const qrScannerRef = useRef<QrScanner | null>(null);
+
   useEffect(() => {
     setIsMounted(true);
   }, []);
 
   useEffect(() => {
     if (loading) return;
-    if (!user || (user.role !== "group-leader" && user.role !== "inspector-ga")) {
+    if (!user || (user.role !== "inspector-ga")) {
       router.push("/login-page");
     }
   }, [user, loading, router]);
@@ -78,49 +126,112 @@ export function GaInspeksiHydrantContent() {
      item.zona.toLowerCase().includes(searchTerm.toLowerCase()))
   );
 
-  const [selectedArea, setSelectedArea] = useState<HydrantItem | null>(null);
-  const [checksheetData, setChecksheetData] = useState<any | null>(null);
-  const [selectedDateInModal, setSelectedDateInModal] = useState<string>("");
-  const [availableDates, setAvailableDates] = useState<string[]>([]);
-
   const openDetail = (area: HydrantItem) => {
     setSelectedArea(area);
-    const key = `e-checksheet-hydrant-${area.no}`;
-    const saved = typeof window !== "undefined" ? localStorage.getItem(key) : null;
-    if (saved) {
-      try {
-        const data = JSON.parse(saved);
-        setChecksheetData(data);
 
-        const allDates = new Set<string>();
-        if (Array.isArray(data)) {
-          data.forEach((entry: any) => {
+    let savedData: ChecksheetEntry[] = [];
+    let dates: string[] = [];
+    let latestDate = "";
+
+    try {
+      const key = `e-checksheet-hydrant-${area.no}`;
+      const saved = typeof window !== "undefined" ? localStorage.getItem(key) : null;
+      if (saved) {
+        savedData = JSON.parse(saved);
+        if (Array.isArray(savedData)) {
+          const allDates = new Set<string>();
+          savedData.forEach((entry) => {
             if (entry?.date) allDates.add(entry.date);
           });
+          dates = Array.from(allDates).sort((a, b) => new Date(b).getTime() - new Date(a).getTime());
+          latestDate = dates[0] || "";
         }
-        const sortedDates = Array.from(allDates).sort((a, b) => new Date(b).getTime() - new Date(a).getTime());
-        setAvailableDates(sortedDates);
-        setSelectedDateInModal(sortedDates[0] || "");
-      } catch (e) {
-        setChecksheetData(null);
-        setAvailableDates([]);
-        setSelectedDateInModal("");
       }
-    } else {
-      setChecksheetData(null);
-      setAvailableDates([]);
-      setSelectedDateInModal("");
+    } catch (e) {
+      console.warn("Failed to parse hydrant data", e);
+      savedData = [];
+      dates = [];
+      latestDate = "";
     }
+
+    setAvailableDates(dates);
+    setSelectedDateInModal(latestDate);
     setShowModal(true);
   };
 
   const closeDetail = () => {
     setSelectedArea(null);
-    setChecksheetData(null);
     setSelectedDateInModal("");
     setAvailableDates([]);
     setShowModal(false);
   };
+
+  // QR Scanner functions
+  const openQrScanner = () => {
+    setIsScanning(true);
+  };
+
+  useEffect(() => {
+    return () => {
+      if (qrScannerRef.current) {
+        qrScannerRef.current.destroy();
+      }
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!isScanning || !videoRef.current) return;
+
+    const video = videoRef.current;
+
+    const onScanSuccess = (result: string) => {
+      console.log("QR Scanned:", result);
+      setIsScanning(false);
+      if (qrScannerRef.current) {
+        qrScannerRef.current.destroy();
+        qrScannerRef.current = null;
+      }
+
+      try {
+        let urlStr = result.trim();
+
+        if (urlStr.startsWith('http')) {
+          const url = new URL(urlStr);
+          if (url.pathname === '/e-checksheet-hydrant') {
+            router.push(urlStr);
+            return;
+          }
+        }
+
+        if (urlStr.startsWith('/e-checksheet-hydrant?')) {
+          router.push(urlStr);
+          return;
+        }
+
+        alert("Invalid QR code. Please scan a valid hydrant inspection QR.");
+      } catch (err) {
+        alert("Invalid QR format.");
+      }
+    };
+
+    const onScanError = (error: string | Error) => {
+      console.warn("QR scan error:", error);
+    };
+
+    qrScannerRef.current = new QrScanner(
+      video,
+      onScanSuccess,
+      onScanError
+    );
+
+    qrScannerRef.current.start();
+
+    return () => {
+      if (qrScannerRef.current) {
+        qrScannerRef.current.stop();
+      }
+    };
+  }, [isScanning, router]);
 
   if (!isMounted) return null;
 
@@ -132,15 +243,14 @@ export function GaInspeksiHydrantContent() {
     );
   }
 
-  if (!user || (user.role !== "inspector-ga" && user.role !== "group-leader")) {
+  if (!user || (user.role !== "inspector-ga")) {
     return null;
   }
 
   return (
     <div style={{ minHeight: "100vh", background: "#f7f9fc" }}>
-      <NavbarStatic userName={user?.fullName || "User"} />
+      <Sidebar userName={user.fullName} />
       <div style={{ padding: "24px 20px", maxWidth: "1400px", margin: "0 auto" }}>
-        
         <div style={{ marginBottom: "28px" }}>
           <div style={{
             background: "#1976d2",
@@ -195,27 +305,55 @@ export function GaInspeksiHydrantContent() {
             </select>
           </div>
 
-          <div style={{ flex: 1, minWidth: "200px" }}>
+          <div style={{ flex: 1, minWidth: "200px", position: "relative" }}>
             <label htmlFor="search-input" style={{ display: "block", marginBottom: "6px", fontSize: "14px", fontWeight: "500", color: "#424242" }}>
               Search Location or Zone:
             </label>
-            <input
-              id="search-input"
-              type="text"
-              placeholder="e.g. KANTIN, BARAT..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              style={{
-                width: "100%",
-                padding: "10px 16px",
-                border: "1px solid #d0d0d0",
-                borderRadius: "6px",
-                fontSize: "14px",
-                color: "#333",
-                outline: "none",
-                fontFamily: "inherit"
-              }}
-            />
+            <div style={{ position: "relative" }}>
+              <input
+                id="search-input"
+                type="text"
+                placeholder="e.g. KANTIN, BARAT..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                style={{
+                  width: "100%",
+                  padding: "10px 40px 10px 16px",
+                  border: "1px solid #d0d0d0",
+                  borderRadius: "6px",
+                  fontSize: "14px",
+                  color: "#333",
+                  outline: "none",
+                  fontFamily: "inherit"
+                }}
+              />
+              <button
+                type="button"
+                onClick={openQrScanner}
+                style={{
+                  position: "absolute",
+                  right: "8px",
+                  top: "50%",
+                  transform: "translateY(-50%)",
+                  background: "transparent",
+                  border: "none",
+                  cursor: "pointer",
+                  padding: "4px",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center"
+                }}
+                title="Scan QR Code"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#1976d2" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+                  <path d="M7 7h.01"></path>
+                  <path d="M17 7h.01"></path>
+                  <path d="M17 17h.01"></path>
+                  <path d="M7 17h.01"></path>
+                </svg>
+              </button>
+            </div>
           </div>
         </div>
 
@@ -322,7 +460,7 @@ export function GaInspeksiHydrantContent() {
           </div>
         </div>
 
-        {/* Modal */}
+        {/* Modal Detail */}
         {showModal && selectedArea && (
           <div
             onClick={closeDetail}
@@ -418,12 +556,7 @@ export function GaInspeksiHydrantContent() {
               </div>
 
               <div style={{ padding: "24px", overflowY: "auto", flex: 1, background: "#fafafa" }}>
-                {!checksheetData || !Array.isArray(checksheetData) || checksheetData.length === 0 ? (
-                  <div style={{ textAlign: "center", padding: "60px 20px", color: "#9e9e9e" }}>
-                    <div style={{ fontSize: "48px", marginBottom: "12px", opacity: 0.5 }}>📋</div>
-                    <p style={{ fontSize: "15px", fontWeight: "500", margin: 0 }}>No inspection records found</p>
-                  </div>
-                ) : !selectedDateInModal ? (
+                {!selectedDateInModal ? (
                   <div style={{ textAlign: "center", padding: "60px 20px", color: "#757575" }}>
                     <div style={{ fontSize: "48px", marginBottom: "12px", opacity: 0.5 }}>📅</div>
                     <p style={{ fontSize: "15px", fontWeight: "500", margin: 0 }}>Please select an inspection date</p>
@@ -431,18 +564,44 @@ export function GaInspeksiHydrantContent() {
                 ) : (
                   <div style={{ overflowX: "auto" }}>
                     {(() => {
-                      const entry = checksheetData.find((e: any) => e.date === selectedDateInModal);
+                      if (!selectedArea) return null;
+
+                      let entry: ChecksheetEntry | null = null;
+                      try {
+                        const key = `e-checksheet-hydrant-${selectedArea.no}`;
+                        const saved = localStorage.getItem(key);
+                        if (saved) {
+                          const data: ChecksheetEntry[] = JSON.parse(saved);
+                          if (Array.isArray(data)) {
+                            entry = data.find((e) => e.date === selectedDateInModal) || null;
+                          }
+                        }
+                      } catch (e) {
+                        console.warn("Failed to load inspection data for modal", e);
+                      }
+
                       if (!entry) {
                         return <div style={{ textAlign: "center", padding: "40px", color: "#9e9e9e" }}>No data found for this date</div>;
                       }
+
                       return (
                         <div>
                           <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "12px", minWidth: "1600px", border: "1px solid #e0e0e0", background: "white" }}>
                             <thead>
                               <tr style={{ background: "#f5f5f5" }}>
-                                {[...Array(20)].map((_, i) => (
-                                  <th key={i} style={{ padding: "8px", border: "1px solid #e0e0e0", fontWeight: "600", color: "#424242", textAlign: "center", fontSize: "11px" }}>
-                                    Item {i + 1}
+                                {ITEM_LABELS.map((label: string, i: number) => (
+                                  <th key={i} style={{
+                                    padding: "8px",
+                                    border: "1px solid #e0e0e0",
+                                    fontWeight: "600",
+                                    color: "#424242",
+                                    textAlign: "center",
+                                    fontSize: "11px",
+                                    minWidth: "100px",
+                                    wordWrap: "break-word",
+                                    lineHeight: "1.2"
+                                  }}>
+                                    {label}
                                   </th>
                                 ))}
                                 <th style={{ padding: "8px", border: "1px solid #e0e0e0", fontWeight: "600", color: "#424242", textAlign: "center", fontSize: "11px" }}>Findings</th>
@@ -455,8 +614,8 @@ export function GaInspeksiHydrantContent() {
                             <tbody>
                               <tr>
                                 {[...Array(20)].map((_, i) => {
-                                  const key = `item${i + 1}` as keyof typeof entry;
-                                  const value = entry[key] || "-";
+                                  const key = `item${i + 1}` as keyof ChecksheetEntry;
+                                  const value = entry![key] || "-";
                                   return (
                                     <td key={i} style={{
                                       padding: "8px",
@@ -482,6 +641,32 @@ export function GaInspeksiHydrantContent() {
                             </tbody>
                           </table>
                           
+                          {/* ✅ TAMPILKAN FOTO DOKUMENTASI DI SINI */}
+                          {entry.imageUrls && entry.imageUrls.length > 0 && (
+                            <div style={{ marginTop: "24px" }}>
+                              <h3 style={{ margin: "0 0 12px 0", fontSize: "14px", fontWeight: "600", color: "#212121" }}>
+                                📸 Documentation Photos ({entry.imageUrls.length})
+                              </h3>
+                              <div style={{ display: "flex", flexWrap: "wrap", gap: "12px", justifyContent: "flex-start" }}>
+                                {entry.imageUrls.map((imgUrl, idx) => (
+                                  <div key={idx} style={{ width: "120px", height: "120px", overflow: "hidden", borderRadius: "6px", border: "1px solid #ddd" }}>
+                                    <img
+                                      src={imgUrl}
+                                      alt={`doc-${idx}`}
+                                      style={{
+                                        width: "100%",
+                                        height: "100%",
+                                        objectFit: "cover",
+                                        cursor: "pointer"
+                                      }}
+                                      onClick={() => window.open(imgUrl, '_blank')}
+                                    />
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+
                           <div style={{ marginTop: "20px", padding: "12px", background: "#f9f9f9", borderRadius: "6px", border: "1px solid #e0e0e0" }}>
                             <p style={{ margin: "0 0 4px 0", fontSize: "11px", color: "#757575" }}>Inspector</p>
                             <p style={{ margin: "0", fontSize: "13px", fontWeight: "500", color: "#424242" }}>{entry.inspector || "N/A"}</p>
@@ -510,6 +695,77 @@ export function GaInspeksiHydrantContent() {
                   Close
                 </button>
               </div>
+            </div>
+          </div>
+        )}
+
+        {/* QR Scanner Modal */}
+        {isScanning && (
+          <div
+            style={{
+              position: "fixed",
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              background: "rgba(0,0,0,0.8)",
+              display: "flex",
+              justifyContent: "center",
+              alignItems: "center",
+              zIndex: 2000,
+            }}
+            onClick={() => {
+              setIsScanning(false);
+              if (qrScannerRef.current) {
+                qrScannerRef.current.destroy();
+                qrScannerRef.current = null;
+              }
+            }}
+          >
+            <div
+              onClick={(e) => e.stopPropagation()}
+              style={{
+                background: "white",
+                borderRadius: "8px",
+                padding: "16px",
+                textAlign: "center",
+                maxWidth: "90vw",
+                width: "100%",
+              }}
+            >
+              <h3 style={{ margin: "0 0 12px 0", color: "#212121" }}>Scan Hydrant QR Code</h3>
+              <video
+                ref={videoRef}
+                style={{
+                  width: "100%",
+                  maxHeight: "60vh",
+                  borderRadius: "6px",
+                  background: "#000"
+                }}
+              />
+              <p style={{ fontSize: "13px", color: "#666", marginTop: "12px" }}>
+                Point your camera at the QR code on the hydrant
+              </p>
+              <button
+                onClick={() => {
+                  setIsScanning(false);
+                  if (qrScannerRef.current) {
+                    qrScannerRef.current.destroy();
+                    qrScannerRef.current = null;
+                  }
+                }}
+                style={{
+                  marginTop: "16px",
+                  padding: "8px 20px",
+                  background: "#757575",
+                  color: "white",
+                  border: "none",
+                  borderRadius: "5px",
+                  cursor: "pointer"
+                }}
+              >
+                Cancel
+              </button>
             </div>
           </div>
         )}

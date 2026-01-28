@@ -4,13 +4,13 @@
 import { createContext, useContext, useState, useCallback, useEffect, type ReactNode } from "react"
 
 // 🔹 Role yang didukung
-export type Role = "group-leader" | "inspector" | "inspector-ga" | "manager"
+export type Role = "group-leader-qa" | "inspector-qa" | "inspector-ga" | "manager"
 
 // 🔹 Struktur pengguna yang diperluas
 export interface User {
   username: string
   fullName: string
-  niki: string
+  nik: string
   department: string
   role: Role
 }
@@ -22,7 +22,7 @@ interface AuthContextType {
   signup: (data: {
     username: string
     fullName: string
-    niki: string
+    nik: string
     department: string
     role: Role
     password: string
@@ -52,11 +52,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const savedCurrentUser = localStorage.getItem(CURRENT_USER_KEY)
       if (savedCurrentUser) {
         const user = JSON.parse(savedCurrentUser)
-        if (["group-leader", "inspector", "inspector-ga", "manager"].includes(user.role)) {
+        if (["group-leader-qa", "inspector-qa", "inspector-ga", "manager"].includes(user.role)) {
           setCurrentUser({
             username: user.username,
             fullName: user.fullName,
-            niki: user.niki,
+            nik: user.nik,
             department: user.department,
             role: user.role as Role,
           })
@@ -82,7 +82,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         JSON.stringify({
           username: currentUser.username,
           fullName: currentUser.fullName,
-          niki: currentUser.niki,
+          nik: currentUser.nik,
           department: currentUser.department,
           role: currentUser.role,
         }),
@@ -96,7 +96,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     ({
       username,
       fullName,
-      niki,
+      nik,
       department,
       role,
       password,
@@ -104,17 +104,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }: {
       username: string
       fullName: string
-      niki: string
+      nik: string
       department: string
       role: Role
       password: string
       confirmPassword: string
     }) => {
-      if (!username.trim() || !fullName.trim() || !niki.trim() || !department.trim()) {
+      if (!username.trim() || !fullName.trim() || !nik.trim() || !department.trim()) {
         return { success: false, error: "Semua field wajib diisi!" }
       }
 
-      if (!role || !["group-leader", "inspector", "inspector-ga", "manager"].includes(role)) {
+      if (!role || !["group-leader-qa", "inspector-qa", "inspector-ga", "manager"].includes(role)) {
         return { success: false, error: "Pilih role yang valid!" }
       }
 
@@ -133,7 +133,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const newUser = {
         username,
         fullName,
-        niki,
+        nik,
         department,
         role,
         password,
@@ -165,14 +165,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return { success: false, error: "Password salah!" }
       }
 
-      if (!["group-leader", "inspector", "inspector-ga", "manager"].includes(user.role)) {
+      if (!["group-leader-qa", "inspector-qa", "inspector-ga", "manager"].includes(user.role)) {
         return { success: false, error: "Role tidak valid!" }
       }
 
       const safeUser: User = {
         username: user.username,
         fullName: user.fullName,
-        niki: user.niki,
+        nik: user.nik,
         department: user.department,
         role: user.role as Role,
       }

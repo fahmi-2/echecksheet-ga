@@ -1,19 +1,24 @@
 // app/e-checksheet-smoke-detector/page.tsx
-import { Suspense } from 'react';
+"use client";
+
+import { Suspense, use } from 'react';
 import { EChecksheetSmokeDetectorForm } from './EChecksheetSmokeDetectorForm';
 
 export default function EChecksheetSmokeDetectorPage({
   searchParams,
 }: {
-  searchParams: {
+  searchParams: Promise<{
     no?: string;
     lokasi?: string;
     zona?: string;
-  };
+  }>;
 }) {
-  const no = searchParams?.no || '0';
-  const lokasi = searchParams?.lokasi || 'Smoke Detector Location';
-  const zona = searchParams?.zona || 'Zone';
+  // ✅ Unwrap searchParams dengan React.use()
+  const params = use(searchParams);
+  
+  const no = params.no || '0';
+  const lokasi = params.lokasi || 'Smoke Detector Location';
+  const zona = params.zona || 'Zone';
 
   return (
     <Suspense fallback={

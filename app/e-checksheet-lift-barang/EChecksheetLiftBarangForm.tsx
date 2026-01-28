@@ -5,6 +5,7 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
 import { NavbarStatic } from "@/components/navbar-static";
+import { Sidebar } from "@/components/Sidebar";
 
 export function EChecksheetLiftBarangForm({
   liftName,
@@ -154,7 +155,7 @@ export function EChecksheetLiftBarangForm({
       const key = `e-checksheet-lift-${liftName}`;
       localStorage.setItem(key, JSON.stringify(answers));
       alert("Data berhasil disimpan!");
-      router.push(`/ga-lift-barang?openLift=${encodeURIComponent(liftName)}`);
+      router.push(`/status-ga/lift-barang?openLift=${encodeURIComponent(liftName)}`);
     } catch (err) {
       console.error("Gagal menyimpan:", err);
       alert("Gagal menyimpan data.");
@@ -165,8 +166,15 @@ export function EChecksheetLiftBarangForm({
 
   return (
     <div style={{ minHeight: "100vh", background: "#f8f9fa" }}>
-      <NavbarStatic userName={user.fullName} />
-      <div style={{ padding: "32px 24px", maxWidth: "100%", margin: "0 auto" }}>
+      <Sidebar userName={user.fullName} />
+      <div style={{ 
+        paddingLeft: "95px",
+        paddingTop: "25px",
+        paddingBottom: "25px",
+        paddingRight: "25px",
+        maxWidth: "100%", 
+        margin: "0 auto" 
+        }}>
         <div style={{ marginBottom: "32px" }}>
           <div style={{
             background: "linear-gradient(135deg, #0d47a1 0%, #1e88e5 100%)",
@@ -596,7 +604,7 @@ export function EChecksheetLiftBarangForm({
           flexWrap: "wrap"
         }}>
           <button
-            onClick={() => router.push("/ga-lift-barang")}
+            onClick={() => router.push("/status-ga/lift-barang")}
             style={{
               padding: "10px 28px",
               border: "none",

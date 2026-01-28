@@ -1,21 +1,26 @@
-// app/e-checksheet-selang-hydrant/page.tsx
-import { Suspense } from 'react';
+// app/e-checksheet-slg-hydrant/page.tsx
+"use client"; // ← Tambahkan ini
+
+import { Suspense, use } from 'react'; // ← tambahkan `use` dari React
 import { EChecksheetSelangHydrantForm } from './EChecksheetSelangHydrantForm';
 
 export default function EChecksheetSelangHydrantPage({
   searchParams,
 }: {
-  searchParams: {
+  searchParams: Promise<{
     lokasi?: string;
     zona?: string;
     jenisHydrant?: string;
     pic?: string;
-  };
+  }>;
 }) {
-  const lokasi = searchParams?.lokasi || 'Hydrant Lokasi';
-  const zona = searchParams?.zona || 'Zona';
-  const jenisHydrant = searchParams?.jenisHydrant || 'Jenis Hydrant';
-  const picDefault = searchParams?.pic || 'PIC';
+  // ✅ Unwrap searchParams dengan React.use()
+  const params = use(searchParams);
+  
+  const lokasi = params.lokasi || 'Hydrant Lokasi';
+  const zona = params.zona || 'Zona';
+  const jenisHydrant = params.jenisHydrant || 'Jenis Hydrant';
+  const picDefault = params.pic || 'PIC';
 
   return (
     <Suspense fallback={

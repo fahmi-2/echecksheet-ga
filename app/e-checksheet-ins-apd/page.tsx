@@ -1,15 +1,18 @@
 // app/e-checksheet-ins-apd/page.tsx
-import { Suspense } from 'react';
+'use client';
+
+import { Suspense, use } from 'react';
 import { EChecksheetInsApdForm } from './EChecksheetInsApdForm';
 
 export default function EChecksheetInsApdPage({
   searchParams,
 }: {
-  searchParams: {
+  searchParams: Promise<{
     areaId?: string;
-  };
+  }>;
 }) {
-  const areaId = Number(searchParams?.areaId) || 1;
+  const params = use(searchParams);
+  const areaId = Number(params?.areaId) || 1;
 
   return (
     <Suspense fallback={

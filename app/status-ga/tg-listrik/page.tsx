@@ -1,15 +1,18 @@
-// app/ga-tg-listrik/page.tsx
-import { Suspense } from 'react';
+// app/status-ga/tg-listrik/page.tsx
+'use client';
+
+import { Suspense, use } from 'react';
 import { GaTanggaListrikContent } from './GaTanggaListrikContent';
 
 export default function GaTanggaListrikPage({
   searchParams,
 }: {
-  searchParams: {
+  searchParams: Promise<{
     openArea?: string;
-  };
+  }>;
 }) {
-  const openArea = searchParams?.openArea || '';
+  const params = use(searchParams);
+  const openArea = params?.openArea || '';
 
   return (
     <Suspense fallback={

@@ -5,6 +5,7 @@ import { useState, useEffect } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import { useAuth } from "@/lib/auth-context"
 import { NavbarStatic } from "@/components/navbar-static"
+import { Sidebar } from "@/components/Sidebar"
 import React from "react"
 
 export default function EChecksheetPanelPage() {
@@ -195,7 +196,7 @@ export default function EChecksheetPanelPage() {
 
   return (
     <div className="app-page">
-      <NavbarStatic userName={user.fullName} />
+      <Sidebar userName={user.fullName} />
       <div className="page-content">
         <div className="header-section">
           <div className="header-content">

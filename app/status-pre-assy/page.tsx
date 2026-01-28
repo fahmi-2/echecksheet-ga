@@ -3,6 +3,7 @@ import { useState, useMemo, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { useAuth } from "@/lib/auth-context"
 import { NavbarStatic } from "@/components/navbar-static"
+import { Sidebar } from "@/components/Sidebar"
 import { DetailModal } from "@/components/ui/detailmodal"
 import React from "react"
 import Link from "next/link"
@@ -57,7 +58,7 @@ export default function PreAssyGLStatusPage() {
   const { user } = useAuth()
 
   useEffect(() => {
-    if (!user || user.role !== "group-leader") {
+    if (!user || user.role !== "group-leader-qa" && user.role !== "inspector-qa") {
       router.push("/login-page")
     }
   }, [user, router])
@@ -368,7 +369,7 @@ export default function PreAssyGLStatusPage() {
           const dateStr = `2026-01-${String(date).padStart(2, "0")}`
           return (
             <Link
-              href={`/e-checksheet?id=${id}&shift=${shift}&date=${dateStr}&timeSlot=${timeSlot}&mainType=pre-assy&checkType=cc-stripping&subType=group-leader`}
+              href={`/e-checksheet?id=${id}&shift=${shift}&date=${dateStr}&timeSlot=${timeSlot}&mainType=pre-assy&checkType=cc-stripping&subType=group-leader-qa`}
               className="block w-full h-full"
             >
               <span className="status-badge status-badge-check text-xs px-1 py-0.5 rounded cursor-pointer flex items-center justify-center w-full h-full">
@@ -390,7 +391,7 @@ export default function PreAssyGLStatusPage() {
       const dateStr = `2026-01-${String(date).padStart(2, "0")}`
       return (
         <Link
-          href={`/e-checksheet?id=${id}&shift=${shift}&date=${dateStr}&mainType=pre-assy&subType=group-leader`}
+          href={`/e-checksheet?id=${id}&shift=${shift}&date=${dateStr}&mainType=pre-assy&subType=group-leader-qa`}
           className="block w-full h-full"
         >
           <span className="status-badge status-badge-check text-xs px-1 py-0.5 rounded cursor-pointer flex items-center justify-center w-full h-full">
@@ -406,7 +407,7 @@ export default function PreAssyGLStatusPage() {
 
   return (
     <div className="app-page">
-      <NavbarStatic userName={user.fullName} />
+      <Sidebar userName={user.fullName} />
       <div className="page-content">
         <div className="header">
           <h1>
@@ -720,7 +721,7 @@ export default function PreAssyGLStatusPage() {
                         const savedGL = typeof window !== "undefined" ? localStorage.getItem(storageKeyGL) : null
                         const glData = savedGL ? JSON.parse(savedGL) : {}
                         const value = glData[dateKey]?.["A"] || "-"
-                        if (user?.role === "group-leader") {
+                        if (user?.role === "group-leader-qa") {
                           return (
                             <td
                               key={`gl-A-${date}`}
@@ -755,7 +756,7 @@ export default function PreAssyGLStatusPage() {
                         const savedGL = typeof window !== "undefined" ? localStorage.getItem(storageKeyGL) : null
                         const glData = savedGL ? JSON.parse(savedGL) : {}
                         const value = glData[dateKey]?.["B"] || "-"
-                        if (user?.role === "group-leader") {
+                        if (user?.role === "group-leader-qa") {
                           return (
                             <td
                               key={`gl-B-${date}`}
@@ -800,7 +801,7 @@ export default function PreAssyGLStatusPage() {
                         if (!isSelasaKamis) {
                           return <td key={`eso-A-${date}`} className="border text-xs"></td>
                         }
-                        if (user?.role === "group-leader") {
+                        if (user?.role === "group-leader-qa") {
                           return (
                             <td
                               key={`eso-A-${date}`}
@@ -840,7 +841,7 @@ export default function PreAssyGLStatusPage() {
                         if (!isSelasaKamis) {
                           return <td key={`eso-B-${date}`} className="border text-xs"></td>
                         }
-                        if (user?.role === "group-leader") {
+                        if (user?.role === "group-leader-qa") {
                           return (
                             <td
                               key={`eso-B-${date}`}

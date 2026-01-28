@@ -7,6 +7,7 @@ import { NavbarStatic } from "@/components/navbar-static"
 import { DetailModal } from "@/components/ui/detailmodal"
 import React from "react"
 import Link from "next/link"
+import { Sidebar } from "@/components/Sidebar"
 
 interface CheckPoint {
   id: number
@@ -32,38 +33,40 @@ interface CheckResult {
 export default function FinalAssyStatusPage() {
   const router = useRouter()
   const { user } = useAuth()
+  const userName = user?.fullName;
+  const currentRole = user?.role || "inspector-qa";
 
   useEffect(() => {
     if (!user) router.push("/login-page")
   }, [user, router])
 
-  const [subType, setSubType] = useState<"group-leader" | "inspector">("group-leader")
+  const [subType, setSubType] = useState<"group-leader-qa" | "inspector-qa">("group-leader-qa")
 
   const [checkpoints] = useState<CheckPoint[]>([
     // Final Assy (10 checkpoint × 2 shift) — tetap
-    { id: 1, checkPoint: "Check 4M Kondisi - Product yang mengalami perubahan 4M sudah di check dan tidak ada masalah", shift: "A", waktuCheck: "07:30 - 08:00", standard: "Abseni Inspector" },
-    { id: 1.1, checkPoint: "Check 4M Kondisi - Product yang mengalami perubahan 4M sudah di check dan tidak ada masalah", shift: "B", waktuCheck: "19:30 - 20:00", standard: "Abseni Inspector" },
-    { id: 2, checkPoint: "Dilakukan Pengecekan HLC Checker Fixture - Check HLC checker fixture dengan alignment gauge", shift: "A", waktuCheck: "08:00 - 09:00", standard: "Check Sheet HLC Checker" },
-    { id: 2.1, checkPoint: "Dilakukan Pengecekan HLC Checker Fixture - Check HLC checker fixture dengan alignment gauge", shift: "B", waktuCheck: "20:00 - 21:00", standard: "Check Sheet HLC Checker" },
-    { id: 3, checkPoint: "Torque Wrench - Torque wrench ada nomor registrasi & kalibrasi tidak expired", shift: "A", waktuCheck: "08:00 - 08:00", standard: "Check Actual Torque Wrench" },
-    { id: 3.1, checkPoint: "Torque Wrench - Torque wrench ada nomor registrasi & kalibrasi tidak expired", shift: "B", waktuCheck: "20:00 - 20:00", standard: "Check Actual Torque Wrench" },
-    { id: 4, checkPoint: "Kandas Lock dan Gauge - Kandas lock dan gauge di area inspection tidak ada yang rusak atau hilang", shift: "A", waktuCheck: "09:00 - 11:00", standard: "Check Actual Tool / Gauge" },
-    { id: 4.1, checkPoint: "Kandas Lock dan Gauge - Kandas lock dan gauge di area inspection tidak ada yang rusak atau hilang", shift: "B", waktuCheck: "21:00 - 23:00", standard: "Check Actual Tool / Gauge" },
-    { id: 5, checkPoint: "Setting Connector HE Checker Fixture - Setting connector HE checker fixture dengan hati-hati", shift: "A", waktuCheck: "09:00 - 11:00", standard: "QA-ACL-FA-IS-046" },
-    { id: 5.1, checkPoint: "Setting Connector HE Checker Fixture - Setting connector HE checker fixture dengan hati-hati", shift: "B", waktuCheck: "21:00 - 23:00", standard: "QA-ACL-FA-IS-046" },
-    { id: 6, checkPoint: "Inspection Board Dpasang Cover - Inspection board dpasang cover jika tidak ada loading", shift: "A", waktuCheck: "00:00 - 11:00", standard: "Check Actual Kondisi Board" },
-    { id: 6.1, checkPoint: "Inspection Board Dpasang Cover - Inspection board dpasang cover jika tidak ada loading", shift: "B", waktuCheck: "12:00 - 23:00", standard: "Check Actual Kondisi Board" },
-    { id: 7, checkPoint: "Box / Polieteer Harness Finish Good - Box / polieteer harness finish good yang quantity-nya tidak standard", shift: "A", waktuCheck: "11:00 - 12:00", standard: "Ada Identitas Qty Tidak Standard" },
-    { id: 7.1, checkPoint: "Box / Polieteer Harness Finish Good - Box / polieteer harness finish good yang quantity-nya tidak standard", shift: "B", waktuCheck: "23:00 - 00:00", standard: "Ada Identitas Qty Tidak Standard" },
-    { id: 8, checkPoint: "Box / Polieteer Pada Saat Proses Dpasang - Box / polieteer pada saat proses dpasang tutup pada bagian atasnya", shift: "A", waktuCheck: "11:00 - 12:00", standard: "Check Actual Polieter" },
-    { id: 8.1, checkPoint: "Box / Polieteer Pada Saat Proses Dpasang - Box / polieteer pada saat proses dpasang tutup pada bagian atasnya", shift: "B", waktuCheck: "23:00 - 00:00", standard: "Check Actual Polieter" },
-    { id: 9, checkPoint: "Pengajian LKI dan DP - Pengajian LKI dan DP oleh inspector sudah dilakukan dengan banar", shift: "A", waktuCheck: "13:00 - 14:00", standard: "Check Actual LKI" },
-    { id: 9.1, checkPoint: "Pengajian LKI dan DP - Pengajian LKI dan DP oleh inspector sudah dilakukan dengan banar", shift: "B", waktuCheck: "01:00 - 02:00", standard: "Check Actual LKI" },
-    { id: 10, checkPoint: "Harness Defect di Hanger - Harness defect di hanger merah dpasang defect tag dan pengisian defect tag", shift: "A", waktuCheck: "14:00 - 15:00", standard: "Check Defect Tag" },
-    { id: 10.1, checkPoint: "Harness Defect di Hanger - Harness defect di hanger merah dpasang defect tag dan pengisian defect tag", shift: "B", waktuCheck: "02:00 - 03:00", standard: "Check Defect Tag" },
+    { id: 1, checkPoint: "Check 4M kondisi, product yang mengalami perubahan 4M sudah di check dan tidak ada masalah", shift: "A", waktuCheck: "07:30 - 08:00", standard: "Abseni Inspector" },
+    { id: 1.1, checkPoint: "Check 4M kondisi, product yang mengalami perubahan 4M sudah di check dan tidak ada masalah", shift: "B", waktuCheck: "19:30 - 20:00", standard: "Abseni Inspector" },
+    { id: 2, checkPoint: "Di lakukan pengecheckan HLC checker fixture dengan alignment gauge oleh inspector checker di akhir shift / checker fixture tidak terpakai", shift: "A", waktuCheck: "08:00 - 09:00", standard: "Check Sheet HLC Checker" },
+    { id: 2.1, checkPoint: "Di lakukan pengecheckan HLC checker fixture dengan alignment gauge oleh inspector checker di akhir shift / checker fixture tidak terpakai", shift: "B", waktuCheck: "20:00 - 21:00", standard: "Check Sheet HLC Checker" },
+    { id: 3, checkPoint: "Torque wrench ada nomor registrasi & kalibrasi tidak expired", shift: "A", waktuCheck: "08:00 - 08:00", standard: "Check Actual Torque Wrench" },
+    { id: 3.1, checkPoint: "Torque wrench ada nomor registrasi & kalibrasi tidak expired", shift: "B", waktuCheck: "20:00 - 20:00", standard: "Check Actual Torque Wrench" },
+    { id: 4, checkPoint: "Kondisi tool dan gauge di area inspection tidak ada yang rusak atau hilang dan ada identitasnya", shift: "A", waktuCheck: "09:00 - 11:00", standard: "Check Actual Tool / Gauge" },
+    { id: 4.1, checkPoint: "Kondisi tool dan gauge di area inspection tidak ada yang rusak atau hilang dan ada identitasnya", shift: "B", waktuCheck: "21:00 - 23:00", standard: "Check Actual Tool / Gauge" },
+    { id: 5, checkPoint: "Setting connector ke checker fixture di lakukan dengan hati-hati, tidak menimbulkan defect damaged connector / bent terminal", shift: "A", waktuCheck: "09:00 - 11:00", standard: "QA-ACL-FA-IS-046" },
+    { id: 5.1, checkPoint: "Setting connector ke checker fixture di lakukan dengan hati-hati, tidak menimbulkan defect damaged connector / bent terminal", shift: "B", waktuCheck: "21:00 - 23:00", standard: "QA-ACL-FA-IS-046" },
+    { id: 6, checkPoint: "Inspection board di pasang cover jika tidak ada loading.", shift: "A", waktuCheck: "00:00 - 11:00", standard: "Check Actual Kondisi Board" },
+    { id: 6.1, checkPoint: "Inspection board di pasang cover jika tidak ada loading.", shift: "B", waktuCheck: "12:00 - 23:00", standard: "Check Actual Kondisi Board" },
+    { id: 7, checkPoint: "Box / politener harness finish good yang quantitynya tidak standart di beri identitas yang jelas", shift: "A", waktuCheck: "11:00 - 12:00", standard: "Ada Identitas Qty Tidak Standard" },
+    { id: 7.1, checkPoint: "Box / politener harness finish good yang quantitynya tidak standart di beri identitas yang jelas", shift: "B", waktuCheck: "23:00 - 00:00", standard: "Ada Identitas Qty Tidak Standard" },
+    { id: 8, checkPoint: "Box / Politener pada saat proses di pasang tutup pada bagian atasnya", shift: "A", waktuCheck: "11:00 - 12:00", standard: "Check Actual Polieter" },
+    { id: 8.1, checkPoint: "Box / Politener pada saat proses di pasang tutup pada bagian atasnya", shift: "B", waktuCheck: "23:00 - 00:00", standard: "Check Actual Polieter" },
+    { id: 9, checkPoint: "Pengisian LKI dan DP oleh inspector sudah di lakukan dengan benar", shift: "A", waktuCheck: "13:00 - 14:00", standard: "Check Actual LKI" },
+    { id: 9.1, checkPoint: "Pengisian LKI dan DP oleh inspector sudah di lakukan dengan benar", shift: "B", waktuCheck: "01:00 - 02:00", standard: "Check Actual LKI" },
+    { id: 10, checkPoint: "Harness defect di hanger merah dipasang defect tag dan pengisian defect tag sudah dilakukan dengan benar", shift: "A", waktuCheck: "14:00 - 15:00", standard: "Check Defect Tag" },
+    { id: 10.1, checkPoint: "Harness defect di hanger merah dipasang defect tag dan pengisian defect tag sudah dilakukan dengan benar", shift: "B", waktuCheck: "02:00 - 03:00", standard: "Check Defect Tag" },
   ])
 
-  const storageKey = `finalAssy${subType === "group-leader" ? "GroupLeader" : "Inspector"}DailyCheckResults`
+  const storageKey = `finalAssy${subType === "group-leader-qa" ? "GroupLeader" : "Inspector"}DailyCheckResults`
 
   const [results, setResults] = useState<Record<string, Record<string, CheckResult>>>(() => {
     if (typeof window !== "undefined") {
@@ -130,15 +133,15 @@ export default function FinalAssyStatusPage() {
   }
 
   const title = 
-    subType === "group-leader" 
-      ? "Daily Check Group Leader Final Assy" 
+    subType === "group-leader-qa" 
+      ? "CHECK SHEET PATROLI HARIAN GROUP LEADER INSPEKSI F/A" 
       : "Daily Check Inspector Final Assy"
 
   if (!user) return null
 
   return (
     <div className="app-page">
-      <NavbarStatic userName={user.fullName} />
+      <Sidebar userName={user.fullName} />
 
       <div className="page-content">
         <div className="header">
@@ -150,11 +153,11 @@ export default function FinalAssyStatusPage() {
               <label>Peran:</label>
               <select
                 value={subType}
-                onChange={(e) => setSubType(e.target.value as "group-leader" | "inspector")}
+                onChange={(e) => setSubType(e.target.value as "group-leader-qa" | "inspector-qa")}
                 className="dropdown"
               >
-                <option value="group-leader">Group Leader</option>
-                <option value="inspector">Inspector</option>
+                <option value="group-leader-qa">Group Leader</option>
+                <option value="inspector-qa">Inspector</option>
               </select>
             </div>
           </div>

@@ -1,15 +1,17 @@
-// app/ga-selang-hydrant/page.tsx
-import { Suspense } from 'react';
+// app/status-ga/selang-hydrant/page.tsx
+"use client";
+
+import { Suspense, use } from 'react';
 import { GaSelangHydrantContent } from './GaSelangHydrantContent';
 
 export default function GaSelangHydrantPage({
   searchParams,
 }: {
-  searchParams: {
-    openArea?: string;
-  };
+  searchParams: Promise<{ openArea?: string }>; // ← Promise
 }) {
-  const openArea = searchParams?.openArea || '';
+  // ✅ Unwrap searchParams dengan React.use()
+  const params = use(searchParams);
+  const openArea = params?.openArea || '';
 
   return (
     <Suspense fallback={

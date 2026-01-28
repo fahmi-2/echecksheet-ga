@@ -1,17 +1,20 @@
 // app/e-checksheet-tg-listrik/page.tsx
-import { Suspense } from 'react';
+'use client';
+
+import { Suspense, use } from 'react';
 import { EChecksheetTgListrikForm } from './EChecksheetTgListrikForm';
 
 export default function EChecksheetTgListrikPage({
   searchParams,
 }: {
-  searchParams: {
+  searchParams: Promise<{
     areaName?: string;
     lokasi?: string;
-  };
+  }>;
 }) {
-  const areaName = searchParams?.areaName || 'Tangga Listrik';
-  const lokasi = searchParams?.lokasi || 'Lokasi';
+  const params = use(searchParams);
+  const areaName = params?.areaName || 'Tangga Listrik';
+  const lokasi = params?.lokasi || 'Lokasi';
 
   return (
     <Suspense fallback={

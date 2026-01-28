@@ -1,43 +1,107 @@
-// app/ga-inspeksi-apd/GaInspeksiApdContent.tsx
+// app/status-ga/GaInspeksiHydrantContent.tsx
 "use client";
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
 import { NavbarStatic } from "@/components/navbar-static";
-import { Sidebar } from "@/components/Sidebar";
 
-interface ApdArea {
-  id: number;
-  name: string;
-  type: string; // "Produksi" / "QA" / "Warehouse" / dll
+interface HydrantItem {
+  no: number;
+  lokasi: string;
+  zona: string;
+  jenisHydrant: string;
 }
 
-const APD_AREAS: ApdArea[] = [
-  { id: 1, name: "PRE ASSY AREA GENBA C", type: "Produksi" },
-  { id: 2, name: "PRE ASSY GENBA A+B", type: "Produksi" },
-  { id: 3, name: "AREA FINAL ASSY", type: "Produksi" },
-  { id: 4, name: "AREA CUTTING TUBE", type: "Produksi" },
-  { id: 5, name: "INSPEKSI PRE ASSY AREA GENBA C", type: "QA" },
-  { id: 6, name: "INSPEKSI PRE ASSY GENBA A+B", type: "QA" },
-  { id: 7, name: "AREA INSPEKSI FINAL ASSY", type: "QA" },
-  { id: 8, name: "AREA WAREHOUSE", type: "Gudang" },
-  { id: 9, name: "AREA EXIM", type: "Logistik" },
-  { id: 10, name: "AREA PREV. APPLICATOR", type: "Produksi" },
-  { id: 11, name: "AREA WORK SHOP", type: "Maintenance" },
-  { id: 12, name: "AREA UTILITY", type: "Utilitas" },
-  { id: 13, name: "AREA RECEIVING INSPECTION MATERIAL", type: "QA" },
-  { id: 14, name: "AREA VOLTAGE TEST", type: "QA" },
+// Define the labels for each of the 20 items (must match EChecksheetHydrantForm)
+const ITEM_LABELS: string[] = [
+  "1. kondisi tidak berkarat",
+  "2. posisi tidak terhalang benda apapun",
+  "3. kondisi bagus tidak berkarat",
+  "4. tidak keropos",
+  "5. ada nomor id & papan petunjuk",
+  "6. posisi tidak terhalang benda apapun",
+  "7. pada posisi Normally open",
+  "8. saat posisi tertutup aliran air tidak keluar",
+  "9. tidak ada kebocoran pada seal",
+  "10. Tersedia",
+  "11. Pengunci coupling berfungsi (ditekan)",
+  "12. Seal tidak rusak",
+  "13. Dapat diputar/dibuka dengan mudah",
+  "14. saat posisi tertutup aliran air tidak keluar",
+  "15. penutup tersedia & dapat diputar/dibuka dengan mudah",
+  "16. Ulir bagian dalam terlumasi",
+  "17. Tersedia",
+  "18. Layout Jelas",
+  "19. Tidak Bocor / pecah, Cat tidak pudar",
+  "20. Terpasang dengan rapi & Jelas",
 ];
 
-export function GaInspeksiApdContent() {
+const HYDRANT_LIST: HydrantItem[] = [
+  { no: 1, lokasi: "KANTIN", zona: "BARAT", jenisHydrant: "HYDRANT INDOOR" },
+  { no: 2, lokasi: "AUDITORIUM", zona: "BARAT", jenisHydrant: "HYDRANT INDOOR" },
+  { no: 3, lokasi: "MAIN OFFICE SISI SELATAN", zona: "BARAT", jenisHydrant: "HYDRANT INDOOR" },
+  { no: 4, lokasi: "BELAKANG RAK KARTON BOX EXIM", zona: "TIMUR", jenisHydrant: "HYDRANT INDOOR" },
+  { no: 5, lokasi: "PINTU 9 CV 2B / GENBA A", zona: "TIMUR", jenisHydrant: "HYDRANT INDOOR" },
+  { no: 6, lokasi: "CV AT6 GENBA A", zona: "TIMUR", jenisHydrant: "HYDRANT INDOOR" },
+  { no: 7, lokasi: "CV AT7 GENBA A", zona: "TIMUR", jenisHydrant: "HYDRANT INDOOR" },
+  { no: 8, lokasi: "CV AT 11 GENBA A", zona: "TIMUR", jenisHydrant: "HYDRANT INDOOR" },
+  { no: 9, lokasi: "PINTU 7 GENBA A", zona: "TIMUR", jenisHydrant: "HYDRANT INDOOR" },
+  { no: 10, lokasi: "SEBELAH UTARA PINTU 7", zona: "TIMUR", jenisHydrant: "HYDRANT INDOOR" },
+  { no: 11, lokasi: "NEW BUILDING WHS (RAK TOYOTA)", zona: "UTARA", jenisHydrant: "HYDRANT INDOOR" },
+  { no: 12, lokasi: "SAMPING LIFT BARANG WHS", zona: "UTARA", jenisHydrant: "HYDRANT INDOOR" },
+  { no: 13, lokasi: "OFFICE WHS", zona: "UTARA", jenisHydrant: "HYDRANT INDOOR" },
+  { no: 14, lokasi: "CV 12B / AREA BARAT", zona: "BARAT", jenisHydrant: "HYDRANT INDOOR" },
+  { no: 15, lokasi: "CV AB 10", zona: "BARAT", jenisHydrant: "HYDRANT INDOOR" },
+  { no: 16, lokasi: "CV AB 5", zona: "BARAT", jenisHydrant: "HYDRANT INDOOR" },
+  { no: 17, lokasi: "PINTU 1 GENBA A", zona: "BARAT", jenisHydrant: "HYDRANT INDOOR" },
+  { no: 18, lokasi: "CV 8A", zona: "TIMUR", jenisHydrant: "HYDRANT INDOOR" },
+  { no: 19, lokasi: "SUB ASSY B1", zona: "TIMUR", jenisHydrant: "HYDRANT INDOOR" },
+  { no: 20, lokasi: "SUB ASSY C7", zona: "BARAT", jenisHydrant: "HYDRANT INDOOR" },
+  { no: 21, lokasi: "SHILD WIRE C4  / AREA TIMUR", zona: "BARAT", jenisHydrant: "HYDRANT INDOOR" },
+  { no: 22, lokasi: "RAYCHAM NPR.07", zona: "BARAT", jenisHydrant: "HYDRANT INDOOR" },
+  { no: 23, lokasi: "CV 5A M/S / AREA BARAT", zona: "BARAT", jenisHydrant: "HYDRANT INDOOR" },
+  { no: 24, lokasi: "TRAINING ROOM", zona: "BARAT", jenisHydrant: "HYDRANT INDOOR" },
+  { no: 25, lokasi: "JIG PROTO / STOCK MATERIAL", zona: "BARAT", jenisHydrant: "HYDRANT INDOOR" },
+  { no: 26, lokasi: "MEZZANINE SISI BARAT", zona: "BARAT", jenisHydrant: "HYDRANT INDOOR" },
+  { no: 27, lokasi: "DEPAN MASJID", zona: "BARAT", jenisHydrant: "HYDRANT PILLAR" },
+  { no: 28, lokasi: "DEPAN GENBA C", zona: "BARAT", jenisHydrant: "HYDRANT PILLAR" },
+  { no: 29, lokasi: "SAMPING PUMP ROOM", zona: "BARAT", jenisHydrant: "HYDRANT PILLAR" },
+  { no: 30, lokasi: "SAMPING LOADING DOCK WH", zona: "TIMUR", jenisHydrant: "HYDRANT PILLAR" },
+  { no: 31, lokasi: "SEBELAH UTARA PINTU 8", zona: "TIMUR", jenisHydrant: "HYDRANT PILLAR" },
+  { no: 32, lokasi: "SAMPING LOADING DOCK EXIM", zona: "TIMUR", jenisHydrant: "HYDRANT PILLAR" },
+  { no: 33, lokasi: "DEPAN AREA PARKIR", zona: "TIMUR", jenisHydrant: "HYDRANT PILLAR" },
+  { no: 34, lokasi: "PARKIR BAWAH", zona: "SELATAN", jenisHydrant: "HYDRANT INDOOR" },
+  { no: 35, lokasi: "PARKIR ATAS", zona: "SELATAN", jenisHydrant: "HYDRANT INDOOR" },
+  { no: 36, lokasi: "DEPAN POWER HOUSE A", zona: "UTARA", jenisHydrant: "HYDRANT OUTDOOR" },
+];
+
+interface ChecksheetEntry {
+  date: string;
+  item1: string; item2: string; item3: string; item4: string; item5: string;
+  item6: string; item7: string; item8: string; item9: string; item10: string;
+  item11: string; item12: string; item13: string; item14: string; item15: string;
+  item16: string; item17: string; item18: string; item19: string; item20: string;
+  keteranganKondisi: string;
+  tindakanPerbaikan: string;
+  pic: string;
+  dueDate: string;
+  verify: string;
+  inspector: string;
+}
+
+export function GaInspeksiHydrantContent() {
   const router = useRouter();
   const { user, loading } = useAuth();
 
   const [isMounted, setIsMounted] = useState(false);
   const [showModal, setShowModal] = useState(false);
-  const [selectedCategory, setSelectedCategory] = useState<string>("Produksi");
+  const [selectedCategory, setSelectedCategory] = useState<string>("HYDRANT INDOOR");
   const [searchTerm, setSearchTerm] = useState("");
+
+  const [selectedArea, setSelectedArea] = useState<HydrantItem | null>(null);
+  const [selectedDateInModal, setSelectedDateInModal] = useState<string>("");
+  const [availableDates, setAvailableDates] = useState<string[]>([]);
 
   useEffect(() => {
     setIsMounted(true);
@@ -50,50 +114,47 @@ export function GaInspeksiApdContent() {
     }
   }, [user, loading, router]);
 
-  const filteredData = APD_AREAS.filter(item =>
-    item.type === selectedCategory &&
-    (item.name.toLowerCase().includes(searchTerm.toLowerCase()))
+  const filteredData = HYDRANT_LIST.filter(item =>
+    item.jenisHydrant === selectedCategory &&
+    (item.lokasi.toLowerCase().includes(searchTerm.toLowerCase()) ||
+     item.zona.toLowerCase().includes(searchTerm.toLowerCase()))
   );
 
-  const [selectedArea, setSelectedArea] = useState<ApdArea | null>(null);
-  const [checksheetData, setChecksheetData] = useState<any[]>([]);
-  const [selectedDateInModal, setSelectedDateInModal] = useState<string>("");
-  const [availableDates, setAvailableDates] = useState<string[]>([]);
-
-  const openDetail = (area: ApdArea) => {
+  const openDetail = (area: HydrantItem) => {
     setSelectedArea(area);
-    const key = `e-checksheet-apd-${area.id}`;
-    const saved = typeof window !== "undefined" ? localStorage.getItem(key) : null;
-    if (saved) {
-      try {
-        const data = JSON.parse(saved);
-        setChecksheetData(data);
 
-        const allDates = new Set<string>();
-        if (Array.isArray(data)) {
-          data.forEach((entry: any) => {
+    let savedData: ChecksheetEntry[] = [];
+    let dates: string[] = [];
+    let latestDate = "";
+
+    try {
+      const key = `e-checksheet-hydrant-${area.no}`;
+      const saved = typeof window !== "undefined" ? localStorage.getItem(key) : null;
+      if (saved) {
+        savedData = JSON.parse(saved);
+        if (Array.isArray(savedData)) {
+          const allDates = new Set<string>();
+          savedData.forEach((entry) => {
             if (entry?.date) allDates.add(entry.date);
           });
+          dates = Array.from(allDates).sort((a, b) => new Date(b).getTime() - new Date(a).getTime());
+          latestDate = dates[0] || "";
         }
-        const sortedDates = Array.from(allDates).sort((a, b) => new Date(b).getTime() - new Date(a).getTime());
-        setAvailableDates(sortedDates);
-        setSelectedDateInModal(sortedDates[0] || "");
-      } catch (e) {
-        setChecksheetData([]);
-        setAvailableDates([]);
-        setSelectedDateInModal("");
       }
-    } else {
-      setChecksheetData([]);
-      setAvailableDates([]);
-      setSelectedDateInModal("");
+    } catch (e) {
+      console.warn("Failed to parse hydrant data", e);
+      savedData = [];
+      dates = [];
+      latestDate = "";
     }
+
+    setAvailableDates(dates);
+    setSelectedDateInModal(latestDate);
     setShowModal(true);
   };
 
   const closeDetail = () => {
     setSelectedArea(null);
-    setChecksheetData([]);
     setSelectedDateInModal("");
     setAvailableDates([]);
     setShowModal(false);
@@ -115,14 +176,8 @@ export function GaInspeksiApdContent() {
 
   return (
     <div style={{ minHeight: "100vh", background: "#f7f9fc" }}>
-      <Sidebar userName={user?.fullName} />
-      <div style={{ 
-        paddingLeft : "95px",
-        paddingRight : "25px",
-        paddingBottom : "32px",
-        paddingTop : "32px",
-        maxWidth: "1400px", 
-        margin: "0 auto" }}>
+      <NavbarStatic userName={user?.fullName || "User"} />
+      <div style={{ padding: "24px 20px", maxWidth: "1400px", margin: "0 auto" }}>
         
         <div style={{ marginBottom: "28px" }}>
           <div style={{
@@ -132,10 +187,10 @@ export function GaInspeksiApdContent() {
             boxShadow: "0 2px 8px rgba(0,0,0,0.1)"
           }}>
             <h1 style={{ margin: "0 0 6px 0", color: "white", fontSize: "26px", fontWeight: "600", letterSpacing: "-0.5px" }}>
-              🛡️ APD Inspection Dashboard
+              🚒 Hydrant Inspection Dashboard
             </h1>
             <p style={{ margin: 0, color: "#e3f2fd", fontSize: "14px", fontWeight: "400" }}>
-              Monthly inspection schedule and maintenance records for Personal Protective Equipment
+              Monthly inspection schedule and maintenance records
             </p>
           </div>
         </div>
@@ -155,7 +210,7 @@ export function GaInspeksiApdContent() {
         }}>
           <div style={{ flex: 1, minWidth: "200px" }}>
             <label htmlFor="category-select" style={{ display: "block", marginBottom: "6px", fontSize: "14px", fontWeight: "500", color: "#424242" }}>
-              Area Type:
+              Hydrant Type:
             </label>
             <select
               id="category-select"
@@ -172,23 +227,20 @@ export function GaInspeksiApdContent() {
                 fontFamily: "inherit"
               }}
             >
-              <option value="Produksi">Produksi</option>
-              <option value="QA">QA</option>
-              <option value="Gudang">Gudang</option>
-              <option value="Logistik">Logistik</option>
-              <option value="Maintenance">Maintenance</option>
-              <option value="Utilitas">Utilitas</option>
+              <option value="HYDRANT INDOOR">HYDRANT INDOOR</option>
+              <option value="HYDRANT PILLAR">HYDRANT PILLAR</option>
+              <option value="HYDRANT OUTDOOR">HYDRANT OUTDOOR</option>
             </select>
           </div>
 
           <div style={{ flex: 1, minWidth: "200px" }}>
             <label htmlFor="search-input" style={{ display: "block", marginBottom: "6px", fontSize: "14px", fontWeight: "500", color: "#424242" }}>
-              Search Area:
+              Search Location or Zone:
             </label>
             <input
               id="search-input"
               type="text"
-              placeholder="e.g. GENBA, FINAL, WAREHOUSE..."
+              placeholder="e.g. KANTIN, BARAT..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               style={{
@@ -217,7 +269,8 @@ export function GaInspeksiApdContent() {
               <thead>
                 <tr style={{ borderBottom: "2px solid #e0e0e0" }}>
                   <th style={{ padding: "14px 16px", textAlign: "center", background: "#fafafa", fontWeight: "600", color: "#424242", fontSize: "13px" }}>No</th>
-                  <th style={{ padding: "14px 16px", textAlign: "left", background: "#fafafa", fontWeight: "600", color: "#424242", fontSize: "13px" }}>Area Name</th>
+                  <th style={{ padding: "14px 16px", textAlign: "left", background: "#fafafa", fontWeight: "600", color: "#424242", fontSize: "13px" }}>Location</th>
+                  <th style={{ padding: "14px 16px", textAlign: "center", background: "#fafafa", fontWeight: "600", color: "#424242", fontSize: "13px" }}>Zone</th>
                   <th style={{ padding: "14px 16px", textAlign: "center", background: "#fafafa", fontWeight: "600", color: "#424242", fontSize: "13px" }}>Type</th>
                   <th style={{ padding: "14px 16px", textAlign: "center", background: "#fafafa", fontWeight: "600", color: "#424242", fontSize: "13px" }}>Status</th>
                   <th style={{ padding: "14px 16px", textAlign: "center", background: "#fafafa", fontWeight: "600", color: "#424242", fontSize: "13px" }}>Actions</th>
@@ -225,7 +278,7 @@ export function GaInspeksiApdContent() {
               </thead>
               <tbody>
                 {filteredData.map((area, idx) => {
-                  const key = `e-checksheet-apd-${area.id}`;
+                  const key = `e-checksheet-hydrant-${area.no}`;
                   const saved = typeof window !== "undefined" ? localStorage.getItem(key) : null;
                   let statusLabel = "No Data";
                   let statusColor = "#757575";
@@ -244,10 +297,11 @@ export function GaInspeksiApdContent() {
                   }
 
                   return (
-                    <tr key={area.id} style={{ borderBottom: idx === filteredData.length - 1 ? "none" : "1px solid #f0f0f0" }}>
-                      <td style={{ padding: "14px 16px", textAlign: "center", fontWeight: "600", color: "#1976d2" }}>{idx + 1}</td>
-                      <td style={{ padding: "14px 16px", fontWeight: "500", color: "#424242" }}>{area.name}</td>
-                      <td style={{ padding: "14px 16px", textAlign: "center", fontWeight: "600", color: "#616161" }}>{area.type}</td>
+                    <tr key={area.no} style={{ borderBottom: idx === filteredData.length - 1 ? "none" : "1px solid #f0f0f0" }}>
+                      <td style={{ padding: "14px 16px", textAlign: "center", fontWeight: "600", color: "#1976d2" }}>{area.no}</td>
+                      <td style={{ padding: "14px 16px", fontWeight: "500", color: "#424242" }}>{area.lokasi}</td>
+                      <td style={{ padding: "14px 16px", textAlign: "center", fontWeight: "600", color: "#616161" }}>{area.zona}</td>
+                      <td style={{ padding: "14px 16px", textAlign: "center", fontWeight: "600", color: "#616161" }}>{area.jenisHydrant}</td>
                       <td style={{ padding: "14px 16px", textAlign: "center" }}>
                         <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "4px" }}>
                           <span style={{
@@ -282,7 +336,7 @@ export function GaInspeksiApdContent() {
                             View
                           </button>
                           <a
-                            href={`/e-checksheet-ins-apd?areaId=${area.id}&areaName=${encodeURIComponent(area.name)}&areaType=${encodeURIComponent(area.type)}`}
+                            href={`/e-checksheet-hydrant?no=${area.no}&lokasi=${encodeURIComponent(area.lokasi)}&zona=${encodeURIComponent(area.zona)}&jenisHydrant=${encodeURIComponent(area.jenisHydrant)}`}
                             style={{
                               padding: "7px 14px",
                               borderRadius: "5px",
@@ -348,10 +402,10 @@ export function GaInspeksiApdContent() {
               }}>
                 <div>
                   <h2 style={{ margin: "0 0 4px 0", color: "#212121", fontSize: "20px", fontWeight: "600" }}>
-                    Inspection History - {selectedArea.name}
+                    Inspection History - Unit #{selectedArea.no}
                   </h2>
                   <p style={{ margin: "0", color: "#616161", fontSize: "14px" }}>
-                    {selectedArea.type}
+                    {selectedArea.lokasi} • {selectedArea.zona} • {selectedArea.jenisHydrant}
                   </p>
                 </div>
                 <button 
@@ -402,12 +456,7 @@ export function GaInspeksiApdContent() {
               </div>
 
               <div style={{ padding: "24px", overflowY: "auto", flex: 1, background: "#fafafa" }}>
-                {!checksheetData || !Array.isArray(checksheetData) || checksheetData.length === 0 ? (
-                  <div style={{ textAlign: "center", padding: "60px 20px", color: "#9e9e9e" }}>
-                    <div style={{ fontSize: "48px", marginBottom: "12px", opacity: 0.5 }}>📋</div>
-                    <p style={{ fontSize: "15px", fontWeight: "500", margin: 0 }}>No inspection records found</p>
-                  </div>
-                ) : !selectedDateInModal ? (
+                {!selectedDateInModal ? (
                   <div style={{ textAlign: "center", padding: "60px 20px", color: "#757575" }}>
                     <div style={{ fontSize: "48px", marginBottom: "12px", opacity: 0.5 }}>📅</div>
                     <p style={{ fontSize: "15px", fontWeight: "500", margin: 0 }}>Please select an inspection date</p>
@@ -415,115 +464,86 @@ export function GaInspeksiApdContent() {
                 ) : (
                   <div style={{ overflowX: "auto" }}>
                     {(() => {
-                      const entry = checksheetData.find((e: any) => e.date === selectedDateInModal);
-                      if (!entry) {
-                        return <div style={{ textAlign: "center", padding: "40px", color: "#9e9e9e" }}>No data found for this date</div>;
+                      if (!selectedArea) return null;
+
+                      let entry: ChecksheetEntry | null = null;
+                      try {
+                        const key = `e-checksheet-hydrant-${selectedArea.no}`;
+                        const saved = localStorage.getItem(key);
+                        if (saved) {
+                          const data: ChecksheetEntry[] = JSON.parse(saved);
+                          if (Array.isArray(data)) {
+                            entry = data.find((e) => e.date === selectedDateInModal) || null;
+                          }
+                        }
+                      } catch (e) {
+                        console.warn("Failed to load inspection data for modal", e);
                       }
 
-                      if (!Array.isArray(entry.data) || entry.data.length === 0) {
-                        return <div style={{ textAlign: "center", padding: "40px", color: "#9e9e9e" }}>No inspection items recorded</div>;
+                      if (!entry) {
+                        return <div style={{ textAlign: "center", padding: "40px", color: "#9e9e9e" }}>No data found for this date</div>;
                       }
 
                       return (
                         <div>
                           <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "12px", minWidth: "1600px", border: "1px solid #e0e0e0", background: "white" }}>
                             <thead>
-                              <tr style={{ background: "#fafafa", borderBottom: "2px solid #ccc" }}>
-                                <th rowSpan={2} style={{ padding: "10px 8px", border: "1px solid #ddd", fontWeight: "600", textAlign: "center", width: "4%" }}>NO</th>
-                                <th style={{ padding: "10px 8px", border: "1px solid #ddd", fontWeight: "600", textAlign: "center", width: "12%" }}>PROSES</th>
-                                <th rowSpan={2} colSpan={6} style={{ padding: "8px", border: "1px solid #ddd", fontWeight: "600", textAlign: "center", width: "30%" }}>NO. MESIN/NIK</th>
-                                <th rowSpan={2} style={{ padding: "10px 8px", border: "1px solid #ddd", fontWeight: "600", textAlign: "center", width: "8%" }}>PROSENTASE OK</th>
-                                <th rowSpan={2} colSpan={4} style={{ padding: "10px 8px", border: "1px solid #ddd", fontWeight: "600", textAlign: "center", width: "16%" }}>PROBLEM</th>
-                                <th rowSpan={2} colSpan={4} style={{ padding: "10px 8px", border: "1px solid #ddd", fontWeight: "600", textAlign: "center", width: "16%" }}>TINDAKAN PERBAIKAN</th>
-                                <th rowSpan={2} style={{ padding: "10px 8px", border: "1px solid #ddd", fontWeight: "600", textAlign: "center", width: "8%" }}>PIC</th>
-                                <th rowSpan={2} style={{ padding: "10px 8px", border: "1px solid #ddd", fontWeight: "600", textAlign: "center", width: "8%" }}>VERIFY</th>
-                              </tr>
-                              <tr style={{ background: "#fafafa", borderBottom: "2px solid #ccc" }}>
-                                <th style={{ padding: "10px 8px", border: "1px solid #ddd", fontWeight: "600", textAlign: "center", width: "18%" }}>STANDART APD</th>
+                              <tr style={{ background: "#f5f5f5" }}>
+                                {ITEM_LABELS.map((label: string, i: number) => (
+                                  <th key={i} style={{
+                                    padding: "8px",
+                                    border: "1px solid #e0e0e0",
+                                    fontWeight: "600",
+                                    color: "#424242",
+                                    textAlign: "center",
+                                    fontSize: "11px",
+                                    minWidth: "100px",
+                                    wordWrap: "break-word",
+                                    lineHeight: "1.2"
+                                  }}>
+                                    {label}
+                                  </th>
+                                ))}
+                                <th style={{ padding: "8px", border: "1px solid #e0e0e0", fontWeight: "600", color: "#424242", textAlign: "center", fontSize: "11px" }}>Findings</th>
+                                <th style={{ padding: "8px", border: "1px solid #e0e0e0", fontWeight: "600", color: "#424242", textAlign: "center", fontSize: "11px" }}>Corrective Action</th>
+                                <th style={{ padding: "8px", border: "1px solid #e0e0e0", fontWeight: "600", color: "#424242", textAlign: "center", fontSize: "11px" }}>PIC</th>
+                                <th style={{ padding: "8px", border: "1px solid #e0e0e0", fontWeight: "600", color: "#424242", textAlign: "center", fontSize: "11px" }}>Due Date</th>
+                                <th style={{ padding: "8px", border: "1px solid #e0e0e0", fontWeight: "600", color: "#424242", textAlign: "center", fontSize: "11px" }}>Verify</th>
                               </tr>
                             </thead>
                             <tbody>
-                              {entry.data.map((row: any, idx: number) => (
-                                <tr key={idx}>
-                                  <td style={{ 
-                                    padding: "8px", 
-                                    border: "1px solid #ddd", 
-                                    textAlign: "center", 
-                                    fontWeight: "600",
-                                    background: row.type === "proses" ? "#f5f5f5" : "white"
-                                  }}>
-                                    {idx + 1}
-                                  </td>
-                                  <td style={{ 
-                                    padding: "8px", 
-                                    border: "1px solid #ddd", 
-                                    textAlign: "left", 
-                                    fontWeight: row.type === "proses" ? "600" : "normal",
-                                    background: row.type === "proses" ? "#f5f5f5" : "white"
-                                  }}>
-                                    {row.proses || "-"}
-                                  </td>
-                                  {[...Array(6)].map((_, i) => {
-                                    const val = row[`r${i + 1}`] || "";
-                                    return (
-                                      <td key={i} style={{ 
-                                        padding: "6px", 
-                                        border: "1px solid #ddd", 
-                                        textAlign: "center",
-                                        background: "white"
-                                      }}>
-                                        {val}
-                                      </td>
-                                    );
-                                  })}
-                                  <td style={{ 
-                                    padding: "8px", 
-                                    border: "1px solid #ddd", 
-                                    textAlign: "center",
-                                    background: "white"
-                                  }}>
-                                    {row.persentaseOk || ""}
-                                  </td>
-                                  <td colSpan={4} style={{ 
-                                    padding: "6px", 
-                                    border: "1px solid #ddd",
-                                    background: "white"
-                                  }}>
-                                    {row.problem || "-"}
-                                  </td>
-                                  <td colSpan={4} style={{ 
-                                    padding: "6px", 
-                                    border: "1px solid #ddd",
-                                    background: "white"
-                                  }}>
-                                    {row.tindakanPerbaikan || "-"}
-                                  </td>
-                                  <td style={{ 
-                                    padding: "6px", 
-                                    border: "1px solid #ddd",
-                                    background: "white"
-                                  }}>
-                                    {row.pic || "-"}
-                                  </td>
-                                  <td style={{ 
-                                    padding: "6px", 
-                                    border: "1px solid #ddd",
-                                    background: "white"
-                                  }}>
-                                    {row.verify || "-"}
-                                  </td>
-                                </tr>
-                              ))}
+                              <tr>
+                                {[...Array(20)].map((_, i) => {
+                                  const key = `item${i + 1}` as keyof ChecksheetEntry;
+                                  const value = entry![key] || "-";
+                                  return (
+                                    <td key={i} style={{
+                                      padding: "8px",
+                                      border: "1px solid #e0e0e0",
+                                      textAlign: "center",
+                                      fontWeight: "600",
+                                      background: value === "OK" ? "#e8f5e9" : value === "NG" ? "#ffebee" : "#fff",
+                                      color: value === "OK" ? "#2e7d32" : value === "NG" ? "#c62828" : "#757575",
+                                      fontSize: "11px"
+                                    }}>
+                                      {value}
+                                    </td>
+                                  );
+                                })}
+                                <td style={{ padding: "8px", border: "1px solid #e0e0e0", lineHeight: "1.4", fontSize: "11px" }}>{entry.keteranganKondisi || "-"}</td>
+                                <td style={{ padding: "8px", border: "1px solid #e0e0e0", lineHeight: "1.4", fontSize: "11px" }}>{entry.tindakanPerbaikan || "-"}</td>
+                                <td style={{ padding: "8px", border: "1px solid #e0e0e0", textAlign: "center", fontSize: "11px" }}>{entry.pic || "-"}</td>
+                                <td style={{ padding: "8px", border: "1px solid #e0e0e0", textAlign: "center", fontSize: "11px" }}>
+                                  {entry.dueDate ? new Date(entry.dueDate).toLocaleDateString("en-US", { day: "2-digit", month: "short" }) : "-"}
+                                </td>
+                                <td style={{ padding: "8px", border: "1px solid #e0e0e0", textAlign: "center", fontSize: "11px" }}>{entry.verify || "-"}</td>
+                              </tr>
                             </tbody>
                           </table>
                           
-                          <div style={{ marginTop: "20px", padding: "16px", background: "#f9f9f9", borderRadius: "6px", border: "1px solid #e0e0e0" }}>
-                            <p style={{ margin: "0 0 4px 0", fontSize: "12px", color: "#757575" }}>Inspector</p>
-                            <p style={{ margin: "0", fontSize: "14px", fontWeight: "500", color: "#424242" }}>{entry.inspector || "N/A"}</p>
-                            <p style={{ margin: "4px 0 0 0", fontSize: "12px", color: "#757575" }}>Inspection Date</p>
-                            <p style={{ margin: "0", fontSize: "14px", fontWeight: "500", color: "#424242" }}>
-                              {new Date(entry.date).toLocaleDateString("id-ID", { weekday: "long", day: "numeric", month: "long", year: "numeric" })}
-                            </p>
+                          <div style={{ marginTop: "20px", padding: "12px", background: "#f9f9f9", borderRadius: "6px", border: "1px solid #e0e0e0" }}>
+                            <p style={{ margin: "0 0 4px 0", fontSize: "11px", color: "#757575" }}>Inspector</p>
+                            <p style={{ margin: "0", fontSize: "13px", fontWeight: "500", color: "#424242" }}>{entry.inspector || "N/A"}</p>
                           </div>
                         </div>
                       );

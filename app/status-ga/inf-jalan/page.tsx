@@ -1,15 +1,18 @@
-// app/ga-inf-jalan/page.tsx
-import { Suspense } from 'react';
+// app/status-ga/inf-jalan/page.tsx
+'use client';
+
+import { Suspense, use } from 'react';
 import { GaInfJalanContent } from './GaInfJalanContent';
 
 export default function GaInfJalanPage({
   searchParams,
 }: {
-  searchParams: {
+  searchParams: Promise<{
     openArea?: string;
-  };
+  }>;
 }) {
-  const openArea = searchParams?.openArea || '';
+  const params = use(searchParams);
+  const openArea = params?.openArea || '';
 
   return (
     <Suspense fallback={

@@ -1,14 +1,17 @@
 // app/ga-lift-barang/page.tsx
-import { Suspense } from 'react';
+'use client';
+
+import { Suspense, use } from 'react';
 import { GaLiftBarangContent } from './GaLiftBarangContent';
 export default function GaLiftBarangPage({
   searchParams,
 }: {
-  searchParams: {
+  searchParams: Promise<{
     openLift?: string;
-  };
+  }>;
 }) {
-  const openLift = searchParams?.openLift || '';
+  const params = use(searchParams);
+  const openLift = params?.openLift || '';
 
   return (
     <Suspense fallback={
