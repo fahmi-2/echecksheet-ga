@@ -6,7 +6,7 @@ export default function EChecksheetInfJalanPage({
   searchParams,
 }: {
   searchParams: {
-    areaName?: string;
+    areaName?: string;  
     kategori?: string;
     lokasi?: string;
   };
