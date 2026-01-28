@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
-import { NavbarStatic } from "@/components/navbar-static";
+import { Sidebar } from "@/components/Sidebar";
 
 type PreventiveItem = {
   id: number;
@@ -61,15 +61,18 @@ type FormData = Record<
 
 export default function PreventiveLiftBarangPage() {
   const router = useRouter();
-  const { user } = useAuth();
+  const { user } = useAuth()
+  const [redirected, setRedirected] = useState(false);
 
   // Redirect jika tidak punya akses
   useEffect(() => {
+    if (redirected) return;
     if (!user) return;
     if (user.role !== "inspector-ga") {
+      setRedirected(true);
       router.push("/home");
     }
-  }, [user, router]);
+  }, [user, router, redirected]);
 
   if (!user) {
     return <div>Loading...</div>;
@@ -145,7 +148,7 @@ export default function PreventiveLiftBarangPage() {
   if (showPreview) {
     return (
       <div className="app-page">
-        <NavbarStatic userName={user.fullName} />
+        <Sidebar userName={user.fullName} />
 
         <div className="page-content">
           <h1>🔍 Preview Data Preventive</h1>
@@ -267,7 +270,7 @@ export default function PreventiveLiftBarangPage() {
 
   return (
     <div className="app-page">
-      <NavbarStatic userName={user.fullName} />
+      <Sidebar userName={user.fullName} />
 
       <div className="page-content">
         <h1>🔧 B. Preventive Lift Barang</h1>

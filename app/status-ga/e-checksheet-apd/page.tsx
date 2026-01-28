@@ -4,11 +4,12 @@
 import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { useAuth } from "@/lib/auth-context"
-import { NavbarStatic } from "@/components/navbar-static"
+import { Sidebar } from "@/components/Sidebar";
 
 export default function EChecksheetApdPage() {
   const router = useRouter()
   const { user } = useAuth()
+  const [redirected, setRedirected] = useState(false)
 
   // Jenis APD dari Excel
   const apdTypes = [
@@ -83,10 +84,12 @@ export default function EChecksheetApdPage() {
 
   // Validasi akses
   useEffect(() => {
+    if (redirected) return;
     if (!user || user.role !== "inspector-ga") {
+      setRedirected(true)
       router.push("/home")
     }
-  }, [user, router])
+  }, [user, router, redirected])
 
   const handleAddRow = () => {
     setItems([...items, { 
@@ -157,29 +160,52 @@ export default function EChecksheetApdPage() {
   }
 
   const handleSave = () => {
-    const today = new Date().toISOString().split('T')[0]
-    const storageKey = `ga_apd_${selectedType}_${today}`
-    const result = {
-      id: `APD-${Date.now()}`,
-      jenisApd: selectedType,
-      date: today,
-      checker: user?.fullName || "",
-      items: items.filter(item => item.nama.trim()),
-      submittedAt: new Date().toISOString(),
-    }
+  const today = new Date().toISOString().split('T')[0];
+  const storageKey = `ga_apd_${selectedType}_${today}`;
+  
+  // Data lengkap untuk penyimpanan detail
+  const fullResult = {
+    id: `APD-${Date.now()}`,
+    jenisApd: selectedType,
+    date: today,
+    checker: user?.fullName || "",
+    items: items.filter(item => item.nama.trim()),
+    submittedAt: new Date().toISOString(),
+  };
 
-    // Simpan ke localStorage
-    localStorage.setItem(storageKey, JSON.stringify(result))
+  // 🔹 1. Simpan ke localStorage spesifik (untuk detail & riwayat APD)
+  localStorage.setItem(storageKey, JSON.stringify(fullResult));
 
-    // Update history
-    const existingHistory = localStorage.getItem("ga_apd_history") || "[]"
-    const history = JSON.parse(existingHistory)
-    history.push({ ...result, id: storageKey })
-    localStorage.setItem("ga_apd_history", JSON.stringify(history))
+  // 🔹 2. Simpan ke riwayat APD global (`ga_apd_history`)
+  const apdHistoryKey = "ga_apd_history";
+  const existingApdHistory = localStorage.getItem(apdHistoryKey) || "[]";
+  const apdHistory = JSON.parse(existingApdHistory);
+  apdHistory.push({ ...fullResult, id: storageKey }); // simpan dengan key sebagai ID
+  localStorage.setItem(apdHistoryKey, JSON.stringify(apdHistory));
 
-    alert(`✅ Data berhasil disimpan!\nDisimpan ke: ${selectedType}`)
-    router.push("/status-ga/e-checksheeet-apd/riwayat-apd")
-  }
+  // 🔹 3. Simpan ke riwayat checklist global (`checksheet_history`) → untuk Home
+  const globalHistoryKey = "checksheet_history";
+  const existingGlobalHistory = localStorage.getItem(globalHistoryKey) || "[]";
+  const globalHistory = JSON.parse(existingGlobalHistory);
+
+  // Format seragam untuk home
+  const homeEntry = {
+    id: `APD-${Date.now()}`,
+    type: "apd",
+    area: selectedType, // Nama jenis APD
+    status: "OK", // APD tidak punya NG
+    filledBy: user?.fullName || "Unknown User",
+    filledAt: new Date().toISOString(),
+  };
+
+  globalHistory.push(homeEntry);
+  localStorage.setItem(globalHistoryKey, JSON.stringify(globalHistory));
+
+  // ✅ Selesai
+  alert(`✅ Data berhasil disimpan!\nJenis: ${selectedType}`);
+  router.push("/status-ga/e-checksheet-apd/riwayat-apd");
+};
+    
 
   const handleCancelPreview = () => {
     setShowPreview(false)
@@ -189,7 +215,7 @@ export default function EChecksheetApdPage() {
 
   return (
     <div className="app-page">
-      <NavbarStatic userName={user.fullName} />
+      <Sidebar userName={user.fullName} />
 
       <div className="page-content">
         <div className="header">

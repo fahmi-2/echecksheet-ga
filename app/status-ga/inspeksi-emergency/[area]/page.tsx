@@ -4,7 +4,7 @@
 import { useState, useEffect, use } from "react" // 🔹 Tambahkan 'use'
 import { useRouter } from "next/navigation"
 import { useAuth } from "@/lib/auth-context"
-import { NavbarStatic } from "@/components/navbar-static"
+import { Sidebar } from "@/components/Sidebar";
 
 // Data lokasi per area dari Excel
 const locations = {
@@ -245,7 +245,7 @@ export default function EmergencyLampChecklist({ params }: { params: Promise<{ a
 
   return (
     <div className="app-page">
-      <NavbarStatic userName={user.fullName} />
+      <Sidebar userName={user.fullName} />
 
       <div className="page-content">
         <div className="header">
@@ -421,7 +421,7 @@ export default function EmergencyLampChecklist({ params }: { params: Promise<{ a
 
         .header h1 {
           margin: 0;
-          color: #d32f2f;
+          color: #ffffff;
           font-size: 2rem;
         }
 

@@ -43,12 +43,16 @@ export default function LoginPage() {
               Kelola checklist Anda dengan efisien menggunakan platform digital kami. Akses mudah, monitoring real-time,
               dan laporan komprehensif.
             </p>
+            <Link href="/signup-page" className="btn-outline">
+              Daftar Sekarang
+            </Link>
           </div>
 
           <div className="login-form-section">
             <div className="login-card">
               <div className="login-card-header">
                 <h2>Login</h2>
+                <p>Masuk ke akun Anda</p>
               </div>
 
               <form className="auth-form" onSubmit={handleSubmit}>

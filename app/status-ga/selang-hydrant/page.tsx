@@ -4,8 +4,8 @@
 import { Suspense, use } from 'react';
 import { GaSelangHydrantContent } from './GaSelangHydrantContent';
 
-export default function GaSelangHydrantPage({
-  searchParams,
+export default async function GaSelangHydrantPage({
+    searchParams,
 }: {
   searchParams: Promise<{ openArea?: string }>; // ← Promise
 }) {

@@ -1,4 +1,7 @@
+<<<<<<< HEAD
 // components/Sidebar.tsx
+=======
+>>>>>>> main
 "use client";
 
 import Link from "next/link";
@@ -12,6 +15,7 @@ interface SidebarProps {
 }
 
 export function Sidebar({ userName = "User", userRole = "Role" }: SidebarProps) {
+<<<<<<< HEAD
   // 🔁 Ubah default sidebar ke TERTUTUP
   const [isExpanded, setIsExpanded] = useState(false);
   const [isMobileOpen, setIsMobileOpen] = useState(false);
@@ -21,10 +25,18 @@ export function Sidebar({ userName = "User", userRole = "Role" }: SidebarProps) 
   const router = useRouter();
   const { user, logout } = useAuth();
   const isMobile = screenSize === "mobile";
+=======
+  const [isExpanded, setIsExpanded] = useState(false);
+  const [isMounted, setIsMounted] = useState(false);
+  const [activeMenu, setActiveMenu] = useState("/ga-home");
+  const router = useRouter();
+  const { user, logout } = useAuth();
+>>>>>>> main
 
   const currentRole = user?.role || "";
   const currentUserName = user?.username || "User";
 
+<<<<<<< HEAD
   // Deteksi ukuran layar dengan 3 breakpoint
   useEffect(() => {
     const checkScreenSize = () => {
@@ -46,6 +58,8 @@ export function Sidebar({ userName = "User", userRole = "Role" }: SidebarProps) 
     return () => window.removeEventListener("resize", checkScreenSize);
   }, []);
 
+=======
+>>>>>>> main
   useEffect(() => {
     setIsMounted(true);
   }, []);
@@ -54,7 +68,10 @@ export function Sidebar({ userName = "User", userRole = "Role" }: SidebarProps) 
     const role = currentRole.toLowerCase();
     if (role.includes("inspector-ga") || role === "ga") return "/home";
     if (role.includes("inspector-qa") || role === "qa") return "/home";
+<<<<<<< HEAD
     if (role.includes("group-leader-qa") || role === "qa") return "/home";
+=======
+>>>>>>> main
     if (role.includes("inspector-produksi") || role === "produksi") return "/produksi-home";
     if (role.includes("manager") || role === "manager") return "/manager-home";
     if (role.includes("admin") || role === "admin") return "/admin-home";
@@ -64,10 +81,16 @@ export function Sidebar({ userName = "User", userRole = "Role" }: SidebarProps) 
   const getDashboardRoute = () => {
     const role = currentRole.toLowerCase();
     if (role.includes("inspector-ga") || role === "ga") return "/ga-dashboard";
+<<<<<<< HEAD
     if (role.includes("inspector-qa") || role === "qa") return "/qa-dashboard";
     if (role.includes("inspector-produksi") || role === "produksi") return "/produksi-dashboard";
     if (role.includes("manager") || role === "manager") return "/manager-dashboard";
     if (role.includes("admin") || role === "admin") return "/admin-dashboard";
+=======
+    if (role.includes("inspector") || role === "qa") return "/qa-dashboard";
+    if (role.includes("group-leader") || role === "produksi") return "/gl-dashboard";
+    
+>>>>>>> main
     return "/dashboard";
   };
 
@@ -76,6 +99,7 @@ export function Sidebar({ userName = "User", userRole = "Role" }: SidebarProps) 
     if (role.includes("manager") || role === "manager" || role.includes("admin")) {
       return "/pelaporan-list";
     }
+<<<<<<< HEAD
     return "/laporan";
   };
 
@@ -90,10 +114,18 @@ export function Sidebar({ userName = "User", userRole = "Role" }: SidebarProps) 
 
   const closeMobileSidebar = () => {
     if (screenSize !== "desktop") setIsMobileOpen(false);
+=======
+    return "/pelaporan-list";
+  };
+
+  const toggleSidebar = () => {
+    setIsExpanded(!isExpanded);
+>>>>>>> main
   };
 
   const handleLogout = () => {
     if (logout) logout();
+<<<<<<< HEAD
     closeMobileSidebar();
     router.push("/login-page");
   };
@@ -245,6 +277,16 @@ export function Sidebar({ userName = "User", userRole = "Role" }: SidebarProps) 
   if (screenSize === "tablet") {
     return (
       <div className={`sidebar-container ${isExpanded ? '' : 'collapsed'}`}>
+=======
+    router.push("/login-page");
+  };
+
+  if (!isMounted) return null;
+
+  return (
+    <>
+      <div className={`sidebar-container ${isExpanded ? 'expanded' : 'collapsed'}`}>
+>>>>>>> main
         {/* Header */}
         <div className="sidebar-header">
           <div className="logo-wrapper">
@@ -254,7 +296,10 @@ export function Sidebar({ userName = "User", userRole = "Role" }: SidebarProps) 
                 <path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11" />
               </svg>
             </div>
+<<<<<<< HEAD
             {!isExpanded && <div className="flex-1"></div>}
+=======
+>>>>>>> main
             {isExpanded && (
               <div className="logo-content">
                 <h1 className="logo-title">E-Checksheet</h1>
@@ -280,7 +325,11 @@ export function Sidebar({ userName = "User", userRole = "Role" }: SidebarProps) 
           <Link 
             href={getHomeRoute()} 
             className={`menu-item ${activeMenu === getHomeRoute() ? 'active' : ''}`}
+<<<<<<< HEAD
             onClick={() => handleNavClick(getHomeRoute())}
+=======
+            onClick={() => setActiveMenu(getHomeRoute())}
+>>>>>>> main
           >
             <span className="menu-icon">
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -294,7 +343,11 @@ export function Sidebar({ userName = "User", userRole = "Role" }: SidebarProps) 
           <Link 
             href={getDashboardRoute()} 
             className={`menu-item ${activeMenu === getDashboardRoute() ? 'active' : ''}`}
+<<<<<<< HEAD
             onClick={() => handleNavClick(getDashboardRoute())}
+=======
+            onClick={() => setActiveMenu(getDashboardRoute())}
+>>>>>>> main
           >
             <span className="menu-icon">
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -310,7 +363,11 @@ export function Sidebar({ userName = "User", userRole = "Role" }: SidebarProps) 
           <Link 
             href={getLaporanRoute()} 
             className={`menu-item ${activeMenu === getLaporanRoute() ? 'active' : ''}`}
+<<<<<<< HEAD
             onClick={() => handleNavClick(getLaporanRoute())}
+=======
+            onClick={() => setActiveMenu(getLaporanRoute())}
+>>>>>>> main
           >
             <span className="menu-icon">
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -336,11 +393,16 @@ export function Sidebar({ userName = "User", userRole = "Role" }: SidebarProps) 
               </div>
             )}
           </div>
+<<<<<<< HEAD
           <button
             onClick={handleLogout}
             className="logout-button"
             aria-label="Logout"
           >
+=======
+          
+          <button onClick={handleLogout} className="logout-button" title="Logout">
+>>>>>>> main
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
               <path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4" />
               <path d="M16 17l5-5-5-5" />
@@ -350,6 +412,7 @@ export function Sidebar({ userName = "User", userRole = "Role" }: SidebarProps) 
           </button>
         </div>
       </div>
+<<<<<<< HEAD
     );
   }
 
@@ -457,5 +520,8 @@ export function Sidebar({ userName = "User", userRole = "Role" }: SidebarProps) 
         </button>
       </div>
     </div>
+=======
+    </>
+>>>>>>> main
   );
 }

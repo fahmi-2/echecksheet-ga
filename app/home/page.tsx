@@ -1,5 +1,4 @@
-// app/home/page.tsx
-"use client";
+"use client"
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
@@ -70,7 +69,7 @@ export default function ModernHomePage() {
         href: "/status-ga",
       },
     ],
-    "group-leader-qa": [
+    "group-leader": [
       {
         id: "final-assy",
         icon: Wrench,

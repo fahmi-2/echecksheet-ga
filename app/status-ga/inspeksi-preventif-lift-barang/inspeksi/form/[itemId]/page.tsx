@@ -3,7 +3,7 @@
 import { useEffect, useState, ChangeEvent } from "react";
 import { useRouter, useSearchParams, useParams } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
-import { NavbarStatic } from "@/components/navbar-static";
+import { Sidebar } from "@/components/Sidebar";
 
 type SubItem = {
   id: string;
@@ -194,18 +194,21 @@ export default function InspeksiFormDetailPage() {
   const router = useRouter();
   const params = useParams();
   const searchParams = useSearchParams();
-  const { user } = useAuth();
+  const { user } = useAuth()
+  const [redirected, setRedirected] = useState(false);
 
   const itemId = typeof params?.itemId === "string" ? params.itemId : "";
   const viewId = searchParams.get("view"); // Ambil ID riwayat dari query string
 
   // Redirect jika tidak punya akses
   useEffect(() => {
+    if (redirected) return;
     if (!user) return;
     if (user.role !== "inspector-ga") {
+      setRedirected(true);
       router.push("/home");
     }
-  }, [user, router]);
+  }, [user, router, redirected]);
 
   if (!user) {
     return <div>Loading...</div>;
@@ -225,6 +228,7 @@ export default function InspeksiFormDetailPage() {
 
   // Load data riwayat jika ada parameter view
   useEffect(() => {
+    if (redirected) return;
     if (viewId) {
       setIsViewMode(true);
       const itemHistoryKey = `inspeksi_lift_barang_history_${itemId}`;
@@ -307,7 +311,7 @@ export default function InspeksiFormDetailPage() {
 
   return (
     <div className="app-page">
-      <NavbarStatic userName={user.fullName} />
+      <Sidebar userName={user.fullName} />
 
       <div className="page-content">
         <button

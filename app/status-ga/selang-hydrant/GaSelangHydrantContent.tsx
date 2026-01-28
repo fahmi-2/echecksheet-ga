@@ -34,7 +34,7 @@ export function GaSelangHydrantContent({ openArea }: { openArea: string }) {
 
   useEffect(() => {
     if (loading) return;
-    if (!user || (user.role !== "group-leader" && user.role !== "inspector-ga")) {
+    if (!user || (user.role !== "inspector-ga")) {
       router.push("/login-page");
     }
   }, [user, loading, router]);
@@ -227,7 +227,7 @@ export function GaSelangHydrantContent({ openArea }: { openArea: string }) {
       </div>
     );
   }
-  if (!user || (user.role !== "inspector-ga" && user.role !== "group-leader")) {
+  if (!user || (user.role !== "inspector-ga")) {
     return null;
   }
 

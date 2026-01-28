@@ -18,7 +18,7 @@ const APD_AREAS: ApdArea[] = [
   { id: 2, name: "PRE ASSY GENBA A+B", type: "Produksi" },
   { id: 3, name: "AREA FINAL ASSY", type: "Produksi" },
   { id: 4, name: "AREA CUTTING TUBE", type: "Produksi" },
-  { id: 5, name: "INSPEKSI PRE ASSY AREA GENBA C", type: "QA" },
+  { id: 5, name: "aINSPEKSI PRE ASSY AREA GENBA C", type: "QA" },
   { id: 6, name: "INSPEKSI PRE ASSY GENBA A+B", type: "QA" },
   { id: 7, name: "AREA INSPEKSI FINAL ASSY", type: "QA" },
   { id: 8, name: "AREA WAREHOUSE", type: "Gudang" },
@@ -45,7 +45,7 @@ export function GaInspeksiApdContent() {
 
   useEffect(() => {
     if (loading) return;
-    if (!user || (user.role !== "group-leader" && user.role !== "inspector-ga")) {
+    if (!user || (user.role !== "group-leader-qa" && user.role !== "inspector-ga")) {
       router.push("/login-page");
     }
   }, [user, loading, router]);
@@ -109,7 +109,7 @@ export function GaInspeksiApdContent() {
     );
   }
 
-  if (!user || (user.role !== "inspector-ga" && user.role !== "group-leader")) {
+  if (!user || (user.role !== "inspector-ga" && user.role !== "group-leader-qa")) {
     return null;
   }
 

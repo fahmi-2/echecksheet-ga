@@ -5,7 +5,7 @@
 import { useEffect, useState } from "react";
 import { useRouter, useParams } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
-import { NavbarStatic } from "@/components/navbar-static";
+import { Sidebar } from "@/components/Sidebar";
 import { aparDataBySlug } from "@/lib/apar-data";
 
 const areaNames: Record<string, string> = {
@@ -85,7 +85,7 @@ export default function RiwayatInspeksiAparPage() {
 
   return (
     <div className="app-page">
-      <NavbarStatic userName={user.fullName} />
+      <Sidebar userName={user.fullName} />
 
       <div className="page-content">
         <button onClick={() => router.back()} className="back-btn">
@@ -196,8 +196,8 @@ export default function RiwayatInspeksiAparPage() {
           background: #e0e0e0;
           transform: translateX(-2px);
         }
-        h1 {
-          color: #b71c1c;
+          h1 {
+            color: #01020a;
           margin-bottom: 24px;
           font-size: 1.8rem;
         }

@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
-import { NavbarStatic } from "@/components/navbar-static";
+import { Sidebar } from "@/components/Sidebar";
 
 type PreventiveHistoryEntry = {
   id?: string;
@@ -15,7 +15,8 @@ type PreventiveHistoryEntry = {
 
 export default function RiwayatPreventivePage() {
   const router = useRouter();
-  const { user } = useAuth();
+  const { user } = useAuth()
+  const [redirected, setRedirected] = useState(false);
   const [history, setHistory] = useState<PreventiveHistoryEntry[]>([]);
   const [filteredHistory, setFilteredHistory] = useState<PreventiveHistoryEntry[]>([]);
   const [selectedDate, setSelectedDate] = useState<string>("");
@@ -24,8 +25,10 @@ export default function RiwayatPreventivePage() {
   const [editAdditionalNotes, setEditAdditionalNotes] = useState("");
 
   useEffect(() => {
+    if (redirected) return;
     if (!user) return;
     if (user.role !== "inspector-ga") {
+      setRedirected(true);
       router.push("/home");
       return;
     }
@@ -50,10 +53,11 @@ export default function RiwayatPreventivePage() {
       setHistory([]);
       setFilteredHistory([]);
     }
-  }, [user, router]);
+  }, [user, router, redirected]);
 
   // Filter berdasarkan tanggal
   useEffect(() => {
+    if (redirected) return;
     if (!selectedDate) {
       setFilteredHistory(history);
     } else {
@@ -152,7 +156,7 @@ export default function RiwayatPreventivePage() {
 
   return (
     <div className="app-page">
-      <NavbarStatic userName={user.fullName} />
+      <Sidebar userName={user.fullName} />
 
       <div className="page-content">
         <div className="header-section">

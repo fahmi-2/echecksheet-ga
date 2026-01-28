@@ -1,10 +1,9 @@
-//
 "use client";
 
 import { useEffect, useState } from "react";
 import { useRouter, useParams } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
-import { NavbarStatic } from "@/components/navbar-static";
+import { Sidebar } from "@/components/Sidebar";
 
 type HistoryEntry = {
   id: string;
@@ -124,7 +123,7 @@ export default function RiwayatInspeksiPerItemPage() {
 
   return (
     <div className="app-page">
-      <NavbarStatic userName={user.fullName} />
+      <Sidebar userName={user.fullName} />
 
       <div className="page-content">
         <button
@@ -292,4 +291,3 @@ export default function RiwayatInspeksiPerItemPage() {
     </div>
   );
 }
-

@@ -602,7 +602,7 @@
 body {
   font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
   background: linear-gradient(135deg, #1e88e5, #29b6f6);
-  color: white;
+  color: rgb(5, 4, 4);
   min-height: 100vh;
 }
 
@@ -633,7 +633,7 @@ body {
 }
 
 .nav-bar-fixed a {
-  color: white;
+  color: rgb(0, 0, 0);
   text-decoration: none;
   font-weight: 500;
   transition: color 0.3s;
@@ -669,11 +669,11 @@ body {
 }
 
 .nav-bar-static .nav-links a {
-  color: #ffffff;
+  color: #000000;
   text-decoration: none;
   font-weight: 500;
   transition: all 0.3s ease;
-  font-size: 16px;
+  font-size: 16px;  
 }
 
 .nav-bar-static .nav-links a:hover {
@@ -1138,10 +1138,12 @@ select:disabled {
   display: flex;
   gap: 15px;
   align-items: center;
+  margin-left: auto;
 }
 
 .user-info span {
   font-weight: bold;
+  margin-left: auto;
 }
 
 .dashboard-cards {
@@ -1386,7 +1388,7 @@ td input[type="text"] {
   font-weight: 700;
   font-size: 0.95rem;
   transition: all 0.3s;
-  color: white;
+  color: rgb(255, 255, 255);
 }
 
 .btn-primary {

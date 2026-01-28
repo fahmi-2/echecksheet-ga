@@ -5,6 +5,7 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
 import { Sidebar } from "@/components/Sidebar";
+import { Sidebar } from "@/components/Sidebar";
 
 interface TanggaListrikItem {
   no: number;

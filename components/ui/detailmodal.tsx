@@ -16,36 +16,24 @@ interface CheckResult {
   submittedBy: string
 }
 
-// ⚠️ Fleksibel: bisa menerima "standard" atau "method"
-interface CheckpointInfo {
-  checkPoint: string
-  shift: string
-  waktuCheck: string
-  standard?: string // opsional
-  method?: string   // opsional
-}
-
 interface ModalData {
   date: number
-  checkpoint: CheckpointInfo
+  checkpoint: {
+    checkPoint?: string
+    machine?: string
+    kind?: string
+    size?: string
+    frequency?: string
+    judge?: string
+    shift: string
+    waktuCheck?: string
+    standard?: string
+  }
   result: CheckResult
 }
 
 export function DetailModal({ data, onClose }: { data: ModalData; onClose: () => void }) {
   const { checkpoint, result } = data
-
-  // Tentukan label dan nilai yang akan ditampilkan
-  let methodLabel = "Metode / Standard"
-  let methodValue = checkpoint.method || checkpoint.standard || "—"
-
-  // Jika hanya ada 'standard', ubah label jadi "Standard"
-  if (checkpoint.standard !== undefined && checkpoint.method === undefined) {
-    methodLabel = "Standard"
-    methodValue = checkpoint.standard
-  } else if (checkpoint.method !== undefined && checkpoint.standard === undefined) {
-    methodLabel = "Metode"
-    methodValue = checkpoint.method
-  }
 
   return (
     <div className="modal-overlay" onClick={onClose}>
@@ -61,8 +49,14 @@ export function DetailModal({ data, onClose }: { data: ModalData; onClose: () =>
             <div className="info-grid">
               <div><strong>Tanggal:</strong> {data.date} Januari</div>
               <div><strong>Shift:</strong> {checkpoint.shift}</div>
-              <div><strong>Waktu Check:</strong> {checkpoint.waktuCheck}</div>
-              <div><strong>{methodLabel}:</strong> {methodValue}</div>
+              {(checkpoint.checkPoint || checkpoint.machine) && (
+                <div><strong>{checkpoint.checkPoint ? "Checkpoint" : "Machine"}:</strong> {checkpoint.checkPoint || checkpoint.machine}</div>
+              )}
+              {checkpoint.kind && <div><strong>Kind:</strong> {checkpoint.kind}</div>}
+              {checkpoint.size && <div><strong>Size:</strong> {checkpoint.size}</div>}
+              {checkpoint.waktuCheck && <div><strong>Waktu Check:</strong> {checkpoint.waktuCheck}</div>}
+              {checkpoint.frequency && <div><strong>Frekuensi:</strong> {checkpoint.frequency}</div>}
+              {checkpoint.standard && <div><strong>Standard:</strong> {checkpoint.standard}</div>}
               <div><strong>Petugas:</strong> {result.submittedBy}</div>
               <div><strong>Waktu Submit:</strong> {new Date(result.submittedAt).toLocaleString("id-ID")}</div>
             </div>

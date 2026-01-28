@@ -4,7 +4,7 @@
 import { useState, useEffect, use } from "react"
 import { useRouter } from "next/navigation"
 import { useAuth } from "@/lib/auth-context"
-import { NavbarStatic } from "@/components/navbar-static"
+import { Sidebar } from "@/components/Sidebar";
 
 // Data lokasi per zona dari Excel
 const locations = {
@@ -87,6 +87,7 @@ const locations = {
 export default function FireAlarmChecklist({ params }: { params: Promise<{ zona: string }> }) {
   const router = useRouter()
   const { user } = useAuth()
+  const [redirected, setRedirected] = useState(false)
 
   const { zona } = use(params)
   const date = new Date().toISOString().split('T')[0]
@@ -95,32 +96,33 @@ export default function FireAlarmChecklist({ params }: { params: Promise<{ zona:
   const [showPreview, setShowPreview] = useState(false)
   const [hasNg, setHasNg] = useState(false)
 
-  // Validasi akses
   useEffect(() => {
+    if (redirected) return
     if (!user || user.role !== "inspector-ga") {
+      setRedirected(true)
       router.push("/home")
     }
-  }, [user, router])
+  }, [user, router, redirected])
 
   useEffect(() => {
     const locs = locations[zona as keyof typeof locations] || []
     const initialItems = locs.map(loc => ({
-      no: loc.no,
-      zona: loc.zona,
-      lokasi: loc.lokasi,
-      alarmBell: "",
-      indicatorLamp: "",
-      manualCallPoint: "",
-      idZona: "",
-      kebersihan: "",
-      kondisiNok: "",
-      tindakanPerbaikan: "",
-      pic: "",
-      dueDate: "",
-      verify: ""
-    }))
+  no: loc.no,
+  zona: loc.zona,
+  lokasi: loc.lokasi,
+  alarmBell: "",
+  indicatorLamp: "",
+  manualCallPoint: "",
+  idZona: "",
+  kebersihan: "",
+  kondisiNok: "",
+  tindakanPerbaikan: "",
+  pic: user?.fullName || "", // ✅ otomatis isi nama user
+  dueDate: "",
+  
+}))
     setItems(initialItems)
-  }, [zona])
+}, [zona, user])
 
   const handleInputChange = (index: number, field: string, value: string) => {
     const newItems = [...items]
@@ -129,7 +131,6 @@ export default function FireAlarmChecklist({ params }: { params: Promise<{ zona:
   }
 
   const handleShowPreview = () => {
-    // Validasi wajib diisi
     for (const item of items) {
       if (!item.alarmBell || !item.indicatorLamp || !item.manualCallPoint || 
           !item.idZona || !item.kebersihan) {
@@ -139,11 +140,11 @@ export default function FireAlarmChecklist({ params }: { params: Promise<{ zona:
     }
 
     const ngExists = items.some(
-      item => item.alarmBell === "NG" || 
-              item.indicatorLamp === "NG" || 
-              item.manualCallPoint === "NG" ||
-              item.idZona === "NG" ||
-              item.kebersihan === "NG"
+      item => ["NG"].includes(item.alarmBell) ||
+               ["NG"].includes(item.indicatorLamp) ||
+               ["NG"].includes(item.manualCallPoint) ||
+               ["NG"].includes(item.idZona) ||
+               ["NG"].includes(item.kebersihan)
     )
     setHasNg(ngExists)
     setShowPreview(true)
@@ -166,7 +167,6 @@ export default function FireAlarmChecklist({ params }: { params: Promise<{ zona:
 
     localStorage.setItem(storageKey, JSON.stringify(result))
 
-    // Simpan ke history
     const historyKey = `ga_fire_alarm_history_${zona}`
     const existing = localStorage.getItem(historyKey) || "[]"
     const history = JSON.parse(existing)
@@ -174,16 +174,16 @@ export default function FireAlarmChecklist({ params }: { params: Promise<{ zona:
     localStorage.setItem(historyKey, JSON.stringify(history))
 
     alert("✅ Data berhasil disimpan!")
-    router.push("/status-ga/fire-alarm")
+    router.push("/status-ga/fire-alarm/riwayat/" + zona)
   }
 
   const handleReportNg = () => {
     const ngItems = items.filter(item =>
-      item.alarmBell === "NG" || 
-      item.indicatorLamp === "NG" || 
-      item.manualCallPoint === "NG" ||
-      item.idZona === "NG" ||
-      item.kebersihan === "NG"
+      ["NG"].includes(item.alarmBell) ||
+      ["NG"].includes(item.indicatorLamp) ||
+      ["NG"].includes(item.manualCallPoint) ||
+      ["NG"].includes(item.idZona) ||
+      ["NG"].includes(item.kebersihan)
     ).map(item => ({
       name: `${item.lokasi} (${item.zona})`,
       notes: item.kondisiNok || "Tidak ada keterangan"
@@ -235,19 +235,19 @@ export default function FireAlarmChecklist({ params }: { params: Promise<{ zona:
 
   return (
     <div className="app-page">
-      <NavbarStatic userName={user.fullName} />
+      <Sidebar userName={user.fullName} />
 
       <div className="page-content">
         <div className="header">
           <div className="header-top">
-            <button onClick={() => router.back()} className="btn-back">← Kembali</button>
-            <h1>🔔 Inspeksi Fire Alarm - {getZoneTitle()}</h1>
+            <button onClick={(): void => router.push("/status-ga/fire-alarm")} className="btn-back">← Kembali</button>
+            <h1 className="page-title">🔔 Inspeksi Fire Alarm - {getZoneTitle()}</h1>
           </div>
           <p className="subtitle">Tanggal: {date}</p>
         </div>
 
         {!showPreview ? (
-          <div className="form-container">
+          <div className="card-container">
             <table className="checklist-table">
               <thead>
                 <tr>
@@ -263,15 +263,14 @@ export default function FireAlarmChecklist({ params }: { params: Promise<{ zona:
                   <th>Tindakan Perbaikan</th>
                   <th>PIC</th>
                   <th>Due Date</th>
-                  <th>Verify</th>
                 </tr>
               </thead>
               <tbody>
                 {items.map((item, index) => (
                   <tr key={index}>
-                    <td>{item.no}</td>
-                    <td>{item.zona}</td>
-                    <td>{item.lokasi}</td>
+                    <td className="info-cell">{item.no}</td>
+<td className="info-cell">{item.zona}</td>
+<td className="info-cell">{item.lokasi}</td>
                     <td>
                       <select value={item.alarmBell} onChange={(e) => handleInputChange(index, "alarmBell", e.target.value)} className="status-select">
                         <option value="">Pilih</option>
@@ -314,17 +313,14 @@ export default function FireAlarmChecklist({ params }: { params: Promise<{ zona:
                       <input type="text" value={item.tindakanPerbaikan} onChange={(e) => handleInputChange(index, "tindakanPerbaikan", e.target.value)} placeholder="Tindakan perbaikan..." className="notes-input" />
                     </td>
                     <td>
-                      <input type="text" value={item.pic} onChange={(e) => handleInputChange(index, "pic", e.target.value)} placeholder="PIC" className="notes-input" />
-                    </td>
+                      <div className="info-cell">{item.pic}</div>
+                    </td> 
                     <td>
                       <input type="date" value={item.dueDate} onChange={(e) => handleInputChange(index, "dueDate", e.target.value)} className="date-input" />
                     </td>
                     <td>
-                      <select value={item.verify} onChange={(e) => handleInputChange(index, "verify", e.target.value)} className="status-select">
-                        <option value="">Pilih</option>
-                        <option value="OK">OK</option>
-                        <option value="NG">NG</option>
-                      </select>
+    
+  
                     </td>
                   </tr>
                 ))}
@@ -337,8 +333,7 @@ export default function FireAlarmChecklist({ params }: { params: Promise<{ zona:
             </div>
           </div>
         ) : (
-          /* Preview Mode */
-          <div className="preview-container">
+          <div className="card-container preview-mode">
             <h2 className="preview-title">🔍 Preview Data</h2>
             <div className="preview-table">
               <table className="simple-table">
@@ -388,17 +383,20 @@ export default function FireAlarmChecklist({ params }: { params: Promise<{ zona:
         )}
       </div>
 
+      <style jsx global>{`
+        body {
+          font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+          margin: 0;
+          padding: 0;
+          background-color: #f8fafc;
+        }
+      `}</style>
+
       <style jsx>{`
         .page-content {
           max-width: 1200px;
           margin: 0 auto;
           padding: 24px;
-        }
-
-        .header h1 {
-          margin: 0;
-          color: #d32f2f;
-          font-size: 2rem;
         }
 
         .header-top {
@@ -407,36 +405,61 @@ export default function FireAlarmChecklist({ params }: { params: Promise<{ zona:
           gap: 16px;
           margin-bottom: 12px;
         }
+.status-cell {
+  width: 1%;
+  white-space: nowrap;
+}
+  .status-select {
+  width: auto; /* ✅ ubah dari 100% */
+  min-width: 60px;
+  padding: 6px 8px;
+  border: 1px solid rgba(255,255,255,0.4);
+  border-radius: 6px;
+  background: rgba(255,255,255,0.9);
+  color: #333;
+  font-size: 0.9rem;
+}
+        .page-title {
+          margin: 0;
+          color: white;
+          font-size: 1.8rem;
+          font-weight: 700;
+          text-shadow: 0 1px 2px rgba(0,0,0,0.3);
+        }
 
         .btn-back {
           padding: 8px 16px;
-          background: #f5f5f5;
-          color: #333;
-          border: 1px solid #ddd;
-          border-radius: 6px;
+          background: rgba(255,255,255,0.2);
+          color: white;
+          border: 1px solid rgba(255,255,255,0.3);
+          border-radius: 8px;
           font-weight: 600;
           cursor: pointer;
-          transition: all 0.3s;
+          transition: all 0.3s ease;
           font-size: 0.95rem;
         }
 
         .btn-back:hover {
-          background: #e0e0e0;
-          border-color: #999;
+          background: rgba(255,255,255,0.3);
         }
 
         .subtitle {
-          color: #666;
+          color: rgba(255,255,255,0.9);
           margin-top: 8px;
+          font-size: 1rem;
         }
 
-        .form-container,
-        .preview-container {
-          background: white;
-          border-radius: 12px;
-          box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+        .card-container {
+          background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
+          border-radius: 16px;
+          box-shadow: 0 6px 20px rgba(0,0,0,0.15);
           padding: 24px;
           overflow-x: auto;
+          color: white;
+        }
+
+        .preview-mode {
+          background: linear-gradient(135deg, #0d47a1 0%, #1976d2 100%);
         }
 
         .checklist-table,
@@ -444,6 +467,7 @@ export default function FireAlarmChecklist({ params }: { params: Promise<{ zona:
           width: 100%;
           border-collapse: collapse;
           margin-bottom: 24px;
+          color: #333;
         }
 
         .checklist-table th,
@@ -452,66 +476,39 @@ export default function FireAlarmChecklist({ params }: { params: Promise<{ zona:
         .simple-table td {
           padding: 12px;
           text-align: left;
-          border: 1px solid #eee;
+          border: 1px solid rgba(255,255,255,0.2);
         }
 
         .checklist-table th,
         .simple-table th {
-          background: #f5f9ff;
+          background: rgba(0,0,0,0.15);
           font-weight: 600;
           position: sticky;
           top: 0;
+          color: white;
         }
 
         .status-select,
         .notes-input,
         .date-input {
           width: 100%;
-          padding: 6px;
-          border: 1px solid #ddd;
-          border-radius: 4px;
-          font-size: 0.9rem;
-        }
-
-        .form-actions {
-          display: flex;
-          gap: 16px;
-          justify-content: flex-end;
-        }
-
-        .btn-cancel,
-        .btn-submit {
-          padding: 10px 24px;
-          border: none;
+          padding: 8px 10px;
+          border: 1px solid rgba(255,255,255,0.4);
           border-radius: 6px;
-          font-weight: 600;
-          cursor: pointer;
-        }
-
-        .btn-cancel {
-          background: #f5f5f5;
+          font-size: 0.9rem;
+          background: rgba(255,255,255,0.9);
           color: #333;
         }
 
-        .btn-submit {
-          background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
-          color: white;
+        .status-select:focus,
+        .notes-input:focus,
+        .date-input:focus {
+          outline: none;
+          border-color: #4fc3f7;
+          box-shadow: 0 0 0 2px rgba(79, 195, 247, 0.3);
         }
 
-        /* Preview Styles */
-        .preview-title {
-          margin: 0 0 24px;
-          color: #0d47a1;
-          font-size: 1.5rem;
-          text-align: center;
-        }
-
-        .status-ng {
-          background: #ffebee;
-          color: #c62828;
-          font-weight: bold;
-        }
-
+        .form-actions,
         .preview-actions {
           display: flex;
           gap: 16px;
@@ -519,42 +516,82 @@ export default function FireAlarmChecklist({ params }: { params: Promise<{ zona:
           margin-top: 20px;
         }
 
-        .cancel-btn {
-          padding: 10px 24px;
-          background: #f5f5f5;
-          color: #333;
+        .btn-cancel,
+        .btn-submit,
+        .cancel-btn,
+        .save-btn,
+        .report-btn {
+          padding: 10px 20px;
           border: none;
-          border-radius: 6px;
+          border-radius: 8px;
           font-weight: 600;
           cursor: pointer;
+          font-size: 0.95rem;
+          transition: all 0.2s ease;
+        }
+
+        .btn-cancel,
+        .cancel-btn {
+          background: rgba(255,255,255,0.2);
+          color: white;
+        }
+
+        .btn-cancel:hover,
+        .cancel-btn:hover {
+          background: rgba(255,255,255,0.3);
+        }
+
+        .btn-submit {
+          background: #4caf50;
+          color: white;
+        }
+
+        .btn-submit:hover {
+          background: #43a047;
         }
 
         .save-btn {
-          padding: 10px 24px;
-          background: linear-gradient(135deg, #2e7d32 0%, #1b5e20 100%);
+          background: #2e7d32;
           color: white;
-          border: none;
-          border-radius: 6px;
-          font-weight: 600;
-          cursor: pointer;
+        }
+
+        .save-btn:hover {
+          background: #1b5e20;
         }
 
         .report-btn {
-          padding: 10px 24px;
-          background: linear-gradient(135deg, #d32f2f 0%, #b71c1c 100%);
+          background: #d32f2f;
           color: white;
-          border: none;
-          border-radius: 6px;
-          font-weight: 600;
-          cursor: pointer;
-          margin-right: 12px;
+        }
+
+        .report-btn:hover {
+          background: #b71c1c;
+        }
+
+        .preview-title {
+          margin: 0 0 24px;
+          color: white;
+          font-size: 1.5rem;
+          text-align: center;
+          font-weight: 700;
+        }
+
+        .status-ng {
+          background: rgba(244, 67, 54, 0.2);
+          color: #ffcdd2;
+          font-weight: bold;
+          border-radius: 4px;
         }
 
         .ng-actions {
           display: flex;
           gap: 12px;
         }
-
+.checklist-table .info-cell {
+  background: rgba(255, 255, 255, 0.4);
+  color: white;
+  font-weight: 500;
+}
         @media (max-width: 768px) {
           .checklist-table,
           .simple-table {
@@ -568,15 +605,18 @@ export default function FireAlarmChecklist({ params }: { params: Promise<{ zona:
             padding: 8px 4px;
           }
 
+          .form-actions,
           .preview-actions,
           .ng-actions {
             flex-direction: column;
             gap: 12px;
           }
 
-          .report-btn {
-            margin-right: 0;
+          .page-title {
+            font-size: 1.5rem;
+
           }
+            
         }
       `}</style>
     </div>

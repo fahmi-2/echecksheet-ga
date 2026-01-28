@@ -27,7 +27,7 @@ export default function EChecksheetInsApdPage({
         Loading APD inspection form...
       </div>
     }>
-      <EChecksheetInsApdForm areaId={areaId} />
+      <EChecksheetInsApdForm areaId={areaId} areaName={areaName} />
     </Suspense>
   );
 }

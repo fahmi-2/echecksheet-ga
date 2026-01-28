@@ -112,7 +112,7 @@ export function EChecksheetInfJalanForm({
 
   useEffect(() => {
     if (!isMounted || loading) return;
-    if (!user || (user.role !== "inspector-ga" && user.role !== "group-leader")) {
+    if (!user || (user.role !== "inspector-ga")) {
       router.push("/login-page");
     }
   }, [user, loading, router, isMounted]);
@@ -151,7 +151,7 @@ export function EChecksheetInfJalanForm({
     );
   }
 
-  if (!user || (user.role !== "inspector-ga" && user.role !== "group-leader")) {
+  if (!user || (user.role !== "inspector-ga")) {
     return null;
   }
 

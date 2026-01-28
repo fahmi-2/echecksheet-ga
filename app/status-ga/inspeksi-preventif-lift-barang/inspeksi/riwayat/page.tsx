@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
-import { NavbarStatic } from "@/components/navbar-static";
+import { Sidebar } from "@/components/Sidebar";
 
 type HistoryEntry = {
   id: string;
@@ -34,12 +34,15 @@ const itemTitles: Record<string, string> = {
 
 export default function RiwayatInspeksiPage() {
   const router = useRouter();
-  const { user } = useAuth();
+  const { user } = useAuth()
+  const [redirected, setRedirected] = useState(false);
   const [history, setHistory] = useState<HistoryEntry[]>([]);
 
   useEffect(() => {
+    if (redirected) return;
     if (!user) return;
     if (user.role !== "inspector-ga") {
+      setRedirected(true)
       router.push("/home");
       return;
     }
@@ -55,14 +58,14 @@ export default function RiwayatInspeksiPage() {
         console.error("Gagal parse riwayat", e);
       }
     }
-  }, [user, router]);
+  }, [user, router, redirected]);
 
   if (!user) return <div>Loading...</div>;
   if (user.role !== "inspector-ga") return null;
 
   return (
     <div className="app-page">
-      <NavbarStatic userName={user.fullName} />
+      <Sidebar userName={user.fullName} />
 
       <div className="page-content">
         <h1>📋 Riwayat Inspeksi Lift Barang</h1>
