@@ -1,5 +1,5 @@
 // app/e-checksheet-slg-hydrant/page.tsx
-"use client"; // ← Tambahkan ini
+"use client";
 
 import { Suspense, use } from 'react'; // ← tambahkan `use` dari React
 import { EChecksheetSelangHydrantForm } from './EChecksheetSelangHydrantForm';

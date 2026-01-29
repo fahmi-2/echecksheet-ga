@@ -5,8 +5,7 @@ import { Suspense, use } from 'react';
 import { GaInfJalanContent } from './GaInfJalanContent';
 
 
-// ✅ JADIKAN SERVER COMPONENT ASYNC
-export default async function GaInfJalanPage({
+export default function GaInfJalanPage({
   searchParams,
 }: {
   searchParams: Promise<{

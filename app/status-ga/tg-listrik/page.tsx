@@ -4,7 +4,7 @@
 import { Suspense, use } from 'react';
 import { GaTanggaListrikContent } from './GaTanggaListrikContent';
 
-export default async function GaTanggaListrikPage({
+export default function GaTanggaListrikPage({
     searchParams,
 }: {
   searchParams: Promise<{

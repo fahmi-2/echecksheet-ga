@@ -1,4 +1,4 @@
-﻿// app/status-ga/page.tsx
+// app/status-ga/page.tsx
 "use client"
 
 import { useEffect, useState } from "react"
@@ -67,7 +67,7 @@ export default function StatusGA() {
         { 
           name: "INSPEKSI INFRASTUKTUR JALAN", 
           desc: "Cek kondisi jalan, trotoar, boardess pabrik", 
-          link: "ga-inf-jalan" // 🔹 Sesuaikan dengan route baru
+          link: "inf-jalan"
         },
         { 
           name: "INSPEKSI APD", 
