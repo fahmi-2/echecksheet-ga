@@ -16,7 +16,7 @@ export default function SignupPage() {
     password: "",
     confirmPassword: "",
     department: "",
-    role: "" as "group-leader-qa" | "inspector-qa" | "inspector-ga" | "manager" | "",
+    role: "" as "group-leader-qa" | "inspector-qa" | "inspector-ga",
   })
   const [error, setError] = useState("")
   const [loading, setLoading] = useState(false)

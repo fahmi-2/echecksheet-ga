@@ -1,15 +1,16 @@
 // app/status-ga/selang-hydrant/page.tsx
-"use client";
+'use client';
 
 import { Suspense, use } from 'react';
 import { GaSelangHydrantContent } from './GaSelangHydrantContent';
 
-export default async function GaSelangHydrantPage({
-    searchParams,
+export default function GaSelangHydrantPage({
+  searchParams,
 }: {
-  searchParams: Promise<{ openArea?: string }>; // ← Promise
+  searchParams?: Promise<{ 
+    openArea?: string;
+  }>;
 }) {
-  // ✅ Unwrap searchParams dengan React.use()
   const params = use(searchParams);
   const openArea = params?.openArea || '';
 
@@ -20,8 +21,7 @@ export default async function GaSelangHydrantPage({
         justifyContent: 'center',
         alignItems: 'center',
         minHeight: '100vh',
-        background: '#f5f5f5',
-        fontSize: '16px'
+        background: '#f5f5f5'
       }}>
         Loading Selang & Hydrant Dashboard...
       </div>

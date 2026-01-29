@@ -4,7 +4,7 @@
 import { Suspense, use } from 'react';
 import { EChecksheetLiftBarangForm } from './EChecksheetLiftBarangForm';
 
-export default async function EChecksheetLiftBarangPage({
+export default function EChecksheetLiftBarangPage({
   searchParams,
 }: {
   searchParams: Promise<{

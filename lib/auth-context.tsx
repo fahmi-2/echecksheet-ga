@@ -11,41 +11,13 @@ import {
 } from "react";
 
 // 🔹 Role yang didukung
-<<<<<<< HEAD
-export type Role = "group-leader-qa" | "inspector-qa" | "inspector-ga" | "manager"
-=======
-export type Role = "group-leader" | "inspector" | "inspector-ga" | "manager";
->>>>>>> main
+export type Role = "group-leader-qa" | "inspector-qa" | "inspector-ga";
 
 // 🔹 Struktur pengguna
 export interface User {
-<<<<<<< HEAD
-  username: string
-  fullName: string
-  nik: string
-  department: string
-  role: Role
-}
-
-interface AuthContextType {
-  user: User | null
-  currentUser: User | null
-  loading: boolean
-  signup: (data: {
-    username: string
-    fullName: string
-    nik: string
-    department: string
-    role: Role
-    password: string
-    confirmPassword: string
-  }) => { success: boolean; error?: string }
-  login: (username: string, password: string) => { success: boolean; error?: string }
-  logout: () => void
-=======
   username: string;
   fullName: string;
-  niki: string;
+  nik: string;
   department: string;
   role: Role;
 }
@@ -58,7 +30,7 @@ interface AuthContextType {
     data: {
       username: string;
       fullName: string;
-      niki: string;
+      nik: string;
       department: string;
       role: Role;
       password: string;
@@ -67,7 +39,6 @@ interface AuthContextType {
   ) => { success: boolean; error?: string };
   login: (username: string, password: string) => { success: boolean; error?: string };
   logout: () => void;
->>>>>>> main
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -91,13 +62,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       const savedCurrentUser = localStorage.getItem(CURRENT_USER_KEY);
       if (savedCurrentUser) {
-<<<<<<< HEAD
-        const user = JSON.parse(savedCurrentUser)
-        if (["group-leader-qa", "inspector-qa", "inspector-ga", "manager"].includes(user.role)) {
-=======
         const user = JSON.parse(savedCurrentUser);
-        if (["group-leader", "inspector", "inspector-ga", "manager"].includes(user.role)) {
->>>>>>> main
+        if (["group-leader-qa", "inspector-qa", "inspector-ga"].includes(user.role)) {
           setCurrentUser({
             username: user.username,
             fullName: user.fullName,
@@ -149,37 +115,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       password,
       confirmPassword,
     }: {
-<<<<<<< HEAD
-      username: string
-      fullName: string
-      nik: string
-      department: string
-      role: Role
-      password: string
-      confirmPassword: string
-    }) => {
-      if (!username.trim() || !fullName.trim() || !nik.trim() || !department.trim()) {
-        return { success: false, error: "Semua field wajib diisi!" }
-      }
-
-      if (!role || !["group-leader-qa", "inspector-qa", "inspector-ga", "manager"].includes(role)) {
-        return { success: false, error: "Pilih role yang valid!" }
-=======
       username: string;
       fullName: string;
-      niki: string;
+      nik: string;
       department: string;
       role: Role;
       password: string;
       confirmPassword: string;
     }) => {
-      if (!username.trim() || !fullName.trim() || !niki.trim() || !department.trim()) {
+      if (!username.trim() || !fullName.trim() || !nik.trim() || !department.trim()) {
         return { success: false, error: "Semua field wajib diisi!" };
       }
 
-      if (!role || !["group-leader", "inspector", "inspector-ga", "manager"].includes(role)) {
+      if (!role || !["group-leader-qa", "inspector-qa", "inspector-ga", "manager"].includes(role)) {
         return { success: false, error: "Pilih role yang valid!" };
->>>>>>> main
       }
 
       if (password.length < 6) {
@@ -196,10 +145,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       // ✅ Validasi role ↔ departemen
       const validDepartments: Record<Role, string[]> = {
-        "group-leader": ["operations", "maintenance", "quality", "admin"],
-        "inspector": ["operations", "maintenance", "quality", "admin"],
+        "group-leader-qa": ["quality-assurance"],
+        "inspector-qa": ["quality-assurance"],
         "inspector-ga": ["general-affairs"],
-        "manager": ["management"],
+
       };
 
       if (!validDepartments[role].includes(department)) {
@@ -252,13 +201,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return { success: false, error: "Password salah!" };
       }
 
-<<<<<<< HEAD
       if (!["group-leader-qa", "inspector-qa", "inspector-ga", "manager"].includes(user.role)) {
-        return { success: false, error: "Role tidak valid!" }
-=======
-      if (!["group-leader", "inspector", "inspector-ga", "manager"].includes(user.role)) {
         return { success: false, error: "Role tidak valid!" };
->>>>>>> main
       }
 
       const safeUser: User = {

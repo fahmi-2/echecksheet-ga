@@ -660,7 +660,8 @@ export function EChecksheetInfJalanForm({
                       padding: "8px",
                       border: "1px solid #0d47a1",
                       verticalAlign: "top",
-                      background: "white"
+                      background: "white",
+                      textAlign:"center",
                     }}>
                       <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
                         <div style={{ display: "flex", gap: "4px" }}>

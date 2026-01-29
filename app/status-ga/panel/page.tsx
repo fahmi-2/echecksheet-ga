@@ -4,7 +4,7 @@
 import { Suspense, use } from 'react';
 import { GaPanelContent } from './GaPanelContent';
 
-export default async function GaPanelPage({
+export default function GaPanelPage({
   searchParams,
 }: {
   searchParams: Promise<{

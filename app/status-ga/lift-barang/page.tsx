@@ -3,7 +3,7 @@
 
 import { Suspense, use } from 'react';
 import { GaLiftBarangContent } from './GaLiftBarangContent';
-export default async function GaLiftBarangPage({
+export default function GaLiftBarangPage({
     searchParams,
 }: {
   searchParams: Promise<{

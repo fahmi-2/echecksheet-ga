@@ -100,13 +100,8 @@ export function NavbarStatic({
         <Link href="/dashboard" className="nav-link">
           📊 Dashboard
         </Link>
-<<<<<<< HEAD
-        <Link href="#" onClick={closeMenu}>
-          Laporan
-=======
         <Link href="/pelaporan-list" className="nav-link">
           📑 Pelaporan
->>>>>>> main
         </Link>
       </div>
 
