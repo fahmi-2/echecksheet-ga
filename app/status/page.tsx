@@ -14,7 +14,7 @@ const RoleSelectorModal = ({
 }: {
   isOpen: boolean
   onClose: () => void
-  onSelect: (subType: "group-leader" | "inspector") => void
+  onSelect: (subType: "group-leader-qa" | "inspector-qa") => void
   mainType: "final-assy" | "pre-assy"
 }) => {
   if (!isOpen) return null
@@ -31,15 +31,15 @@ const RoleSelectorModal = ({
         <div className="modal-buttons">
           <button
             className="btn btn-primary"
-            onClick={() => onSelect("group-leader")}
+            onClick={() => onSelect("group-leader-qa")}
           >
-            Group Leader
+            Group Leader (QA)
           </button>
           <button
             className="btn btn-secondary"
-            onClick={() => onSelect("inspector")}
+            onClick={() => onSelect("inspector-qa")}
           >
-            Inspector
+            Inspector (QA)
           </button>
         </div>
         <button className="btn-close" onClick={onClose}>✕</button>
@@ -144,7 +144,7 @@ export default function HomePage() {
     setIsModalOpen(true)
   }
 
-  const handleRoleSelect = (subType: "group-leader" | "inspector") => {
+  const handleRoleSelect = (subType: "group-leader-qa" | "inspector-qa") => {
     if (!selectedMainType) return
     setIsModalOpen(false)
     

@@ -50,7 +50,7 @@ export default function EChecksheetPanelPage() {
 
   useEffect(() => {
     if (loading) return
-    if (!user || (user.role !== "inspector-ga" && user.role !== "group-leader")) {
+    if (!user || (user.role !== "inspector-ga" && user.role !== "group-leader-qa")) {
       router.push("/login-page")
     }
   }, [user, loading, router])
@@ -79,7 +79,7 @@ export default function EChecksheetPanelPage() {
     )
   }
 
-  if (!user || (user.role !== "inspector-ga" && user.role !== "group-leader")) {
+  if (!user || (user.role !== "inspector-ga" && user.role !== "group-leader-qa")) {
     return null
   }
 

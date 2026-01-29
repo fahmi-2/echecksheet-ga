@@ -74,7 +74,7 @@ export function EChecksheetLiftBarangForm({
 
   useEffect(() => {
     if (!isMounted || loading) return;
-    if (!user || (user.role !== "inspector-ga" && user.role !== "group-leader")) {
+    if (!user || (user.role !== "inspector-ga" && user.role !== "group-leader-qa")) {
       router.push("/login-page");
     }
   }, [user, loading, router, isMounted]);
@@ -91,7 +91,7 @@ export function EChecksheetLiftBarangForm({
     );
   }
 
-  if (!user || (user.role !== "inspector-ga" && user.role !== "group-leader")) {
+  if (!user || (user.role !== "inspector-ga" && user.role !== "group-leader-qa")) {
     return null;
   }
 
@@ -564,7 +564,7 @@ export function EChecksheetLiftBarangForm({
                             type="text"
                             value={inspector}
                             onChange={(e) => handleInputChange(dateKey, "inspector", e.target.value, day)}
-                            placeholder="NIK"
+                            placeholder="niki"
                             style={{
                               width: "100%",
                               padding: "6px 4px",

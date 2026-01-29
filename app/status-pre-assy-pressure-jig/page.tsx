@@ -41,7 +41,7 @@ export default function PressureJigPreAssyStatusPage() {
   // 🔹 Hanya Inspector boleh akses. Jika Group Leader, redirect diam-diam.
   useEffect(() => {
     if (redirected) return
-    if (user && user.role !== "inspector") {
+    if (user && user.role !== "inspector-qa") {
       setRedirected(true)
       router.push("/status-pre-assy")
     }

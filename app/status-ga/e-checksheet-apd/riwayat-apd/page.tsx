@@ -313,12 +313,12 @@ export default function RiwayatApdPage() {
                                   {editMode?.recordId === record.id && editMode.itemIndex === idx ? (
                                     <input
                                       type="text"
-                                      value={editItem?.nik || ""}
+                                      value={editItem?.niki || ""}
                                       onChange={(e) => setEditItem(prev => prev ? { ...prev, nik: e.target.value } : null)}
                                       className="edit-input"
                                     />
                                   ) : (
-                                    item.nik
+                                    item.niki
                                   )}
                                 </td>
                                 <td>

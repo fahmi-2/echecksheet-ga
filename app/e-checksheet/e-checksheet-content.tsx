@@ -131,10 +131,10 @@
             if (subType === "group-leader") {
             storageKey =
                 checkType === "daily-check"
-                ? "preAssyGroupLeaderDailyCheckDailyCheckResults"
-                : "preAssyGroupLeaderCcStrippingDailyCheckResults"
+                ? "preAssyQADailyCheckDailyCheckResults"
+                : "preAssyQACcStrippingDailyCheckResults"
             } else {
-            storageKey = "preAssyInspectorDailyCheckResults"
+            storageKey = "preAssyQADailyCheckResults"
             }
         }
 

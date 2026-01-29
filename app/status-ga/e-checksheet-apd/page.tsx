@@ -128,7 +128,7 @@ export default function EChecksheetApdPage() {
         alert("⚠️ Kolom 'Nama' wajib diisi!")
         return
       }
-      if (!item.nik.trim()) {
+      if (!item.niki.trim()) {
         alert("⚠️ Kolom 'NIK' wajib diisi!")
         return
       }
@@ -287,9 +287,9 @@ export default function EChecksheetApdPage() {
                         <td>
                           <input
                             type="text"
-                            value={item.nik}
-                            onChange={(e) => handleInputChange(index, "nik", e.target.value)}
-                            placeholder="NIK"
+                            value={item.niki}
+                            onChange={(e) => handleInputChange(index, "niki", e.target.value)}
+                            placeholder="niki"
                             className="table-input"
                             required
                           />
@@ -396,7 +396,7 @@ export default function EChecksheetApdPage() {
                       <tr key={index}>
                         <td>{item.no}</td>
                         <td>{item.nama}</td>
-                        <td>{item.nik}</td>
+                        <td>{item.niki}</td>
                         <td>{item.tglPengambilan}</td>
                         <td>{item.dept}</td>
                         <td>{item.jobDesc}</td>

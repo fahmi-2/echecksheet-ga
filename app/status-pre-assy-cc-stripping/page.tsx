@@ -36,7 +36,7 @@ export default function PreAssyGLStatusPage() {
 
   useEffect(() => {
     if (redirected) return;
-    if (!user || user.role !== "group-leader") {
+    if (!user || user.role !== "group-leader-qa") {
       setRedirected(true)
       router.push("/login-page")
     }
@@ -73,7 +73,7 @@ export default function PreAssyGLStatusPage() {
     { id: 14.1, checkPoint: "Memastikan semua inspector menggunakan penutup kepala...", shift: "B", waktuCheck: "Setiap Hari", standard: "Check kondisi actual" },
   ])
 
-  const storageKey = `preAssyGroupLeaderDailyCheckResults`
+  const storageKey = `preAssyQADailyCheckResults`
   const [results, setResults] = useState<Record<string, Record<string, CheckResult>>>(() => {
     if (typeof window !== "undefined") {
       const saved = localStorage.getItem(storageKey)

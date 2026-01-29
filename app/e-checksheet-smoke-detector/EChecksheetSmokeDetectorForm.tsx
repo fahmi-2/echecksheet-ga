@@ -63,7 +63,7 @@ export function EChecksheetSmokeDetectorForm({
 
   useEffect(() => {
     if (!isMounted || loading) return;
-    if (!user || (user.role !== "inspector-ga" && user.role !== "group-leader")) {
+    if (!user || (user.role !== "inspector-ga" && user.role !== "group-leader-qa")) {
       router.push("/login-page");
     }
   }, [user, loading, router, isMounted]);
@@ -78,7 +78,7 @@ export function EChecksheetSmokeDetectorForm({
     );
   }
 
-  if (!user || (user.role !== "inspector-ga" && user.role !== "group-leader")) {
+  if (!user || (user.role !== "inspector-ga" && user.role !== "group-leader-qa")) {
     return null;
   }
 

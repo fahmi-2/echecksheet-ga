@@ -90,7 +90,7 @@ export default function ChecksheetToiletForm({ params }: { params: Promise<{ are
   // Auth guard
   useEffect(() => {
     if (!isMounted || loading) return;
-    if (!user || (user.role !== "inspector-ga" && user.role !== "group-leader")) {
+    if (!user || (user.role !== "inspector-ga" && user.role !== "group-leader-qa")) {
       router.push("/login-page");
     }
   }, [user, loading, router, isMounted]);
@@ -103,7 +103,7 @@ export default function ChecksheetToiletForm({ params }: { params: Promise<{ are
       </div>
     );
   }
-  if (!user || (user.role !== "inspector-ga" && user.role !== "group-leader")) return null;
+  if (!user || (user.role !== "inspector-ga" && user.role !== "group-leader-qa")) return null;
 
   const handleInputChange = (field: string, value: string) => {
     setAnswers((prev) => ({ ...prev, [field]: value }));

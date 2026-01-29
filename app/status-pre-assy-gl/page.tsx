@@ -43,7 +43,7 @@ export default function PreAssyGLStatusPage() {
 
   useEffect(() => {
     if (redirected) return;
-    if (!user || user.role !== "group-leader") {
+    if (!user || user.role !== "group-leader-qa") {
       setRedirected(true)
       router.push("/login-page")
     }
@@ -123,8 +123,8 @@ export default function PreAssyGLStatusPage() {
 
   const storageKey = useMemo(() =>
     viewMode === "daily"
-      ? "preAssyGroupLeaderDailyCheckResults"
-      : "preAssyGroupLeaderCcStrippingDailyCheckResults"
+      ? "preAssyQADailyCheckResults"
+      : "preAssyQACcStrippingDailyCheckResults"
   , [viewMode])
 
   const [results, setResults] = useState<Record<string, Record<string, CheckResult>>>(() => {

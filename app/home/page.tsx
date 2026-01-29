@@ -1,7 +1,9 @@
-"use client"
+// app/home/page.tsx
+"use client";
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import type { LucideIcon } from "lucide-react"; // ✅ Tipe spesifik
 import {
   BarChart2,
   FileText,
@@ -9,8 +11,6 @@ import {
   Building2,
   CheckCircle2,
   AlertCircle,
-  Clock,
-  TrendingUp,
   ChevronRight,
 } from "lucide-react";
 import { Sidebar } from "@/components/Sidebar";
@@ -18,65 +18,116 @@ import { useAuth } from "@/lib/auth-context";
 
 interface CardData {
   id: string;
-  icon: any;
+  icon: LucideIcon; // ✅ Ganti 'any' dengan tipe yang benar
   title: string;
   description: string;
   gradient: string;
   href: string;
 }
 
+interface ActivityItem {
+  title: string;
+  user: string;
+  time: string;
+  status: "OK" | "NG";
+}
+
 export default function ModernHomePage() {
-  const { user } = useAuth();
-  const [collapsed, setCollapsed] = useState(false);
+  const { user, loading } = useAuth(); // ✅ Ambil status loading
+  const [activities, setActivities] = useState<ActivityItem[]>([]);
 
-  // Ambil data dari context
-  const userName = user?.fullName;
-  const currentRole = user?.role || "inspector-ga" || "inspector-qa" || "group-leader-qa";
+  // Handle loading & auth
+  if (loading) {
+    return (
+      <div className="modern-home-page">
+        <Sidebar userName="Loading..." />
+        <main className="main-content">
+          <div style={{ padding: "40px", textAlign: "center", color: "#64748b" }}>
+            Memuat data...
+          </div>
+        </main>
+      </div>
+    );
+  }
 
-  // Statistik
-  const stats = [
-    { id: "total", icon: CheckCircle2, label: "Total Checklist", value: "24", color: "#10B981" },
-    { id: "ng", icon: AlertCircle, label: "Temuan NG", value: "3", color: "#F59E0B" },
-    { id: "pending", icon: Clock, label: "Pending", value: "2", color: "#8B5CF6" },
-    { id: "completion", icon: TrendingUp, label: "Completion", value: "87%", color: "#3B82F6" },
-  ];
+  if (!user) {
+    return null; // atau redirect ke login
+  }
 
-  // Kartu berdasarkan role
+  const userName = user.fullName || "User";
+  const currentRole = user.role; // ✅ Sudah pasti string karena lolos loading
+
+  // 🔁 Muat aktivitas hari ini
+  useEffect(() => {
+    try {
+      const historyStr = localStorage.getItem("checksheet_history");
+      if (!historyStr) {
+        setActivities([]);
+        return;
+      }
+
+      const history = JSON.parse(historyStr);
+      if (!Array.isArray(history)) {
+        setActivities([]);
+        return;
+      }
+
+      const today = new Date();
+      const todayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+      const todayEnd = new Date(today.getFullYear(), today.getMonth(), today.getDate() + 1);
+
+      const todayEntries = history.filter((item: any) => {
+        const filledDate = new Date(item.filledAt);
+        return filledDate >= todayStart && filledDate < todayEnd;
+      });
+
+      const sorted = [...todayEntries].sort(
+        (a: any, b: any) => new Date(b.filledAt).getTime() - new Date(a.filledAt).getTime()
+      );
+
+      const recent = sorted.slice(0, 3).map((item: any) => ({
+        title: String(item.area || "Checklist Tanpa Nama"),
+        user: String(item.filledBy || "Unknown User"),
+        time: new Date(item.filledAt).toLocaleString("id-ID", {
+          hour: "2-digit",
+          minute: "2-digit",
+        }),
+        status: (item.status === "NG" ? "NG" : "OK") as "OK" | "NG",
+      }));
+
+      setActivities(recent);
+    } catch (e) {
+      console.error("[Home] Gagal memuat riwayat checklist:", e);
+      setActivities([]);
+    }
+  }, []);
+
+  // 🗺️ Mapping role ke dashboard
+  const getDashboardLink = () => {
+    switch (currentRole) {
+      case "inspector-ga":
+        return "/ga-dashboard";
+      case "inspector-qa":
+        return "/qa-dashboard";
+      case "group-leader-qa":
+        return "/gl-dashboard";
+      default:
+        return "/dashboard";
+    }
+  };
+
+  const dashboardLink = getDashboardLink();
+
+  // 🎯 Kartu berdasarkan role (sesuai auth context terbaru)
   const roleCards: Record<string, CardData[]> = {
-    manager: [
-      {
-        id: "final-assy-qa",
-        icon: Wrench,
-        title: "Final Assy (QA)",
-        description: "Semua checklist Final Assy",
-        gradient: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
-        href: "/status-final-assy?subType=inspector",
-      },
-      {
-        id: "pre-assy-qa",
-        icon: Wrench,
-        title: "Pre-Assy (QA)",
-        description: "Semua checklist Pre-Assy",
-        gradient: "linear-gradient(135deg, #f093fb 0%, #f5576c 100%)",
-        href: "/status-pre-assy?subType=inspector",
-      },
-      {
-        id: "general-affairs",
-        icon: Building2,
-        title: "General Affairs",
-        description: "Checklist GA",
-        gradient: "linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)",
-        href: "/status-ga",
-      },
-    ],
-    "group-leader": [
+    "group-leader-qa": [
       {
         id: "final-assy",
         icon: Wrench,
         title: "Final Assy",
         description: "Daily check untuk Final Assembly",
         gradient: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
-        href: "/status-final-assy?subType=group-leader",
+        href: "/status-final-assy?subType=group-leader-qa",
       },
       {
         id: "pre-assy",
@@ -84,7 +135,7 @@ export default function ModernHomePage() {
         title: "Pre-Assy",
         description: "Daily check dan CC Stripping",
         gradient: "linear-gradient(135deg, #f093fb 0%, #f5576c 100%)",
-        href: "/status-pre-assy?subType=group-leader",
+        href: "/status-pre-assy?subType=group-leader-qa",
       },
     ],
     "inspector-qa": [
@@ -94,7 +145,7 @@ export default function ModernHomePage() {
         title: "Final Assy",
         description: "Inspeksi Final Assembly",
         gradient: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
-        href: "/status-final-assy?subType=inspector",
+        href: "/status-final-assy?subType=inspector-qa",
       },
       {
         id: "pre-assy",
@@ -102,7 +153,7 @@ export default function ModernHomePage() {
         title: "Pre-Assy",
         description: "Inspeksi Pre-Assembly",
         gradient: "linear-gradient(135deg, #f093fb 0%, #f5576c 100%)",
-        href: "/status-pre-assy?subType=inspector",
+        href: "/status-pre-assy?subType=inspector-qa",
       },
       {
         id: "pressure-jig",
@@ -125,34 +176,13 @@ export default function ModernHomePage() {
     ],
   };
 
-  const commonCards: CardData[] = [
-    {
-      id: "dashboard",
-      icon: BarChart2,
-      title: "Dashboard",
-      description: "Statistik dan riwayat checklist",
-      gradient: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
-      href: "/dashboard",
-    },
-    {
-      id: "pelaporan",
-      icon: FileText,
-      title: "Laporan NG",
-      description: "Kelola dan diskusikan laporan NG",
-      gradient: "linear-gradient(135deg, #f093fb 0%, #f5576c 100%)",
-      href: "/pelaporan-list",
-    },
-  ];
-
   const currentRoleCards = roleCards[currentRole] || [];
 
   return (
     <div className="modern-home-page">
-      <Sidebar
-        userName={userName}
-      />
+      <Sidebar userName={userName} />
 
-      <main className={`main-content ${collapsed ? "collapsed" : ""}`}>
+      <main className="main-content">
         {/* Welcome Banner */}
         <div className="welcome-banner">
           <div className="welcome-content">
@@ -174,24 +204,6 @@ export default function ModernHomePage() {
               />
             </svg>
           </div>
-        </div>
-
-        {/* Stats */}
-        <div className="stats-grid">
-          {stats.map((stat) => {
-            const Icon = stat.icon;
-            return (
-              <div key={stat.id} className="stat-card">
-                <div className="stat-icon" style={{ backgroundColor: stat.color }}>
-                  <Icon size={20} color="white" aria-hidden="true" />
-                </div>
-                <div className="stat-content">
-                  <div className="stat-value">{stat.value}</div>
-                  <div className="stat-label">{stat.label}</div>
-                </div>
-              </div>
-            );
-          })}
         </div>
 
         {/* Role-based Cards */}
@@ -225,35 +237,6 @@ export default function ModernHomePage() {
           </section>
         )}
 
-        {/* Common Cards */}
-        <section className="section">
-          <div className="section-header">
-            <div>
-              <h2 className="section-title">📊 Riwayat & Pelaporan</h2>
-              <p className="section-desc">Kelola checklist dan laporan NG</p>
-            </div>
-          </div>
-          <div className="cards-grid">
-            {commonCards.map((card) => {
-              const Icon = card.icon;
-              return (
-                <Link key={card.id} href={card.href} className="feature-card-link">
-                  <div className="feature-card" style={{ background: card.gradient }}>
-                    <div className="card-header">
-                      <div className="card-icon">
-                        <Icon size={24} color="white" aria-hidden="true" />
-                      </div>
-                      <ChevronRight size={18} color="white" aria-hidden="true" />
-                    </div>
-                    <h3 className="card-title">{card.title}</h3>
-                    <p className="card-desc">{card.description}</p>
-                  </div>
-                </Link>
-              );
-            })}
-          </div>
-        </section>
-
         {/* Recent Activity */}
         <section className="section">
           <div className="section-header">
@@ -261,58 +244,63 @@ export default function ModernHomePage() {
               <h2 className="section-title">🕐 Aktivitas Terbaru</h2>
               <p className="section-desc">Checklist yang baru saja diselesaikan</p>
             </div>
-            <Link href="/dashboard" className="view-all-btn">
+            <Link href={dashboardLink} className="view-all-btn">
               Lihat Semua →
             </Link>
           </div>
           <div className="activity-list">
-            {[1, 2, 3].map((i) => (
-              <div key={i} className="activity-item">
-                <div className="activity-icon ok" aria-hidden="true">
-                  <CheckCircle2 size={18} />
+            {activities.length > 0 ? (
+              activities.map((act, i) => (
+                <div key={i} className="activity-item">
+                  <div className={`activity-icon ${act.status === "OK" ? "ok" : "ng"}`} aria-hidden="true">
+                    {act.status === "OK" ? <CheckCircle2 size={18} /> : <AlertCircle size={18} />}
+                  </div>
+                  <div className="activity-content">
+                    <h3 className="activity-title">{act.title}</h3>
+                    <p className="activity-desc">Diselesaikan oleh {act.user}</p>
+                  </div>
+                  <div className="activity-meta">
+                    <span className="activity-time">{act.time}</span>
+                    <span className={`activity-status ${act.status === "OK" ? "ok" : "ng"}`}>
+                      {act.status}
+                    </span>
+                  </div>
                 </div>
-                <div className="activity-content">
-                  <h3 className="activity-title">Checklist Toilet - Driver</h3>
-                  <p className="activity-desc">Diselesaikan oleh Ahmad Fauzi</p>
-                </div>
-                <div className="activity-meta">
-                  <span className="activity-time">2 jam lalu</span>
-                  <span className="activity-status ok">OK</span>
-                </div>
-              </div>
-            ))}
+              ))
+            ) : (
+              <p className="empty-activity">Belum ada aktivitas checklist hari ini.</p>
+            )}
           </div>
         </section>
       </main>
 
       <style jsx>{`
         .modern-home-page {
+          display: flex;
           min-height: 100vh;
           background-color: #f5f6fa;
           font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
         }
 
+        .empty-activity {
+          padding: 16px;
+          text-align: center;
+          color: #94a3b8;
+          font-style: italic;
+          background: white;
+          border-radius: 12px;
+          border: 1px solid #f1f5f9;
+        }
+
         .main-content {
+          flex: 1;
           padding: 24px;
-          transition: margin-left 0.3s ease;
           min-height: calc(100vh - 64px);
           max-width: 1200px;
-          margin: 0 auto; /* Center horizontal */
+          margin: 0 auto;
           padding-top: 20px;
         }
 
-        .main-content.collapsed {
-          margin-left: 72px;
-        }
-
-        @media (min-width: 768px) {
-          .main-content {
-            margin-left: 25 0px;
-            padding: 24px;
-          }
-        }
-
-        /* Welcome Banner */
         .welcome-banner {
           background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
           border-radius: 16px;
@@ -343,48 +331,6 @@ export default function ModernHomePage() {
           flex-shrink: 0;
         }
 
-        /* Stats */
-        .stats-grid {
-          display: grid;
-          grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-          gap: 16px;
-          margin-bottom: 28px;
-        }
-
-        .stat-card {
-          background: white;
-          border-radius: 12px;
-          padding: 18px;
-          display: flex;
-          align-items: center;
-          gap: 14px;
-          box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
-          transition: all 0.3s ease;
-          border: 1px solid #f0f0f0;
-        }
-
-        .stat-icon {
-          width: 48px;
-          height: 48px;
-          border-radius: 12px;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-        }
-
-        .stat-value {
-          font-size: 24px;
-          font-weight: 700;
-          color: #1a202c;
-          margin-bottom: 4px;
-        }
-
-        .stat-label {
-          font-size: 13px;
-          color: #718096;
-        }
-
-        /* Sections */
         .section {
           margin-bottom: 32px;
         }
@@ -418,13 +364,14 @@ export default function ModernHomePage() {
           font-weight: 600;
           padding: 8px 16px;
           border-radius: 8px;
+          transition: all 0.2s ease;
         }
 
         .view-all-btn:hover {
           background: #f3f4f6;
+          transform: translateX(4px);
         }
 
-        /* Cards */
         .cards-grid {
           display: grid;
           grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
@@ -486,7 +433,6 @@ export default function ModernHomePage() {
           line-height: 1.5;
         }
 
-        /* Activity */
         .activity-list {
           display: flex;
           flex-direction: column;
@@ -508,6 +454,10 @@ export default function ModernHomePage() {
         .activity-icon.ok {
           background: #d1fae5;
           color: #10b981;
+        }
+        .activity-icon.ng {
+          background: #fee2e2;
+          color: #ef4444;
         }
 
         .activity-title {
@@ -555,17 +505,16 @@ export default function ModernHomePage() {
           background: #d1fae5;
           color: #059669;
         }
-
-        /* Responsive */
-        @media (max-width: 1024px) {
-          .main-content {
-            margin-left: 240px;
-          }
+        .activity-status.ng {
+          background: #fee2e2;
+          color: #dc2626;
         }
 
         @media (max-width: 768px) {
+          .modern-home-page {
+            flex-direction: column;
+          }
           .main-content {
-            margin-left: 0;
             padding: 16px;
           }
           .welcome-banner {
@@ -579,6 +528,9 @@ export default function ModernHomePage() {
           .section-header {
             flex-direction: column;
             align-items: flex-start;
+          }
+          .view-all-btn {
+            align-self: flex-start;
           }
         }
       `}</style>

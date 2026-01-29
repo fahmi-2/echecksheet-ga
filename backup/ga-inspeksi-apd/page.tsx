@@ -45,7 +45,7 @@ export default function GaInspeksiApdPage() {
 
   useEffect(() => {
     if (loading) return
-    if (!user || (user.role !== "group-leader" && user.role !== "inspector-ga")) {
+    if (!user || (user.role !== "group-leader-qa" && user.role !== "inspector-ga")) {
       router.push("/login-page")
     }
   }, [user, loading, router])
@@ -109,7 +109,7 @@ export default function GaInspeksiApdPage() {
     )
   }
 
-  if (!user || (user.role !== "inspector-ga" && user.role !== "group-leader")) {
+  if (!user || (user.role !== "inspector-ga" && user.role !== "group-leader-qa")) {
     return null
   }
 

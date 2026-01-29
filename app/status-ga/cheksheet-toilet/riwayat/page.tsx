@@ -72,14 +72,14 @@
 
     useEffect(() => {
       if (!isMounted || loading) return;
-      if (!user || (user.role !== "inspector-ga" && user.role !== "group-leader")) {
+      if (!user || (user.role !== "inspector-ga" && user.role !== "group-leader-qa")) {
         router.push("/login-page");
       }
     }, [user, loading, router, isMounted]);
 
     if (!isMounted) return null;
     if (loading) return <div style={{ padding: "40px", textAlign: "center" }}>Loading...</div>;
-    if (!user || (user.role !== "inspector-ga" && user.role !== "group-leader")) return null;
+    if (!user || (user.role !== "inspector-ga" && user.role !== "group-leader-qa")) return null;
 
     // Ambil semua tanggal unik
     const allDates = new Set<string>();

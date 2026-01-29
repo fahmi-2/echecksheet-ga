@@ -36,7 +36,7 @@ export default function FinalAssyInspectorStatusPage() {
 
   useEffect(() => {
     if (redirected) return;
-    if (!user || user.role !== "inspector") {
+    if (!user || user.role !== "inspector-qa") {
       setRedirected(true)
       router.push("/login-page")
     }

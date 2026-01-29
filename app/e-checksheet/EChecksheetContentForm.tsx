@@ -128,10 +128,10 @@ export function EChecksheetContentForm({
         if (subType === "group-leader") {
           storageKey =
             checkType === "daily-check"
-              ? "preAssyGroupLeaderDailyCheckDailyCheckResults"
-              : "preAssyGroupLeaderCcStrippingDailyCheckResults";
+              ? "preAssyQADailyCheckDailyCheckResults"
+              : "preAssyQACcStrippingDailyCheckResults";
         } else {
-          storageKey = "preAssyInspectorDailyCheckResults";
+          storageKey = "preAssyQADailyCheckResults";
         }
       } else if (mainType === "cs-remove-tool") {
         storageKey = "csRemoveControlResults";

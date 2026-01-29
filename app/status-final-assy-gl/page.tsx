@@ -36,7 +36,7 @@ export default function FinalAssyGLStatusPage() {
 
   useEffect(() => {
     if (redirected) return;
-    if (!user || user.role !== "group-leader") {
+    if (!user || user.role !== "group-leader-qa") {
       setRedirected(true)
       router.push("/login-page")
     }

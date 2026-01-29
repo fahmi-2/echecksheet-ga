@@ -19,10 +19,9 @@ export default function HomePage() {
   if (!user) return null
 
   const roleLabels = {
-    "group-leader": "Group Leader QA",
-    "inspector": "Inspector QA",
+    "group-leader-qa": "Group Leader QA",
+    "inspector-qa": "Inspector QA",
     "inspector-ga": "Inspector GA",
-    "manager": "Manajer",
   }
 
   return (
@@ -41,12 +40,12 @@ export default function HomePage() {
 
         <div className="home-container">
           {/* 🔹 MANAJER: Lihat semua */}
-          {user.role === "manager" && (
+          {false /* manager role removed */ && (
             <div className="section">
               <h2 className="section-title">🔐 Akses Penuh - Manajemen</h2>
               <p className="section-desc">Kelola semua area dan laporan</p>
               <div className="card-grid">
-                <Link href="/status-final-assy?subType=inspector" className="card-link">
+                <Link href="/status-final-assy?subType=inspector-qa" className="card-link">
                   <div className="card card-primary">
                     <div className="card-icon">🔧</div>
                     <h3>Final Assy (QA)</h3>
@@ -54,7 +53,7 @@ export default function HomePage() {
                     <span className="card-arrow">→</span>
                   </div>
                 </Link>
-                <Link href="/status-pre-assy?subType=inspector" className="card-link">
+                <Link href="/status-pre-assy?subType=inspector-qa" className="card-link">
                   <div className="card card-primary">
                     <div className="card-icon">⚙️</div>
                     <h3>Pre-Assy (QA)</h3>
@@ -75,12 +74,12 @@ export default function HomePage() {
           )}
 
           {/* 🔹 GROUP LEADER QA */}
-          {user.role === "group-leader" && (
+          {user.role === "group-leader-qa" && (
             <div className="section">
               <h2 className="section-title">📋 Daily Check Group Leader QA</h2>
               <p className="section-desc">Kelola daily check untuk Final Assy dan Pre-Assy</p>
               <div className="card-grid">
-                <Link href="/status-final-assy?subType=group-leader" className="card-link">
+                <Link href="/status-final-assy?subType=group-leader-qa" className="card-link">
                   <div className="card card-primary">
                     <div className="card-icon">🔧</div>
                     <h3>Final Assy</h3>
@@ -88,7 +87,7 @@ export default function HomePage() {
                     <span className="card-arrow">→</span>
                   </div>
                 </Link>
-                <Link href="/status-pre-assy?subType=group-leader" className="card-link">
+                <Link href="/status-pre-assy?subType=group-leader-qa" className="card-link">
                   <div className="card card-primary">
                     <div className="card-icon">⚙️</div>
                     <h3>Pre-Assy</h3>
@@ -101,12 +100,12 @@ export default function HomePage() {
           )}
 
           {/* 🔹 INSPECTOR QA */}
-          {user.role === "inspector" && (
+          {user.role === "inspector-qa" && (
             <div className="section">
               <h2 className="section-title">📋 Daily Check Inspector QA</h2>
               <p className="section-desc">Lakukan daily check sesuai area Anda</p>
               <div className="card-grid">
-                <Link href="/status-final-assy?subType=inspector" className="card-link">
+                <Link href="/status-final-assy?subType=inspector-qa" className="card-link">
                   <div className="card card-secondary">
                     <div className="card-icon">🔍</div>
                     <h3>Final Assy</h3>
@@ -114,7 +113,7 @@ export default function HomePage() {
                     <span className="card-arrow">→</span>
                   </div>
                 </Link>
-                <Link href="/status-pre-assy?subType=inspector" className="card-link">
+                <Link href="/status-pre-assy?subType=inspector-qa" className="card-link">
                   <div className="card card-secondary">
                     <div className="card-icon">🔎</div>
                     <h3>Pre-Assy</h3>

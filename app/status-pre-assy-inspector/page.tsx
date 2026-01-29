@@ -29,14 +29,14 @@ interface CheckResult {
   submittedBy: string
 }
 
-export default function PreAssyInspectorStatusPage() {
+export default function preAssyQAStatusPage() {
   const router = useRouter()
   const { user } = useAuth()
   const [redirected, setRedirected] = useState(false)
 
   useEffect(() => {
     if (redirected) return;
-    if (!user || user.role !== "inspector") {
+    if (!user || user.role !== "inspector-qa") {
       setRedirected(true)
       router.push("/login-page")
     }
@@ -73,7 +73,7 @@ export default function PreAssyInspectorStatusPage() {
     { id: 14.1, checkPoint: "Memastikan semua inspector menggunakan penutup kepala...", shift: "B", waktuCheck: "Setiap Hari", standard: "Check kondisi actual" },
   ])
 
-  const storageKey = "preAssyInspectorDailyCheckResults"
+  const storageKey = "preAssyQADailyCheckResults"
 
   const [results, setResults] = useState<Record<string, Record<string, CheckResult>>>(() => {
     if (typeof window !== "undefined") {

@@ -1,3 +1,4 @@
+// app/signup-page.tsx
 "use client"
 
 import type React from "react"
@@ -16,19 +17,19 @@ export default function SignupPage() {
     password: "",
     confirmPassword: "",
     department: "",
-    role: "" as "group-leader-qa" | "inspector-qa" | "inspector-ga" | "manager" | "",
+    role: "" as "group-leader-qa" | "inspector-qa" | "inspector-ga" | "",
   })
   const [error, setError] = useState("")
   const [loading, setLoading] = useState(false)
   const router = useRouter()
   const { signup } = useAuth()
 
-  // 🔹 Auto-set department berdasarkan role (tanpa mengubah UI)
+  // 🔹 Auto-set department berdasarkan role (dengan nilai yang sesuai auth context)
   useEffect(() => {
     if (formData.role === "inspector-ga") {
-      setFormData(prev => ({ ...prev, department: "general-affairs" }))
+      setFormData(prev => ({ ...prev, department: "ga" })) // ✅ "ga" bukan "general-affairs"
     } else if (formData.role === "group-leader-qa" || formData.role === "inspector-qa") {
-      setFormData(prev => ({ ...prev, department: "quality-assurance" }))
+      setFormData(prev => ({ ...prev, department: "qa" })) // ✅ "qa" bukan "quality-assurance"
     }
   }, [formData.role])
 
@@ -46,7 +47,7 @@ export default function SignupPage() {
     setLoading(true)
 
     // Validasi role
-    if (!formData.role || !['group-leader-qa', 'inspector-qa', 'inspector-ga', 'manager'].includes(formData.role)) {
+    if (!formData.role || !['group-leader-qa', 'inspector-qa', 'inspector-ga'].includes(formData.role)) {
       setError("Pilih role terlebih dahulu!")
       setLoading(false)
       return
@@ -57,7 +58,7 @@ export default function SignupPage() {
       fullName: formData.fullName,
       nik: formData.nik,
       department: formData.department,
-      role: formData.role,
+      role: formData.role as any,
       password: formData.password,
       confirmPassword: formData.confirmPassword,
     })
@@ -132,7 +133,7 @@ export default function SignupPage() {
                       id="nik"
                       type="text"
                       name="nik"
-                      placeholder="NIK"
+                      placeholder="nik"
                       value={formData.nik}
                       onChange={handleChange}
                       disabled={loading}
@@ -149,13 +150,12 @@ export default function SignupPage() {
                       name="department"
                       value={formData.department}
                       onChange={handleChange}
-                      disabled={loading}
+                      disabled={true} // ✅ Nonaktifkan karena diatur otomatis berdasarkan role
                       required
                     >
                       <option value="">Pilih Departemen</option>
-                      {/* 🔹 Tambahkan opsi baru tanpa mengubah tampilan */}
-                      <option value="general-affairs">General Affairs (GA)</option>
-                      <option value="quality-assurance">Quality Assurance (QA)</option>
+                      <option value="ga">General Affairs (GA)</option>
+                      <option value="qa">Quality Assurance (QA)</option>
                     </select>
                   </div>
                 </div>
@@ -168,21 +168,13 @@ export default function SignupPage() {
                       name="role"
                       value={formData.role}
                       onChange={handleChange}
-                      disabled={loading || !formData.department }
+                      disabled={loading}
                       required
                     >
                       <option value="">Pilih Peran</option>
-                      {formData.department == "quality-assurance" && (
-                        <>
-                          <option value="group-leader-qa">Group Leader QA</option>
-                          <option value="inspector-qa">Inspector QA</option>
-                        </>
-                      )}
-                      {formData.department == "general-affairs" && (
-                        <>
-                          <option value="inspector-ga">Inspector GA</option>
-                        </>
-                      )}
+                      <option value="group-leader-qa">Group Leader QA</option>
+                      <option value="inspector-qa">Inspector QA</option>
+                      <option value="inspector-ga">Inspector GA</option>
                     </select>
                   </div>
                 </div>
