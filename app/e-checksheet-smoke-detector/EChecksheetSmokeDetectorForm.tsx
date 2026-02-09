@@ -1,65 +1,75 @@
 // app/e-checksheet-smoke-detector/EChecksheetSmokeDetectorForm.tsx
 "use client";
-
 import { useState, useEffect } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation"; // ✅ Import useSearchParams
 import { useAuth } from "@/lib/auth-context";
 import { Sidebar } from "@/components/Sidebar";
 
-interface ChecksheetEntry {
-  date: string;
-  alarmBell: string;
-  indicatorLamp: string;
-  kebersihan: string;
-  keteranganKondisi: string;
+interface ChecklistItem {
+  id: number;
+  item_key: string;
+  no: number;
+  item_group: string;
+  item_check: string;
+  method: string;
+  image: string | null;
+}
+
+interface ItemData {
+  hasilPemeriksaan: string;
+  keteranganTemuan: string;
   tindakanPerbaikan: string;
   pic: string;
   dueDate: string;
   verify: string;
-  inspector: string;
+  images: string[];
+  notes: string;
 }
 
-export function EChecksheetSmokeDetectorForm({
-  no,
-  lokasi,
-  zona,
-}: {
-  no: string;
-  lokasi: string;
-  zona: string;
-}) {
+interface AreaInfo {
+  id: number;
+  no: number;
+  name: string;
+  location: string;
+}
+
+// ✅ Hapus prop areaId, ambil dari query string
+export function EChecksheetSmokeDetectorForm() {
   const router = useRouter();
+  const searchParams = useSearchParams(); // ✅ Ambil query params
   const { user, loading } = useAuth();
+  
+  // ✅ Ambil areaId dari query string
+  const areaId = searchParams.get('areaId');
 
   const [isMounted, setIsMounted] = useState(false);
-  const [selectedDate, setSelectedDate] = useState<string>("");
-  const [alarmBell, setAlarmBell] = useState<string>("");
-  const [indicatorLamp, setIndicatorLamp] = useState<string>("");
-  const [kebersihan, setKebersihan] = useState<string>("");
-  const [keteranganKondisi, setKeteranganKondisi] = useState<string>("");
-  const [tindakanPerbaikan, setTindakanPerbaikan] = useState<string>("");
-  const [pic, setPic] = useState<string>("");
-  const [dueDate, setDueDate] = useState<string>("");
-  const [verify, setVerify] = useState<string>("");
-  const [savedData, setSavedData] = useState<ChecksheetEntry[]>([]);
+  const [selectedDate, setSelectedDate] = useState("");
+  // ✅ Validasi areaId
+  useEffect(() => {
+    if (isMounted && !areaId) {
+      alert('Area ID tidak ditemukan. Silakan pilih area dari halaman sebelumnya.');
+      router.push('/status-ga/smoke-detector');
+    }
+  }, [isMounted, areaId, router]);
+
+
+  // Data from API
+  const [areaInfo, setAreaInfo] = useState<AreaInfo | null>(null);
+  const [checklistItems, setChecklistItems] = useState<ChecklistItem[]>([]);
+  const [checklistData, setChecklistData] = useState<Record<string, ItemData>>({});
+  const [availableDates, setAvailableDates] = useState<string[]>([]);
+
+  // Loading states
+  const [loadingArea, setLoadingArea] = useState(true);
+  const [loadingItems, setLoadingItems] = useState(true);
+  const [loadingDates, setLoadingDates] = useState(true);
+  const [saving, setSaving] = useState(false);
+
+  const TYPE_SLUG = 'smoke-detector';
 
   useEffect(() => {
     setIsMounted(true);
   }, []);
-
-  useEffect(() => {
-    if (!isMounted) return;
-    try {
-      const key = `e-checksheet-smoke-detector-${no}`;
-      const saved = localStorage.getItem(key);
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        setSavedData(parsed);
-      }
-    } catch (err) {
-      console.warn("Failed to parse saved data");
-    }
-  }, [isMounted, no]);
 
   useEffect(() => {
     if (!isMounted || loading) return;
@@ -68,12 +78,219 @@ export function EChecksheetSmokeDetectorForm({
     }
   }, [user, loading, router, isMounted]);
 
+  // Fetch area info
+  useEffect(() => {
+    if (!isMounted || !areaId) return;
+
+    const fetchAreaInfo = async () => {
+      try {
+        setLoadingArea(true);
+        const response = await fetch(`/api/ga/checksheet/${TYPE_SLUG}/areas`);
+        const result = await response.json();
+        
+        if (result.success) {
+          const area = result.data.find((a: any) => a.id === parseInt(areaId));
+          if (area) {
+            setAreaInfo(area);
+          } else {
+            alert('Area tidak ditemukan');
+            router.push('/status-ga/smoke-detector');
+          }
+        }
+      } catch (error) {
+        console.error('Error fetching area:', error);
+        alert('Gagal memuat informasi area');
+      } finally {
+        setLoadingArea(false);
+      }
+    };
+
+    fetchAreaInfo();
+  }, [isMounted, areaId, router]);
+
+  // Fetch checklist items
+  useEffect(() => {
+    if (!isMounted) return;
+
+    const fetchItems = async () => {
+      try {
+        setLoadingItems(true);
+        const response = await fetch(`/api/ga/checksheet/${TYPE_SLUG}/items`);
+        const result = await response.json();
+        
+        if (result.success) {
+          setChecklistItems(result.data);
+          
+          // Initialize empty data for each item
+          const initialData: Record<string, ItemData> = {};
+          result.data.forEach((item: ChecklistItem) => {
+            initialData[item.item_key] = {
+              hasilPemeriksaan: '',
+              keteranganTemuan: '',
+              tindakanPerbaikan: '',
+              pic: '',
+              dueDate: '',
+              verify: '',
+              images: [],
+              notes: ''
+            };
+          });
+          setChecklistData(initialData);
+        }
+      } catch (error) {
+        console.error('Error fetching items:', error);
+      } finally {
+        setLoadingItems(false);
+      }
+    };
+
+    fetchItems();
+  }, [isMounted]);
+
+  // Fetch available dates
+  useEffect(() => {
+    if (!isMounted || !areaId) return;
+
+    const fetchDates = async () => {
+      try {
+        setLoadingDates(true);
+        const response = await fetch(`/api/ga/checksheet/${TYPE_SLUG}/by-area/${areaId}/dates`);
+        const result = await response.json();
+        
+        if (result.success && result.data) {
+          const sortedDates = result.data.sort((a: string, b: string) => 
+            new Date(b).getTime() - new Date(a).getTime()
+          );
+          setAvailableDates(sortedDates);
+        }
+      } catch (error) {
+        console.error('Error fetching dates:', error);
+      } finally {
+        setLoadingDates(false);
+      }
+    };
+
+    fetchDates();
+  }, [isMounted, areaId]);
+
+  // Load existing data when date is selected
+  useEffect(() => {
+    if (!selectedDate || !areaId) {
+      return;
+    }
+
+    const loadExistingData = async () => {
+      try {
+        const response = await fetch(
+          `/api/ga/checksheet/${TYPE_SLUG}/by-area/${areaId}/${selectedDate}`
+        );
+        const result = await response.json();
+        
+        if (result.success && result.data) {
+          setChecklistData(result.data);
+        } else {
+          // Reset to empty if no data found
+          const emptyData: Record<string, ItemData> = {};
+          checklistItems.forEach((item) => {
+            emptyData[item.item_key] = {
+              hasilPemeriksaan: '',
+              keteranganTemuan: '',
+              tindakanPerbaikan: '',
+              pic: '',
+              dueDate: '',
+              verify: '',
+              images: [],
+              notes: ''
+            };
+          });
+          setChecklistData(emptyData);
+        }
+      } catch (error) {
+        console.error('Error loading existing data:', error);
+      }
+    };
+
+    loadExistingData();
+  }, [selectedDate, areaId, checklistItems]);
+
+  const updateItemData = (itemKey: string, field: keyof ItemData, value: any) => {
+    setChecklistData(prev => ({
+      ...prev,
+      [itemKey]: {
+        ...prev[itemKey],
+        [field]: value
+      }
+    }));
+  };
+
+  const handleSave = async () => {
+    if (!selectedDate) {
+      alert("Silakan pilih tanggal inspeksi");
+      return;
+    }
+
+    // Validate that at least one item has a result
+    const hasData = Object.values(checklistData).some(
+      item => item.hasilPemeriksaan !== ''
+    );
+
+    if (!hasData) {
+      alert("Silakan lengkapi minimal satu item inspeksi");
+      return;
+    }
+
+    try {
+      setSaving(true);
+      
+      const response = await fetch(
+        `/api/ga/checksheet/${TYPE_SLUG}/by-area/${areaId}/${selectedDate}`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            checklistData,
+            inspectorId: user?.id || '',
+            inspectorName: user?.fullName || '',
+            status: 'submitted'
+          }),
+        }
+      );
+
+      const result = await response.json();
+
+      if (result.success) {
+        alert(`Data inspeksi berhasil disimpan untuk ${new Date(selectedDate).toLocaleDateString("id-ID")}`);
+        router.push(`/status-ga/smoke-detector?openArea=${encodeURIComponent(areaInfo?.location || '')}`);
+      } else {
+        alert(`Gagal menyimpan: ${result.message}`);
+      }
+    } catch (error) {
+      console.error('Save failed:', error);
+      alert('Gagal menyimpan data. Silakan coba lagi.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
   if (!isMounted) return null;
 
-  if (loading) {
+  // ✅ Tambahkan validasi areaId sebelum loading
+  if (!areaId) {
     return (
       <div style={{ display: "flex", justifyContent: "center", alignItems: "center", minHeight: "100vh", background: "#f5f5f5" }}>
-        <p>Loading...</p>
+        <div style={{ textAlign: "center" }}>
+          <p style={{ fontSize: "18px", color: "#757575" }}>Area ID tidak ditemukan</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (loading || loadingArea || loadingItems) {
+    return (
+      <div style={{ display: "flex", justifyContent: "center", alignItems: "center", minHeight: "100vh", background: "#f5f5f5" }}>
+        Loading...
       </div>
     );
   }
@@ -82,90 +299,23 @@ export function EChecksheetSmokeDetectorForm({
     return null;
   }
 
-  const handleSave = () => {
-    if (!selectedDate) {
-      alert("Please select an inspection date");
-      return;
-    }
+  if (!areaInfo) {
+    return (
+      <div style={{ display: "flex", justifyContent: "center", alignItems: "center", minHeight: "100vh", background: "#f5f5f5" }}>
+        Area tidak ditemukan
+      </div>
+    );
+  }
 
-    if (!alarmBell || !indicatorLamp || !kebersihan) {
-      alert("Please complete all inspection fields (Alarm Bell, Indicator Lamp, Cleanliness)");
-      return;
-    }
-
-    try {
-      const entry: ChecksheetEntry = {
-        date: selectedDate,
-        alarmBell,
-        indicatorLamp,
-        kebersihan,
-        keteranganKondisi,
-        tindakanPerbaikan,
-        pic,
-        dueDate,
-        verify,
-        inspector: user.fullName || ""
-      };
-
-      const newData = [...savedData];
-      const existingIndex = newData.findIndex(e => e.date === selectedDate);
-
-      if (existingIndex >= 0) {
-        newData[existingIndex] = entry;
-      } else {
-        newData.unshift(entry);
-      }
-
-      newData.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-
-      const key = `e-checksheet-smoke-detector-${no}`;
-      localStorage.setItem(key, JSON.stringify(newData));
-      alert(`Inspection data saved for ${new Date(selectedDate).toLocaleDateString("en-US")}`);
-      router.push(`/status-ga/smoke-detector?openArea=${encodeURIComponent(lokasi)}`);
-    } catch (err) {
-      console.error("Save failed:", err);
-      alert("Failed to save data");
-    }
+  const extractZone = (name: string): string => {
+    const match = name.match(/Zone (\d+)/);
+    return match ? match[1] : '-';
   };
-
-  const handleLoadExisting = () => {
-    if (!selectedDate) {
-      alert("Please select a date first");
-      return;
-    }
-
-    const entry = savedData.find(e => e.date === selectedDate);
-
-    if (entry) {
-      setAlarmBell(entry.alarmBell);
-      setIndicatorLamp(entry.indicatorLamp);
-      setKebersihan(entry.kebersihan);
-      setKeteranganKondisi(entry.keteranganKondisi);
-      setTindakanPerbaikan(entry.tindakanPerbaikan);
-      setPic(entry.pic);
-      setDueDate(entry.dueDate);
-      setVerify(entry.verify);
-      alert("Data loaded successfully");
-    } else {
-      alert("No data found for this date");
-      setAlarmBell("");
-      setIndicatorLamp("");
-      setKebersihan("");
-      setKeteranganKondisi("");
-      setTindakanPerbaikan("");
-      setPic("");
-      setDueDate("");
-      setVerify("");
-    }
-  };
-
-  // ❌ HAPUS fungsi generateBiMonthlyDates() — tidak digunakan lagi
 
   return (
     <div style={{ minHeight: "100vh", background: "#f7f9fc" }}>
       <Sidebar userName={user.fullName} />
       <div style={{ padding: "24px 20px", maxWidth: "100%", margin: "0 auto" }}>
-        
         <div style={{ marginBottom: "28px" }}>
           <div style={{
             background: "#1976d2",
@@ -182,6 +332,7 @@ export function EChecksheetSmokeDetectorForm({
           </div>
         </div>
 
+        {/* Area Info */}
         <div style={{
           background: "white",
           border: "1px solid #e0e0e0",
@@ -193,15 +344,15 @@ export function EChecksheetSmokeDetectorForm({
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))", gap: "16px" }}>
             <div>
               <span style={{ fontSize: "13px", color: "#757575", display: "block", marginBottom: "4px" }}>Unit Number</span>
-              <span style={{ fontSize: "15px", fontWeight: "500", color: "#212121" }}>{no}</span>
+              <span style={{ fontSize: "15px", fontWeight: "500", color: "#212121" }}>{areaInfo.no}</span>
             </div>
             <div>
               <span style={{ fontSize: "13px", color: "#757575", display: "block", marginBottom: "4px" }}>Location</span>
-              <span style={{ fontSize: "15px", fontWeight: "500", color: "#212121" }}>{lokasi}</span>
+              <span style={{ fontSize: "15px", fontWeight: "500", color: "#212121" }}>{areaInfo.location}</span>
             </div>
             <div>
               <span style={{ fontSize: "13px", color: "#757575", display: "block", marginBottom: "4px" }}>Zone</span>
-              <span style={{ fontSize: "15px", fontWeight: "500", color: "#212121" }}>{zona}</span>
+              <span style={{ fontSize: "15px", fontWeight: "500", color: "#212121" }}>{extractZone(areaInfo.name)}</span>
             </div>
             <div>
               <span style={{ fontSize: "13px", color: "#757575", display: "block", marginBottom: "4px" }}>Inspector</span>
@@ -210,7 +361,7 @@ export function EChecksheetSmokeDetectorForm({
           </div>
         </div>
 
-        {/* 🔁 Bagian Inspection Schedule yang Dimodifikasi */}
+        {/* Inspection Schedule */}
         <div style={{
           background: "white",
           border: "1px solid #e0e0e0",
@@ -245,7 +396,7 @@ export function EChecksheetSmokeDetectorForm({
           </div>
 
           {/* Dropdown Riwayat Pengisian */}
-          {savedData.length > 0 && (
+          {!loadingDates && availableDates.length > 0 && (
             <div style={{ display: "flex", alignItems: "center", gap: "12px", flexWrap: "wrap" }}>
               <label style={{ fontWeight: "500", color: "#424242", fontSize: "14px" }}>Riwayat Isian:</label>
               <select
@@ -267,39 +418,21 @@ export function EChecksheetSmokeDetectorForm({
                 }}
               >
                 <option value="">— Pilih tanggal lama —</option>
-                {savedData
-                  .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
-                  .map((entry) => (
-                    <option key={entry.date} value={entry.date}>
-                      {new Date(entry.date).toLocaleDateString("en-US", {
-                        day: "2-digit",
-                        month: "short",
-                        year: "numeric"
-                      })}
-                    </option>
-                  ))}
+                {availableDates.map((date) => (
+                  <option key={date} value={date}>
+                    {new Date(date).toLocaleDateString("id-ID", {
+                      day: "2-digit",
+                      month: "short",
+                      year: "numeric"
+                    })}
+                  </option>
+                ))}
               </select>
-              <button
-                onClick={handleLoadExisting}
-                disabled={!selectedDate}
-                style={{
-                  padding: "7px 16px",
-                  background: selectedDate ? "#ff9800" : "#e0e0e0",
-                  color: selectedDate ? "white" : "#9e9e9e",
-                  border: "none",
-                  borderRadius: "5px",
-                  cursor: selectedDate ? "pointer" : "not-allowed",
-                  fontWeight: "500",
-                  fontSize: "14px"
-                }}
-              >
-                Load Existing
-              </button>
             </div>
           )}
         </div>
 
-        {/* ... (Sisa kode tabel, form, dan keterangan tetap sama) */}
+        {/* Checklist Table */}
         <div style={{
           background: "white",
           borderRadius: "8px",
@@ -312,175 +445,147 @@ export function EChecksheetSmokeDetectorForm({
             <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "14px", minWidth: "1200px" }}>
               <thead>
                 <tr style={{ background: "#fafafa", borderBottom: "2px solid #e0e0e0" }}>
-                  <th style={{ padding: "14px 12px", border: "1px solid #e0e0e0", fontWeight: "600", color: "#424242", textAlign: "center", width: "11%" }}>Alarm Bell</th>
-                  <th style={{ padding: "14px 12px", border: "1px solid #e0e0e0", fontWeight: "600", color: "#424242", textAlign: "center", width: "11%" }}>Indicator Lamp</th>
-                  <th style={{ padding: "14px 12px", border: "1px solid #e0e0e0", fontWeight: "600", color: "#424242", textAlign: "center", width: "11%" }}>Cleanliness</th>
+                  <th style={{ padding: "14px 12px", border: "1px solid #e0e0e0", fontWeight: "600", color: "#424242", textAlign: "left", width: "15%" }}>Item Check</th>
+                  <th style={{ padding: "14px 12px", border: "1px solid #e0e0e0", fontWeight: "600", color: "#424242", textAlign: "center", width: "10%" }}>Result</th>
                   <th style={{ padding: "14px 12px", border: "1px solid #e0e0e0", fontWeight: "600", color: "#424242", textAlign: "left", width: "18%" }}>Findings (if NG)</th>
                   <th style={{ padding: "14px 12px", border: "1px solid #e0e0e0", fontWeight: "600", color: "#424242", textAlign: "left", width: "18%" }}>Corrective Action</th>
                   <th style={{ padding: "14px 12px", border: "1px solid #e0e0e0", fontWeight: "600", color: "#424242", textAlign: "center", width: "10%" }}>PIC</th>
                   <th style={{ padding: "14px 12px", border: "1px solid #e0e0e0", fontWeight: "600", color: "#424242", textAlign: "center", width: "11%" }}>Due Date</th>
-                  <th style={{ padding: "14px 12px", border: "1px solid #e0e0e0", fontWeight: "600", color: "#424242", textAlign: "center", width: "10%" }}>Verify</th>
+                  <th style={{ padding: "14px 12px", border: "1px solid #e0e0e0", fontWeight: "600", color: "#424242", textAlign: "center", width: "10%" }}>Verified By</th>
                 </tr>
               </thead>
               <tbody>
-                <tr>
-                  <td style={{ padding: "12px", border: "1px solid #e0e0e0", textAlign: "center" }}>
-                    <select
-                      value={alarmBell}
-                      onChange={(e) => setAlarmBell(e.target.value)}
-                      disabled={!selectedDate}
-                      style={{ 
-                        width: "100%", 
-                        padding: "8px", 
-                        border: "1px solid #d0d0d0", 
-                        borderRadius: "5px",
-                        fontWeight: "500",
-                        fontSize: "14px",
-                        outline: "none",
-                        background: "white"
-                      }}
-                    >
-                      <option value="">-</option>
-                      <option value="OK">OK</option>
-                      <option value="NG">NG</option>
-                    </select>
-                  </td>
-                  <td style={{ padding: "12px", border: "1px solid #e0e0e0", textAlign: "center" }}>
-                    <select
-                      value={indicatorLamp}
-                      onChange={(e) => setIndicatorLamp(e.target.value)}
-                      disabled={!selectedDate}
-                      style={{ 
-                        width: "100%", 
-                        padding: "8px", 
-                        border: "1px solid #d0d0d0", 
-                        borderRadius: "5px",
-                        fontWeight: "500",
-                        fontSize: "14px",
-                        outline: "none",
-                        background: "white"
-                      }}
-                    >
-                      <option value="">-</option>
-                      <option value="OK">OK</option>
-                      <option value="NG">NG</option>
-                    </select>
-                  </td>
-                  <td style={{ padding: "12px", border: "1px solid #e0e0e0", textAlign: "center" }}>
-                    <select
-                      value={kebersihan}
-                      onChange={(e) => setKebersihan(e.target.value)}
-                      disabled={!selectedDate}
-                      style={{ 
-                        width: "100%", 
-                        padding: "8px", 
-                        border: "1px solid #d0d0d0", 
-                        borderRadius: "5px",
-                        fontWeight: "500",
-                        fontSize: "14px",
-                        outline: "none",
-                        background: "white"
-                      }}
-                    >
-                      <option value="">-</option>
-                      <option value="OK">OK</option>
-                      <option value="NG">NG</option>
-                    </select>
-                  </td>
-                  <td style={{ padding: "12px", border: "1px solid #e0e0e0" }}>
-                    <textarea
-                      value={keteranganKondisi}
-                      onChange={(e) => setKeteranganKondisi(e.target.value)}
-                      disabled={!selectedDate}
-                      placeholder="Describe any issues..."
-                      rows={3}
-                      style={{ 
-                        width: "100%", 
-                        padding: "8px", 
-                        fontSize: "13px", 
-                        resize: "vertical",
-                        border: "1px solid #d0d0d0",
-                        borderRadius: "4px",
-                        outline: "none",
-                        fontFamily: "inherit"
-                      }}
-                    />
-                  </td>
-                  <td style={{ padding: "12px", border: "1px solid #e0e0e0" }}>
-                    <textarea
-                      value={tindakanPerbaikan}
-                      onChange={(e) => setTindakanPerbaikan(e.target.value)}
-                      disabled={!selectedDate}
-                      placeholder="Action taken..."
-                      rows={3}
-                      style={{ 
-                        width: "100%", 
-                        padding: "8px", 
-                        fontSize: "13px", 
-                        resize: "vertical",
-                        border: "1px solid #d0d0d0",
-                        borderRadius: "4px",
-                        outline: "none",
-                        fontFamily: "inherit"
-                      }}
-                    />
-                  </td>
-                  <td style={{ padding: "12px", border: "1px solid #e0e0e0" }}>
-                    <input
-                      type="text"
-                      value={pic}
-                      onChange={(e) => setPic(e.target.value)}
-                      disabled={!selectedDate}
-                      placeholder="Name"
-                      style={{ 
-                        width: "100%", 
-                        padding: "8px", 
-                        fontSize: "13px",
-                        border: "1px solid #d0d0d0",
-                        borderRadius: "4px",
-                        outline: "none"
-                      }}
-                    />
-                  </td>
-                  <td style={{ padding: "12px", border: "1px solid #e0e0e0" }}>
-                    <input
-                      type="date"
-                      value={dueDate}
-                      onChange={(e) => setDueDate(e.target.value)}
-                      disabled={!selectedDate}
-                      style={{ 
-                        width: "100%", 
-                        padding: "8px",
-                        border: "1px solid #d0d0d0",
-                        borderRadius: "4px",
-                        outline: "none",
-                        fontSize: "13px"
-                      }}
-                    />
-                  </td>
-                  <td style={{ padding: "12px", border: "1px solid #e0e0e0" }}>
-                    <input
-                      type="text"
-                      value={verify}
-                      onChange={(e) => setVerify(e.target.value)}
-                      disabled={!selectedDate}
-                      placeholder="Name"
-                      style={{ 
-                        width: "100%", 
-                        padding: "8px", 
-                        fontSize: "13px",
-                        border: "1px solid #d0d0d0",
-                        borderRadius: "4px",
-                        outline: "none"
-                      }}
-                    />
-                  </td>
-                </tr>
+                {checklistItems.map((item) => {
+                  const data = checklistData[item.item_key] || {};
+                  
+                  return (
+                    <tr key={item.id}>
+                      <td style={{ padding: "12px", border: "1px solid #e0e0e0", fontWeight: "500", color: "#424242" }}>
+                        <div style={{ marginBottom: "4px" }}>{item.item_check}</div>
+                        {item.method && (
+                          <div style={{ fontSize: "11px", color: "#757575", fontStyle: "italic" }}>
+                            Method: {item.method}
+                          </div>
+                        )}
+                      </td>
+                      <td style={{ padding: "12px", border: "1px solid #e0e0e0", textAlign: "center" }}>
+                        <select
+                          value={data.hasilPemeriksaan || ''}
+                          onChange={(e) => updateItemData(item.item_key, 'hasilPemeriksaan', e.target.value)}
+                          disabled={!selectedDate}
+                          style={{ 
+                            width: "100%", 
+                            padding: "8px", 
+                            border: "1px solid #d0d0d0", 
+                            borderRadius: "5px",
+                            fontWeight: "500",
+                            fontSize: "14px",
+                            outline: "none",
+                            background: "white"
+                          }}
+                        >
+                          <option value="">-</option>
+                          <option value="OK">OK</option>
+                          <option value="NG">NG</option>
+                        </select>
+                      </td>
+                      <td style={{ padding: "12px", border: "1px solid #e0e0e0" }}>
+                        <textarea
+                          value={data.keteranganTemuan || ''}
+                          onChange={(e) => updateItemData(item.item_key, 'keteranganTemuan', e.target.value)}
+                          disabled={!selectedDate}
+                          placeholder="Describe any issues..."
+                          rows={3}
+                          style={{ 
+                            width: "100%", 
+                            padding: "8px", 
+                            fontSize: "13px", 
+                            resize: "vertical",
+                            border: "1px solid #d0d0d0",
+                            borderRadius: "4px",
+                            outline: "none",
+                            fontFamily: "inherit"
+                          }}
+                        />
+                      </td>
+                      <td style={{ padding: "12px", border: "1px solid #e0e0e0" }}>
+                        <textarea
+                          value={data.tindakanPerbaikan || ''}
+                          onChange={(e) => updateItemData(item.item_key, 'tindakanPerbaikan', e.target.value)}
+                          disabled={!selectedDate}
+                          placeholder="Action taken..."
+                          rows={3}
+                          style={{ 
+                            width: "100%", 
+                            padding: "8px", 
+                            fontSize: "13px", 
+                            resize: "vertical",
+                            border: "1px solid #d0d0d0",
+                            borderRadius: "4px",
+                            outline: "none",
+                            fontFamily: "inherit"
+                          }}
+                        />
+                      </td>
+                      <td style={{ padding: "12px", border: "1px solid #e0e0e0" }}>
+                        <input
+                          type="text"
+                          value={data.pic || ''}
+                          onChange={(e) => updateItemData(item.item_key, 'pic', e.target.value)}
+                          disabled={!selectedDate}
+                          placeholder="Name"
+                          style={{ 
+                            width: "100%", 
+                            padding: "8px", 
+                            fontSize: "13px",
+                            border: "1px solid #d0d0d0",
+                            borderRadius: "4px",
+                            outline: "none"
+                          }}
+                        />
+                      </td>
+                      <td style={{ padding: "12px", border: "1px solid #e0e0e0" }}>
+                        <input
+                          type="date"
+                          value={data.dueDate || ''}
+                          onChange={(e) => updateItemData(item.item_key, 'dueDate', e.target.value)}
+                          disabled={!selectedDate}
+                          style={{ 
+                            width: "100%", 
+                            padding: "8px",
+                            border: "1px solid #d0d0d0",
+                            borderRadius: "4px",
+                            outline: "none",
+                            fontSize: "13px"
+                          }}
+                        />
+                      </td>
+                      <td style={{ padding: "12px", border: "1px solid #e0e0e0" }}>
+                        <input
+                          type="text"
+                          value={data.verify || ''}
+                          onChange={(e) => updateItemData(item.item_key, 'verify', e.target.value)}
+                          disabled={!selectedDate}
+                          placeholder="Name"
+                          style={{ 
+                            width: "100%", 
+                            padding: "8px", 
+                            fontSize: "13px",
+                            border: "1px solid #d0d0d0",
+                            borderRadius: "4px",
+                            outline: "none"
+                          }}
+                        />
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
         </div>
 
+        {/* Action Buttons */}
         <div style={{ display: "flex", gap: "12px", justifyContent: "center", padding: "20px 0" }}>
           <button
             onClick={() => router.push("/status-ga/smoke-detector")}
@@ -499,20 +604,20 @@ export function EChecksheetSmokeDetectorForm({
           </button>
           <button
             onClick={handleSave}
-            disabled={!selectedDate}
+            disabled={!selectedDate || saving}
             style={{
               padding: "11px 28px",
-              background: selectedDate ? "#1976d2" : "#e0e0e0",
-              color: selectedDate ? "white" : "#9e9e9e",
+              background: selectedDate && !saving ? "#1976d2" : "#e0e0e0",
+              color: selectedDate && !saving ? "white" : "#9e9e9e",
               border: "none",
               borderRadius: "6px",
               fontWeight: "500",
               fontSize: "15px",
-              opacity: selectedDate ? 1 : 0.6,
-              cursor: selectedDate ? "pointer" : "not-allowed"
+              opacity: selectedDate && !saving ? 1 : 0.6,
+              cursor: selectedDate && !saving ? "pointer" : "not-allowed"
             }}
           >
-            Save Inspection
+            {saving ? "Saving..." : "Save Inspection"}
           </button>
         </div>
 
@@ -571,7 +676,7 @@ export function EChecksheetSmokeDetectorForm({
               <tbody>
                 {[
                   {
-                    item: "1. Bunyi",
+                    item: "1. Bunyi Alarm Bell",
                     ok: "Berbunyi keras",
                     ng: "Tidak berbunyi atau berbunyi pelan",
                     cara: [
@@ -581,7 +686,7 @@ export function EChecksheetSmokeDetectorForm({
                     ]
                   },
                   {
-                    item: "2. Indicator lamp",
+                    item: "2. Indicator Lamp",
                     ok: "Lampu nyala",
                     ng: "Lampu tidak nyala",
                     cara: ["Lihat lampu nyala atau tidak"]
@@ -590,13 +695,13 @@ export function EChecksheetSmokeDetectorForm({
                     item: "3. Kebersihan",
                     ok: "Bersih",
                     ng: "Kotor",
-                    cara: ["Periksa kebersihan"]
+                    cara: ["Periksa kebersihan detector dari debu/kotoran"]
                   },
                   {
-                    item: "4. Kondisi lainnya yang tidak layak/bagus",
+                    item: "4. Kondisi Lainnya",
                     ok: "Masih Baik",
                     ng: "Tidak baik/rusak",
-                    cara: ["Cek kondisi lainnya"]
+                    cara: ["Cek kondisi fisik (casing, mounting, kabel)"]
                   }
                 ].map((item, index) => (
                   <tr key={index} style={{

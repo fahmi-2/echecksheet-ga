@@ -391,33 +391,6 @@ export function GaLiftBarangContent({ openLift }: { openLift: string }) {
                 outline: "none"
               }}
             />
-            {/* QR Scan Button inside input */}
-            <button
-              type="button"
-              onClick={openQrScanner}
-              style={{
-                position: "absolute",
-                right: "10px",
-                top: "50%",
-                transform: "translateY(-50%)",
-                background: "transparent",
-                border: "none",
-                cursor: "pointer",
-                padding: "4px",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center"
-              }}
-              title="Scan QR Code"
-            >
-              <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#1976d2" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
-                <path d="M7 7h.01"></path>
-                <path d="M17 7h.01"></path>
-                <path d="M17 17h.01"></path>
-                <path d="M7 17h.01"></path>
-              </svg>
-            </button>
           </div>
         </div>
 

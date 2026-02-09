@@ -234,7 +234,7 @@ export default function ModernHomePage() {
             </div>
           </div>
           <div className="cards-grid">
-            {gaCards.map((card) => {
+            {currentRoleCards.map((card) => {
               const Icon = card.icon;
               return (
                 <Link key={card.id} href={card.href} className="feature-card-link">
