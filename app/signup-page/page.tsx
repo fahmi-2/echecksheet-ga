@@ -27,8 +27,8 @@ export default function SignupPage() {
   // 🔹 Auto-set department berdasarkan role (dengan nilai yang sesuai auth context)
   useEffect(() => {
     if (formData.role === "inspector-ga") {
-      setFormData(prev => ({ ...prev, department: "general-affairs" }))
-    }
+      setFormData(prev => ({ ...prev, department: "general-affairs" })) // ✅ "ga" bukan "general-affairs"
+    } 
   }, [formData.role])
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
@@ -45,7 +45,7 @@ const handleSubmit = async (e: React.FormEvent) => {
   setLoading(true)
 
   // Validasi role
-  if (!formData.role || !['group-leader-qa', 'inspector-qa', 'inspector-ga'].includes(formData.role)) {
+  if (!formData.role || !['inspector-ga'].includes(formData.role)) {
     setError("Pilih role terlebih dahulu!")
     setLoading(false)
     return

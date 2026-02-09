@@ -1,82 +1,102 @@
-// /app/-e-checksheet-panel/page.tsx
+// app/e-checksheet-panel/page.tsx
 "use client"
 
 import { useState, useEffect } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import { useAuth } from "@/lib/auth-context"
-import { NavbarStatic } from "@/components/navbar-static"
 import { Sidebar } from "@/components/Sidebar"
 import React from "react"
+import {
+  getItemsByType,
+  getChecklistByDate,
+  saveChecklist,
+  getAvailableDates,
+  ChecklistItem
+} from "@/lib/api/checksheet"
 
 export default function EChecksheetPanelPage() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const { user, loading } = useAuth()
+  
+  const TYPE_SLUG = 'panel'
 
-  // 🔹 Tambahkan isMounted untuk hindari SSR-client mismatch
   const [isMounted, setIsMounted] = useState(false)
+  const [inspectionItems, setInspectionItems] = useState<ChecklistItem[]>([])
+  const [areaId, setAreaId] = useState<number | null>(null)
+  const [availableDates, setAvailableDates] = useState<string[]>([])
+  const [isSaving, setIsSaving] = useState(false)
+
+  const panelName = searchParams.get("panelName") || "Nama Panel"
+  const area = searchParams.get("area") || "Area"
+  const dateParam = searchParams.get("date") || new Date().toISOString().split("T")[0]
+  
+  const [selectedDate, setSelectedDate] = useState<string>(dateParam)
+  const [answers, setAnswers] = useState<Record<string, string>>({})
+
+  useEffect(() => {
+    const loadItems = async () => {
+      try {
+        const items = await getItemsByType(TYPE_SLUG);
+        console.log('Loaded inspection items:', items);
+        setInspectionItems(items);
+      } catch (error) {
+        console.error("Failed to load checklist items:", error);
+      }
+    };
+    if (isMounted) {
+      loadItems();
+    }
+  }, [isMounted]);
+
+  useEffect(() => {
+    if (!panelName || !isMounted) return;
+    
+    const loadAreaData = async () => {
+      try {
+        const fullAreaName = `${panelName} \u0007 ${area}`;
+        
+        const areasRes = await fetch(`/api/ga/checksheet/${TYPE_SLUG}/areas`);
+        const areasData = await areasRes.json();
+        
+        if (!areasData.success) {
+          throw new Error(areasData.message || 'Gagal mengambil data area');
+        }
+        
+        const areaItem = areasData.data.find((a: any) => 
+          a.name.trim().toLowerCase() === fullAreaName.trim().toLowerCase()
+        );
+        
+        if (areaItem) {
+          setAreaId(areaItem.id);
+          const dates = await getAvailableDates(TYPE_SLUG, areaItem.id);
+          setAvailableDates(dates);
+        } else {
+          console.warn(`Area not found: ${fullAreaName}`);
+          const fallbackArea = areasData.data.find((a: any) => 
+            a.name.trim().toLowerCase().startsWith(panelName.trim().toLowerCase())
+          );
+          if (fallbackArea) {
+            setAreaId(fallbackArea.id);
+            const dates = await getAvailableDates(TYPE_SLUG, fallbackArea.id);
+            setAvailableDates(dates);
+          } else {
+            alert(`Panel "${panelName}" tidak ditemukan di database.`);
+          }
+        }
+      } catch (error) {
+        console.error("Failed to load area data:", error);
+        alert("Gagal memuat data area.");
+      }
+    };
+    
+    loadAreaData();
+  }, [panelName, area, isMounted]);
 
   useEffect(() => {
     setIsMounted(true)
   }, [])
 
-  const panelName = searchParams.get("panelName") || "Nama Panel"
-  const area = searchParams.get("area") || "Area"
-  const date = searchParams.get("date") || new Date().toISOString().split("T")[0]
-
-  // 🔹 Inisialisasi answers hanya di client
-  const [answers, setAnswers] = useState<Record<string, string>>({})
-
-  // 🔹 Muat data dari localStorage saat mount (hanya di client)
-  useEffect(() => {
-    if (!isMounted) return
-
-    try {
-      const key = `e-checksheet-panel-${panelName}`
-      const saved = localStorage.getItem(key)
-      if (saved) {
-        const parsed = JSON.parse(saved)
-        let sourceData: Record<string, any> = {}
-
-        if (Array.isArray(parsed)) {
-          // Ambil entri terbaru yang cocok dengan tanggal ini (jika ada)
-          const matchingEntry = parsed.find((entry: any) => entry._savedAt === date)
-          if (matchingEntry) {
-            sourceData = matchingEntry
-          } else {
-            // Jika tidak ada, ambil entri pertama sebagai fallback
-            sourceData = parsed[0]
-          }
-        } else if (parsed && typeof parsed === "object" && parsed.tempC !== undefined) {
-          sourceData = parsed
-        }
-
-        setAnswers({
-          "1": sourceData.tempC || "",
-          "2": sourceData.tempCableConnect || "",
-          "3": sourceData.tempCable || "",
-          "4": sourceData.bau || "",
-          "5": sourceData.suara || "",
-          "6": sourceData.sistemGrounding || "",
-          "7": sourceData.kondisiKabelIsolasi || "",
-          "8": sourceData.indikatorPanel || "",
-          "9": sourceData.elcb || "",
-          "10": sourceData.safetyWarning || "",
-          "11-R": sourceData.kondisiSambunganR || "",
-          "11-S": sourceData.kondisiSambunganS || "",
-          "11-T": sourceData.kondisiSambunganT || "",
-          "12": sourceData.boxPanel || "",
-          "13": sourceData.s5 || "",
-          "14": sourceData.keteranganNg1 || "",
-          signature: "",
-        })
-      }
-    } catch (err) {
-      console.warn("Failed to parse saved data")
-    }
-  }, [isMounted, panelName, date])
-
-  // 🔹 Redirect jika tidak punya akses
   useEffect(() => {
     if (!isMounted || loading) return
     if (!user || (user.role !== "inspector-ga")) {
@@ -84,11 +104,7 @@ export default function EChecksheetPanelPage() {
     }
   }, [user, loading, router, isMounted])
 
-  // 🔹 Jangan render apa pun sebelum mount (hindari hydration error)
-  if (!isMounted) {
-    return null
-  }
-
+  if (!isMounted) return null
   if (loading) {
     return (
       <div className="loading-screen">
@@ -106,93 +122,197 @@ export default function EChecksheetPanelPage() {
       </div>
     )
   }
+  if (!user || (user.role !== "inspector-ga")) return null
 
-  if (!user || (user.role !== "inspector-ga")) {
-    return null
-  }
-
-  const inspectionItems = [
-    { no: 1, name: "Temp (°C)" },
-    { no: 2, name: "Temp Cable Connect" },
-    { no: 3, name: "Temp Cable" },
-    { no: 4, name: "Bau" },
-    { no: 5, name: "Suara" },
-    { no: 6, name: "Sistem Grounding" },
-    { no: 7, name: "Kondisi kabel dan isolasinya" },
-    { no: 8, name: "Indikator panel" },
-    { no: 9, name: "ELCB" },
-    { no: 10, name: "Safety warning" },
-    { no: 11, name: "Kondisi Sambungan", sub: ["R", "S", "T"] },
-    { no: 12, name: "Box Panel" },
-    { no: 13, name: "5S" },
-    { no: 14, name: "Lain-lain" },
+  // Inspection items with type definition
+  const inspectionItemsDisplay = [
+    { no: 1, name: "Temp (°C)", key: "temp_c", type: "text" },
+    { no: 2, name: "Temp Cable Connect", key: "temp_cable_connect", type: "text" },
+    { no: 3, name: "Temp Cable", key: "temp_cable", type: "text" },
+    { no: 4, name: "Bau", key: "bau", type: "dropdown" },
+    { no: 5, name: "Suara", key: "suara", type: "dropdown" },
+    { no: 6, name: "Sistem Grounding", key: "sistem_grounding", type: "dropdown" },
+    { no: 7, name: "Kondisi kabel dan isolasinya", key: "kondisi_kabel_isolasi", type: "dropdown" },
+    { no: 8, name: "Indikator panel", key: "indikator_panel", type: "dropdown" },
+    { no: 9, name: "ELCB", key: "elcb", type: "dropdown" },
+    { no: 10, name: "Safety warning", key: "safety_warning", type: "dropdown" },
+    { no: 11, name: "Kondisi Sambungan", sub: ["R", "S", "T"], keys: ["sambungan_r", "sambungan_s", "sambungan_t"], type: "dropdown" },
+    { no: 12, name: "Box Panel", key: "box_panel", type: "dropdown" },
+    { no: 13, name: "5S", key: "s5", type: "dropdown" },
+    { no: 14, name: "Lain-lain", key: "lain_lain", type: "text" },
   ]
 
   const handleInputChange = (key: string, value: string) => {
     setAnswers((prev) => ({ ...prev, [key]: value }))
   }
 
-  const handleSave = () => {
-    if (typeof window !== "undefined") {
-      try {
-        const newEntry = {
-          _savedAt: date,
-          tempC: answers["1"] || "",
-          tempCableConnect: answers["2"] || "",
-          tempCable: answers["3"] || "",
-          bau: answers["4"] || "",
-          suara: answers["5"] || "",
-          sistemGrounding: answers["6"] || "",
-          kondisiKabelIsolasi: answers["7"] || "",
-          indikatorPanel: answers["8"] || "",
-          elcb: answers["9"] || "",
-          safetyWarning: answers["10"] || "",
-          kondisiSambunganR: answers["11-R"] || "",
-          kondisiSambunganS: answers["11-S"] || "",
-          kondisiSambunganT: answers["11-T"] || "",
-          boxPanel: answers["12"] || "",
-          s5: answers["13"] || "",
-          keteranganNg1: answers["14"] || "",
-        }
-
-        const key = `e-checksheet-panel-${panelName}`
-        const existing = localStorage.getItem(key)
-        let history: (typeof newEntry)[] = []
-
-        if (existing) {
-          try {
-            const parsed = JSON.parse(existing)
-            if (Array.isArray(parsed)) {
-              history = parsed
-            } else if (parsed && typeof parsed === "object" && parsed._savedAt) {
-              history = [parsed]
-            }
-          } catch (e) {
-            console.warn("Invalid history format")
-          }
-        }
-
-        // 🔁 Cek apakah sudah ada data dengan tanggal yang sama
-        const existingIndex = history.findIndex((entry) => entry._savedAt === date)
-
-        if (existingIndex >= 0) {
-          // ✏️ Update data lama
-          history[existingIndex] = newEntry
-        } else {
-          // ➕ Tambah data baru di awal
-          history.unshift(newEntry)
-        }
-
-        localStorage.setItem(key, JSON.stringify(history))
-
-        alert("Data berhasil disimpan!")
-        router.push(`/status-ga/panel?openPanel=${encodeURIComponent(panelName)}`)
-      } catch (err) {
-        console.error("Gagal menyimpan:", err)
-        alert("Gagal menyimpan data.")
-      }
+  const handleLoadExisting = async () => {
+    if (!selectedDate) {
+      alert("Pilih tanggal terlebih dahulu!");
+      return;
     }
-  }
+
+    if (!areaId) {
+      alert("Area tidak valid!");
+      return;
+    }
+
+    try {
+      const data = await getChecklistByDate(TYPE_SLUG, areaId, selectedDate);
+      
+      if (data && Object.keys(data).length > 0) {
+        const newAnswers: Record<string, string> = {};
+        
+        inspectionItemsDisplay.forEach(item => {
+          if (item.sub && item.keys) {
+            item.keys.forEach((key, idx) => {
+              const itemData = data[key];
+              if (itemData) {
+                newAnswers[`${item.no}-${item.sub[idx]}`] = itemData.hasilPemeriksaan || "";
+              }
+            });
+          } else if (item.key) {
+            const itemData = data[item.key];
+            if (itemData) {
+              newAnswers[item.no.toString()] = itemData.hasilPemeriksaan || "";
+            }
+          }
+        });
+        
+        if (data.signature) {
+          newAnswers["signature"] = data.signature.hasilPemeriksaan || "";
+        }
+        
+        setAnswers(newAnswers);
+        alert("Data berhasil dimuat!");
+      } else {
+        alert("Tidak ada data untuk tanggal ini.");
+        setAnswers({});
+      }
+    } catch (error) {
+      console.error("Error loading existing data:", error);
+      alert("Gagal memuat data.");
+    }
+  };
+
+  const handleSave = async () => {
+    if (!user) {
+      alert("User belum login");
+      router.push("/login-page");
+      return;
+    }
+
+    if (!selectedDate) {
+      alert("Pilih tanggal pemeriksaan terlebih dahulu!");
+      return;
+    }
+
+    if (!areaId) {
+      alert("Area tidak valid!");
+      return;
+    }
+
+    try {
+      setIsSaving(true);
+
+      const checklistData: any = {};
+      
+      inspectionItemsDisplay.forEach((item) => {
+        if (item.sub && item.keys) {
+          item.keys.forEach((key, idx) => {
+            checklistData[key] = {
+              date: selectedDate,
+              hasilPemeriksaan: answers[`${item.no}-${item.sub[idx]}`] || "",
+              keteranganTemuan: "",
+              tindakanPerbaikan: "",
+              pic: "",
+              dueDate: "",
+              verify: "",
+              inspector: user.fullName || "",
+              images: [],
+              notes: ""
+            };
+          });
+        } else if (item.key) {
+          checklistData[item.key] = {
+            date: selectedDate,
+            hasilPemeriksaan: answers[item.no.toString()] || "",
+            keteranganTemuan: "",
+            tindakanPerbaikan: "",
+            pic: "",
+            dueDate: "",
+            verify: "",
+            inspector: user.fullName || "",
+            images: [],
+            notes: ""
+          };
+        }
+      });
+
+      if (answers["signature"]) {
+        checklistData["signature"] = {
+          date: selectedDate,
+          hasilPemeriksaan: answers["signature"],
+          keteranganTemuan: "",
+          tindakanPerbaikan: "",
+          pic: "",
+          dueDate: "",
+          verify: "",
+          inspector: user.fullName || "",
+          images: [],
+          notes: ""
+        };
+      }
+
+      await saveChecklist(
+        TYPE_SLUG,
+        areaId,
+        selectedDate,
+        checklistData,
+        user.id || "unknown",
+        user.fullName || "Unknown Inspector"
+      );
+
+      alert("Data berhasil disimpan!");
+      
+      setTimeout(() => {
+        router.push(`/status-ga/panel?openPanel=${encodeURIComponent(panelName)}`);
+      }, 500);
+      
+    } catch (error) {
+      console.error("Error saving checklist data:", error);
+      alert("Gagal menyimpan data.");
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const renderInputField = (item: any) => {
+    if (item.type === "dropdown") {
+      return (
+        <select
+          value={answers[item.no.toString()] || ""}
+          onChange={(e) => handleInputChange(item.no.toString(), e.target.value)}
+          disabled={!selectedDate}
+          className="input-field select-field"
+        >
+          <option value="">-</option>
+          <option value="O">O</option>
+          <option value="X">X</option>
+        </select>
+      );
+    } else {
+      return (
+        <input
+          type="text"
+          value={answers[item.no.toString()] || ""}
+          onChange={(e) => handleInputChange(item.no.toString(), e.target.value)}
+          disabled={!selectedDate}
+          className="input-field"
+        />
+      );
+    }
+  };
 
   return (
     <div className="app-page">
@@ -216,10 +336,93 @@ export default function EChecksheetPanelPage() {
               <span className="info-value">{area}</span>
             </div>
             <div className="info-row">
-              <span className="info-label">Tanggal Pemeriksaan</span>
-              <span className="info-value">{new Date(date).toLocaleDateString("id-ID")}</span>
+              <span className="info-label">PIC Pengecekan</span>
+              <span className="info-value">{user.fullName}</span>
             </div>
           </div>
+        </div>
+
+        <div className="date-section">
+          <div style={{ display: "flex", alignItems: "center", gap: "12px", flexWrap: "wrap", marginBottom: "12px" }}>
+            <label style={{ fontWeight: "600", color: "#0d47a1", fontSize: "14px", minWidth: "140px" }}>
+              📅 Tanggal Pemeriksaan:
+            </label>
+            <input
+              type="date"
+              value={selectedDate}
+              onChange={(e) => setSelectedDate(e.target.value)}
+              max={new Date().toISOString().split('T')[0]}
+              style={{
+                padding: "8px 12px",
+                border: "2px solid #1e88e5",
+                borderRadius: "6px",
+                fontSize: "13px",
+                color: "#333",
+                fontWeight: "600",
+                minWidth: "160px"
+              }}
+            />
+          </div>
+
+          {availableDates.length > 0 && (
+            <div style={{ display: "flex", alignItems: "center", gap: "12px", flexWrap: "wrap" }}>
+              <label style={{ fontWeight: "600", color: "#0d47a1", fontSize: "14px", minWidth: "140px" }}>
+                Riwayat Isian:
+              </label>
+              <select
+                value=""
+                onChange={(e) => {
+                  const date = e.target.value;
+                  if (date) {
+                    setSelectedDate(date);
+                  }
+                }}
+                style={{
+                  padding: "8px 12px",
+                  border: "2px solid #1e88e5",
+                  borderRadius: "6px",
+                  fontSize: "13px",
+                  color: "#333",
+                  fontWeight: "600",
+                  minWidth: "180px"
+                }}
+              >
+                <option value="">— Pilih tanggal lama —</option>
+                {availableDates
+                  .sort((a, b) => new Date(b).getTime() - new Date(a).getTime())
+                  .map(date => (
+                    <option key={date} value={date}>
+                      {new Date(date).toLocaleDateString("id-ID", { day: "2-digit", month: "short", year: "numeric" })}
+                    </option>
+                  ))}
+              </select>
+              <button
+                onClick={handleLoadExisting}
+                disabled={!selectedDate}
+                style={{
+                  padding: "8px 16px",
+                  background: selectedDate ? "#ff9800" : "#bdbdbd",
+                  color: "white",
+                  border: "none",
+                  borderRadius: "6px",
+                  cursor: selectedDate ? "pointer" : "not-allowed",
+                  fontSize: "13px",
+                  fontWeight: "600"
+                }}
+              >
+                📂 Muat Data
+              </button>
+            </div>
+          )}
+
+          <p style={{
+            margin: "12px 0 0 0",
+            fontSize: "12px",
+            color: "#666",
+            fontStyle: "italic"
+          }}>
+            💡 O = Aman/OK, X = NG/Tidak Aman, - = Belum Diisi
+          </p>
         </div>
 
         <div className="table-container">
@@ -232,47 +435,52 @@ export default function EChecksheetPanelPage() {
               </tr>
             </thead>
             <tbody>
-              {inspectionItems.map((item) => {
+              {inspectionItemsDisplay.map((item) => {
                 if (item.sub) {
                   return (
                     <React.Fragment key={item.no}>
                       <tr>
-                        <td rowSpan={item.sub.length} className="col-no">
-                          {item.no}
-                        </td>
-                        <td rowSpan={item.sub.length} className="col-item">
-                          {item.name}
-                        </td>
+                        <td rowSpan={item.sub.length} className="col-no">{item.no}</td>
+                        <td rowSpan={item.sub.length} className="col-item">{item.name}</td>
                         <td className="col-input">
-                          <input
-                            type="text"
+                          <select
                             value={answers[`${item.no}-R`] || ""}
                             onChange={(e) => handleInputChange(`${item.no}-R`, e.target.value)}
-                            placeholder="R"
-                            className="input-field"
-                          />
+                            disabled={!selectedDate}
+                            className="input-field select-field"
+                          >
+                            <option value="">-</option>
+                            <option value="O">O</option>
+                            <option value="X">X</option>
+                          </select>
                         </td>
                       </tr>
                       <tr>
                         <td className="col-input">
-                          <input
-                            type="text"
+                          <select
                             value={answers[`${item.no}-S`] || ""}
                             onChange={(e) => handleInputChange(`${item.no}-S`, e.target.value)}
-                            placeholder="S"
-                            className="input-field"
-                          />
+                            disabled={!selectedDate}
+                            className="input-field select-field"
+                          >
+                            <option value="">-</option>
+                            <option value="O">O</option>
+                            <option value="X">X</option>
+                          </select>
                         </td>
                       </tr>
                       <tr>
                         <td className="col-input">
-                          <input
-                            type="text"
+                          <select
                             value={answers[`${item.no}-T`] || ""}
                             onChange={(e) => handleInputChange(`${item.no}-T`, e.target.value)}
-                            placeholder="T"
-                            className="input-field"
-                          />
+                            disabled={!selectedDate}
+                            className="input-field select-field"
+                          >
+                            <option value="">-</option>
+                            <option value="O">O</option>
+                            <option value="X">X</option>
+                          </select>
                         </td>
                       </tr>
                     </React.Fragment>
@@ -283,25 +491,19 @@ export default function EChecksheetPanelPage() {
                     <td className="col-no">{item.no}</td>
                     <td className="col-item">{item.name}</td>
                     <td className="col-input">
-                      <input
-                        type="text"
-                        value={answers[item.no.toString()] || ""}
-                        onChange={(e) => handleInputChange(item.no.toString(), e.target.value)}
-                        className="input-field"
-                      />
+                      {renderInputField(item)}
                     </td>
                   </tr>
                 )
               })}
               <tr>
-                <td colSpan={2} className="col-signature-label">
-                  TANDA TANGAN / NIK
-                </td>
+                <td colSpan={2} className="col-signature-label">TANDA TANGAN / NIK</td>
                 <td className="col-input">
                   <input
                     type="text"
                     value={answers["signature"] || ""}
                     onChange={(e) => handleInputChange("signature", e.target.value)}
+                    disabled={!selectedDate}
                     className="input-field"
                   />
                 </td>
@@ -314,8 +516,16 @@ export default function EChecksheetPanelPage() {
           <button onClick={() => router.push("/status-ga/panel")} className="btn-secondary">
             ← Kembali
           </button>
-          <button onClick={handleSave} className="btn-primary">
-            ✓ Simpan
+          <button 
+            onClick={handleSave} 
+            disabled={!selectedDate || isSaving}
+            className="btn-primary"
+            style={{
+              opacity: (selectedDate && !isSaving) ? 1 : 0.6,
+              cursor: (selectedDate && !isSaving) ? "pointer" : "not-allowed"
+            }}
+          >
+            {isSaving ? "Menyimpan..." : "✓ Simpan"}
           </button>
         </div>
       </div>
@@ -359,7 +569,7 @@ export default function EChecksheetPanelPage() {
         }
 
         .info-section {
-          margin-bottom: 28px;
+          margin-bottom: 24px;
         }
 
         .info-card {
@@ -367,7 +577,7 @@ export default function EChecksheetPanelPage() {
           border: 1px solid #e8e8e8;
           border-radius: 10px;
           padding: 20px 24px;
-          box-shadow: 0 2px 6px rgba(0, 0, 0, 0.05);
+          box-shadow: 0 2px 6px rgba(0,0,0,0.05);
         }
 
         .info-row {
@@ -399,10 +609,19 @@ export default function EChecksheetPanelPage() {
           flex: 1;
         }
 
+        .date-section {
+          background: white;
+          border: 2px solid #1e88e5;
+          border-radius: 10px;
+          padding: 16px 20px;
+          box-shadow: 0 2px 6px rgba(0,0,0,0.05);
+          margin-bottom: 24px;
+        }
+
         .table-container {
           background: white;
           border-radius: 12px;
-          box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+          box-shadow: 0 2px 8px rgba(0,0,0,0.06);
           overflow: hidden;
           border: 1px solid #e8e8e8;
           margin-bottom: 28px;
@@ -468,7 +687,7 @@ export default function EChecksheetPanelPage() {
           background: #f5f7fa;
         }
 
-        .input-field {
+        select.input-field {
           width: 100%;
           padding: 8px 10px;
           border: 1px solid #ddd;
@@ -479,10 +698,22 @@ export default function EChecksheetPanelPage() {
           font-family: inherit;
         }
 
+        .input-field.select-field {
+          width: 100%;
+          cursor: pointer;
+          background: white;
+        }
+
+        .input-field:disabled {
+          background: #f5f5f5;
+          cursor: not-allowed;
+          opacity: 0.6;
+        }
+
         .input-field:focus {
           outline: none;
           border-color: #1e88e5;
-          box-shadow: 0 0 0 3px rgba(30, 136, 229, 0.1);
+          box-shadow: 0 0 0 3px rgba(30,136,229,0.1);
           background: #f9fbff;
         }
 
@@ -508,27 +739,27 @@ export default function EChecksheetPanelPage() {
         }
 
         .btn-primary {
-          background: linear-gradient(135deg, #1e88e5, #1565c0);
+          background: linear-gradient(135deg,#1e88e5,#1565c0);
           color: white;
-          box-shadow: 0 2px 8px rgba(30, 136, 229, 0.2);
+          box-shadow: 0 2px 8px rgba(30,136,229,0.2);
         }
 
-        .btn-primary:hover {
-          background: linear-gradient(135deg, #1565c0, #0d47a1);
+        .btn-primary:hover:not(:disabled) {
+          background: linear-gradient(135deg,#1565c0,#0d47a1);
           transform: translateY(-2px);
-          box-shadow: 0 4px 12px rgba(13, 71, 161, 0.3);
+          box-shadow: 0 4px 12px rgba(13,71,161,0.3);
         }
 
         .btn-secondary {
           background: #bdbdbd;
           color: white;
-          box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+          box-shadow: 0 2px 8px rgba(0,0,0,0.1);
         }
 
         .btn-secondary:hover {
           background: #757575;
           transform: translateY(-2px);
-          box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+          box-shadow: 0 4px 12px rgba(0,0,0,0.15);
         }
 
         @media (max-width: 768px) {

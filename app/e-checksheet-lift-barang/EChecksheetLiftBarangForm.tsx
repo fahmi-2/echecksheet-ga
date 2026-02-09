@@ -1,11 +1,18 @@
 // app/e-checksheet-lift-barang/EChecksheetLiftBarangForm.tsx
 "use client";
-
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
-import { NavbarStatic } from "@/components/navbar-static";
 import { Sidebar } from "@/components/Sidebar";
+// ✅ Import API helper yang reusable
+import {
+  getItemsByType,
+  getChecklistByDate,
+  saveChecklist,
+  getAvailableDates,
+  ChecklistItem,
+  ChecklistData
+} from "@/lib/api/checksheet";
 
 export function EChecksheetLiftBarangForm({
   liftName,
@@ -18,105 +25,44 @@ export function EChecksheetLiftBarangForm({
 }) {
   const router = useRouter();
   const { user, loading } = useAuth();
-
+  
+  // ✅ Hardcode type slug untuk page ini
+  const TYPE_SLUG = 'lift-barang';
+  
+  // ✅ SEMUA HOOKS DI ATAS — TANPA KONDISI
   const [isMounted, setIsMounted] = useState(false);
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [answers, setAnswers] = useState<Record<string, Record<string, string>>>({});
-  const [today] = useState(new Date());
-
-  useEffect(() => {
-    setIsMounted(true);
-  }, []);
-
-  const inspectionItems = [
-    { key: "limitSwitchBawah", no: 1, item: "Limit switch pintu pagar bawah", content: "Limit switch", method: "Dicoba" },
-    { key: "pintuKendorPecah1", no: 1, item: "Limit switch pintu pagar bawah", content: "Tidak kendor dan pecah", method: "Visual" },
-    { key: "pintuEngsel1", no: 1, item: "Limit switch pintu pagar bawah", content: "Engsel", method: "Dicoba" },
-    { key: "pintuPengunci1", no: 1, item: "Limit switch pintu pagar bawah", content: "Pengunci", method: "Dicoba" },
-    { key: "limitSwitchAtas", no: 2, item: "Kondisi pintu pagar atas", content: "Limit switch", method: "Dicoba" },
-    { key: "pintuKendorPecah2", no: 2, item: "Kondisi pintu pagar atas", content: "Tidak kendor dan pecah", method: "Visual" },
-    { key: "pintuEngsel2", no: 2, item: "Kondisi pintu pagar atas", content: "Engsel", method: "Dicoba" },
-    { key: "pintuPengunci2", no: 2, item: "Kondisi pintu pagar atas", content: "Pengunci", method: "Dicoba" },
-    { key: "limitSwitchPintuLift", no: 3, item: "Kondisi pintu lift", content: "Limit switch", method: "Dicoba" },
-    { key: "pintuKendorPecah3", no: 3, item: "Kondisi pintu lift", content: "Tidak kendor dan pecah", method: "Visual" },
-    { key: "pintuEngsel3", no: 3, item: "Kondisi pintu lift", content: "Engsel", method: "Dicoba" },
-    { key: "pintuPengunci3", no: 3, item: "Kondisi pintu lift", content: "Pengunci", method: "Dicoba" },
-    { key: "cabinLift", no: 4, item: "Cabin lift", content: "Rata dengan landasan saat berhenti", method: "Visual" },
-    { key: "pushButtonNaik", no: 5, item: "Push button Bawah", content: "Naik", method: "Dicoba" },
-    { key: "pushButtonTurun", no: 5, item: "Push button Bawah", content: "Turun", method: "Dicoba" },
-    { key: "pushButtonEmergency", no: 5, item: "Push button Bawah", content: "Emergency Stop", method: "Dicoba" },
-    { key: "pushButtonAtasNaik", no: 6, item: "Push button Atas", content: "Naik", method: "Dicoba" },
-    { key: "pushButtonAtasTurun", no: 6, item: "Push button Atas", content: "Turun", method: "Dicoba" },
-    { key: "pushButtonAtasEmergency", no: 6, item: "Push button Atas", content: "Emergency Stop", method: "Dicoba" },
-    { key: "sensorLiftTurun", no: 7, item: "Sensor Lift turun", content: "Proximity Switch", method: "Dicoba" },
-    { key: "sensorLiftNaik", no: 8, item: "Sensor Lift naik", content: "Proximity Switch", method: "Dicoba" },
-    { key: "bearingSliding", no: 9, item: "Kondisi Bearing sliding (All)", content: "Bearing Sliding", method: "Dicoba & di lihat" },
-    { key: "kawatSeling", no: 10, item: "Kondisi Kawat seling", content: "Kawat seling", method: "Dilihat" },
-    { key: "bunyiAbnormalNaik", no: 11, item: "Bunyi abnormal saat lift naik dan turun", content: "Bearing Sliding", method: "Dicoba" },
-    { key: "bunyiAbnormalLiftStopper", no: 12, item: "Bunyi abnormal saat lift berhenti di Stopper atas", content: "Keranjang Lift dengan Stopper atas", method: "Dicoba" },
-    { key: "bunyiAbnormalLiftBawah", no: 13, item: "Bunyi abnormal saat lift berhenti di bawah", content: "Keranjang Lift dengan stoper bawah", method: "Di coba" },
-  ];
-
-  useEffect(() => {
-    if (!isMounted) return;
-
-    try {
-      const key = `e-checksheet-lift-${liftName}`;
-      const saved = localStorage.getItem(key);
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        setAnswers(parsed);
-      }
-    } catch (err) {
-      console.warn("Failed to parse saved data");
-    }
-  }, [isMounted, liftName]);
-
-  useEffect(() => {
-    if (!isMounted || loading) return;
-    if (!user || (user.role !== "inspector-ga")) {
-      router.push("/login-page");
-    }
-  }, [user, loading, router, isMounted]);
-
-  if (!isMounted) {
-    return null;
-  }
-
-  if (loading) {
-    return (
-      <div style={{ display: "flex", justifyContent: "center", alignItems: "center", minHeight: "100vh", background: "#f5f5f5" }}>
-        <p>Loading...</p>
-      </div>
-    );
-  }
-
-  if (!user || (user.role !== "inspector-ga")) {
-    return null;
-  }
-
+  const [inspectionItems, setInspectionItems] = useState<ChecklistItem[]>([]);
+  const [areaId, setAreaId] = useState<number | null>(null);
+  const [availableDates, setAvailableDates] = useState<string[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const today = new Date();
+  
+  // Helper function untuk format tanggal
+  const formatDateKey = (day: number): string => {
+    const year = currentMonth.getFullYear();
+    const month = String(currentMonth.getMonth() + 1).padStart(2, "0");
+    const d = String(day).padStart(2, "0");
+    return `${year}-${month}-${d}`;
+  };
+  
+  const getMonthYear = () => {
+    return currentMonth.toLocaleDateString("id-ID", { month: "long", year: "numeric" });
+  };
+  
   const getDaysInMonth = (date: Date) => {
     const year = date.getFullYear();
     const month = date.getMonth();
     const days = new Date(year, month + 1, 0).getDate();
     return Array.from({ length: days }, (_, i) => i + 1);
   };
-
-  const formatDateKey = (day: number) => {
-    const year = currentMonth.getFullYear();
-    const month = String(currentMonth.getMonth() + 1).padStart(2, "0");
-    const d = String(day).padStart(2, "0");
-    return `${year}-${month}-${d}`;
-  };
-
-  const getMonthYear = () => {
-    return currentMonth.toLocaleDateString("id-ID", { month: "long", year: "numeric" });
-  };
-
+  
   const changeMonth = (direction: number) => {
     setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() + direction, 1));
   };
-
+  
   const isDateEditable = (day: number): boolean => {
     const cellDate = new Date(currentMonth.getFullYear(), currentMonth.getMonth(), day);
     const todayDate = new Date(today.getFullYear(), today.getMonth(), today.getDate());
@@ -124,7 +70,7 @@ export function EChecksheetLiftBarangForm({
     todayDate.setHours(0, 0, 0, 0);
     return cellDate.getTime() === todayDate.getTime();
   };
-
+  
   const getDateStatus = (day: number): 'past' | 'today' | 'future' => {
     const cellDate = new Date(currentMonth.getFullYear(), currentMonth.getMonth(), day);
     const todayDate = new Date(today.getFullYear(), today.getMonth(), today.getDate());
@@ -135,12 +81,154 @@ export function EChecksheetLiftBarangForm({
     return 'future';
   };
 
+  // ✅ Load inspection items dari API berdasarkan type
+  useEffect(() => {
+    const loadItems = async () => {
+      try {
+        const items = await getItemsByType(TYPE_SLUG);
+        setInspectionItems(items);
+      } catch (error) {
+        console.error("Failed to load checklist items:", error);
+        alert("Gagal memuat daftar item checklist. Silakan coba lagi.");
+      }
+    };
+    loadItems();
+  }, []);
+
+  // ✅ Load areaId dan available dates
+  useEffect(() => {
+    if (!liftName || !area || !lokasi || !isMounted) return;
+    
+    const loadAreaData = async () => {
+      try {
+        // Format area name sesuai database: "Lift Barang Produksi • Genba A Lt. 2 • Produksi Genba A"
+        const areaName = `${liftName} • ${area} • ${lokasi}`;
+        
+        const areasRes = await fetch(`/api/ga/checksheet/${TYPE_SLUG}/areas`);
+        const areasData = await areasRes.json();
+        
+        if (!areasData.success) {
+          throw new Error(areasData.message || 'Gagal mengambil data area');
+        }
+        
+        // Cari area dengan case-insensitive dan trim
+        const areaItem = areasData.data.find((a: any) => 
+          a.name.trim().toLowerCase() === areaName.trim().toLowerCase()
+        );
+        
+        if (areaItem) {
+          setAreaId(areaItem.id);
+          
+          // Load available dates untuk area ini
+          const dates = await getAvailableDates(TYPE_SLUG, areaItem.id);
+          setAvailableDates(dates);
+          
+          // Load data untuk bulan ini
+          await loadMonthData(areaItem.id, currentMonth, dates);
+        } else {
+          console.warn(`Area not found: ${areaName}`);
+          // Coba cari berdasarkan liftName saja sebagai fallback
+          const fallbackArea = areasData.data.find((a: any) => 
+            a.name.trim().toLowerCase().startsWith(liftName.trim().toLowerCase())
+          );
+          if (fallbackArea) {
+            setAreaId(fallbackArea.id);
+            const dates = await getAvailableDates(TYPE_SLUG, fallbackArea.id);
+            setAvailableDates(dates);
+            await loadMonthData(fallbackArea.id, currentMonth, dates);
+          } else {
+            alert(`Area "${liftName}" tidak ditemukan di database. Silakan hubungi administrator.`);
+          }
+        }
+      } catch (error) {
+        console.error("Failed to load area data:", error);
+        alert("Gagal memuat data area. Silakan coba lagi.");
+      }
+    };
+    
+    loadAreaData();
+  }, [liftName, area, lokasi, isMounted, currentMonth]);
+
+  // ✅ Load data untuk bulan tertentu
+  const loadMonthData = async (areaId: number, monthDate: Date, allDates: string[]) => {
+    setIsLoading(true);
+    try {
+      const year = monthDate.getFullYear();
+      const month = monthDate.getMonth();
+      const firstDay = new Date(year, month, 1);
+      const lastDay = new Date(year, month + 1, 0);
+      
+      // Filter tanggal yang ada di bulan ini
+      const datesInMonth = allDates.filter(dateStr => {
+        const date = new Date(dateStr);
+        return date >= firstDay && date <= lastDay;
+      });
+
+      // Fetch data untuk setiap tanggal di bulan ini
+      const newData: Record<string, Record<string, string>> = {};
+      
+      for (const dateStr of datesInMonth) {
+        try {
+          const data = await getChecklistByDate(TYPE_SLUG, areaId, dateStr);
+          
+          if (data) {
+            // Konversi data dari "OK"/"NG" ke "✓"/"✗" untuk tampilan
+            const convertedData: Record<string, string> = {};
+            
+            // Ambil inspector dari item pertama (semua item memiliki inspector yang sama per hari)
+            let inspector = "";
+            
+            Object.entries(data).forEach(([itemKey, entry]) => {
+              // Konversi hasil pemeriksaan
+              if (entry.hasilPemeriksaan === "OK") {
+                convertedData[itemKey] = "✓";
+              } else if (entry.hasilPemeriksaan === "NG") {
+                convertedData[itemKey] = "✗";
+              } else {
+                convertedData[itemKey] = "";
+              }
+              
+              // Ambil inspector dari entry pertama
+              if (!inspector && entry.inspector) {
+                inspector = entry.inspector;
+              }
+            });
+            
+            convertedData["inspector"] = inspector || "";
+            newData[dateStr] = convertedData;
+          }
+        } catch (error) {
+          console.error(`Error loading data for ${dateStr}:`, error);
+        }
+      }
+      
+      setAnswers(newData);
+    } catch (error) {
+      console.error("Error loading month data:", error);
+      alert("Gagal memuat data bulan ini. Silakan coba lagi.");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    setIsMounted(true);
+  }, []);
+
+  useEffect(() => {
+    if (!isMounted || loading) return;
+    if (!user || (user.role !== "inspector-ga")) {
+      router.push("/login-page");
+    }
+  }, [user, loading, router, isMounted]);
+
+  // ✅ Handle perubahan input (hanya untuk hari ini)
   const handleInputChange = (dateKey: string, itemKey: string, value: string, day: number) => {
     if (!isDateEditable(day)) {
       alert("Anda hanya dapat mengisi data untuk hari ini!");
       return;
     }
-
+    
     setAnswers((prev) => ({
       ...prev,
       [dateKey]: {
@@ -150,47 +238,151 @@ export function EChecksheetLiftBarangForm({
     }));
   };
 
-  const handleSave = () => {
+  // ✅ Handle perubahan inspector (hanya untuk hari ini)
+  const handleInspectorChange = (dateKey: string, value: string, day: number) => {
+    if (!isDateEditable(day)) {
+      alert("Anda hanya dapat mengisi data untuk hari ini!");
+      return;
+    }
+    
+    setAnswers((prev) => ({
+      ...prev,
+      [dateKey]: {
+        ...prev[dateKey],
+        inspector: value,
+      },
+    }));
+  };
+
+  // ✅ Save to API (hanya untuk hari ini)
+  const handleSave = async () => {
+    if (!user) {
+      alert("User belum login");
+      router.push("/login-page");
+      return;
+    }
+
+    if (!areaId) {
+      alert("Area tidak valid!");
+      return;
+    }
+
+    // Format today's date
+    const todayDateKey = formatDateKey(today.getDate());
+    
+    // Validasi: pastikan semua item diisi untuk hari ini
+    const todayData = answers[todayDateKey] || {};
+    const allItemsFilled = inspectionItems.every((item) => 
+      todayData[item.item_key] === "✓" || todayData[item.item_key] === "✗"
+    );
+
+    if (!allItemsFilled) {
+      alert("Mohon isi semua item untuk hari ini!");
+      return;
+    }
+
+    if (!todayData.inspector || todayData.inspector.trim() === "") {
+      alert("Mohon isi nama inspector untuk hari ini!");
+      return;
+    }
+
     try {
-      const key = `e-checksheet-lift-${liftName}`;
-      localStorage.setItem(key, JSON.stringify(answers));
-      alert("Data berhasil disimpan!");
-      router.push(`/status-ga/lift-barang?openLift=${encodeURIComponent(liftName)}`);
-    } catch (err) {
-      console.error("Gagal menyimpan:", err);
-      alert("Gagal menyimpan data.");
+      setIsSaving(true);
+
+      // Format data untuk API (konversi "✓"/"✗" ke "OK"/"NG")
+      const checklistData: ChecklistData = {};
+      
+      inspectionItems.forEach((item) => {
+        const value = todayData[item.item_key] || "";
+        const hasilPemeriksaan = value === "✓" ? "OK" : value === "✗" ? "NG" : "";
+        
+        checklistData[item.item_key] = {
+          date: todayDateKey,
+          hasilPemeriksaan,
+          keteranganTemuan: "", // Lift barang tidak menggunakan field ini
+          tindakanPerbaikan: "", // Lift barang tidak menggunakan field ini
+          pic: "",              // Lift barang tidak menggunakan field ini
+          dueDate: "",          // Lift barang tidak menggunakan field ini
+          verify: "",           // Lift barang tidak menggunakan field ini
+          inspector: todayData.inspector || user.fullName || "",
+          images: [],           // Lift barang tidak menggunakan upload gambar
+          notes: ""
+        };
+      });
+
+      // Save ke API
+      await saveChecklist(
+        TYPE_SLUG,
+        areaId,
+        todayDateKey,
+        checklistData,
+        user.id || "unknown",
+        user.fullName || "Unknown Inspector"
+      );
+
+      alert(`Data berhasil disimpan untuk tanggal ${today.toLocaleDateString("id-ID")}`);
+      
+      // Reload data bulan ini untuk update tampilan
+      if (areaId) {
+        await loadMonthData(areaId, currentMonth, availableDates);
+      }
+      
+      // Redirect ke status page setelah 500ms
+      setTimeout(() => {
+        router.push(`/status-ga/lift-barang?openLift=${encodeURIComponent(liftName)}`);
+      }, 500);
+      
+    } catch (error) {
+      console.error("Error saving checklist data:", error);
+      alert("Gagal menyimpan data. Silakan coba lagi.");
+    } finally {
+      setIsSaving(false);
     }
   };
+
+  if (!isMounted) return null;
+  if (loading) {
+    return (
+      <div style={{ display: "flex", justifyContent: "center", alignItems: "center", minHeight: "100vh", background: "#f5f5f5" }}>
+        Loading...
+      </div>
+    );
+  }
+  if (!user || (user.role !== "inspector-ga")) {
+    return null;
+  }
 
   const days = getDaysInMonth(currentMonth);
 
   return (
     <div style={{ minHeight: "100vh", background: "#f8f9fa" }}>
       <Sidebar userName={user.fullName} />
-      <div style={{ 
+      <div style={{
         paddingLeft: "95px",
-        paddingTop: "25px",
-        paddingBottom: "25px",
         paddingRight: "25px",
-        maxWidth: "100%", 
-        margin: "0 auto" 
-        }}>
-        <div style={{ marginBottom: "32px" }}>
+        paddingTop: "32px",
+        paddingBottom: "32px",
+        maxWidth: "100%",
+        margin: "0 auto"
+      }}>
+        {/* Header */}
+        <div style={{ marginBottom: "24px" }}>
           <div style={{
             background: "linear-gradient(135deg, #0d47a1 0%, #1e88e5 100%)",
             borderRadius: "12px",
-            padding: "24px 32px",
+            padding: "20px 24px",
             boxShadow: "0 4px 12px rgba(13, 71, 161, 0.15)"
           }}>
-            <h1 style={{ margin: "0 0 8px 0", color: "white", fontSize: "28px", fontWeight: "700", letterSpacing: "-0.5px" }}>
+            <h1 style={{ margin: "0 0 8px 0", color: "white", fontSize: "clamp(20px, 5vw, 28px)", fontWeight: "700" }}>
               Check Sheet Inspeksi Lift Barang
             </h1>
-            <p style={{ margin: 0, color: "rgba(255, 255, 255, 0.9)", fontSize: "14px", fontWeight: "400" }}>
+            <p style={{ margin: 0, color: "rgba(255,255,255,0.9)", fontSize: "14px" }}>
               Form Pemeriksaan Kelayakan Lift Barang (Monthly Calendar View)
             </p>
           </div>
         </div>
 
+        {/* Info Area */}
         <div style={{
           background: "white",
           border: "1px solid #e8e8e8",
@@ -265,6 +457,7 @@ export function EChecksheetLiftBarangForm({
           </div>
         </div>
 
+        {/* Month Navigation */}
         <div style={{
           display: "flex",
           justifyContent: "space-between",
@@ -312,14 +505,44 @@ export function EChecksheetLiftBarangForm({
           </button>
         </div>
 
+        {/* Loading Indicator */}
+        {isLoading && (
+          <div style={{ textAlign: "center", padding: "20px", color: "#1e88e5", fontWeight: "500" }}>
+            Memuat data bulan ini...
+          </div>
+        )}
+
+        {/* Checksheet Table */}
         <div style={{
           background: "white",
           borderRadius: "12px",
           boxShadow: "0 2px 8px rgba(0, 0, 0, 0.06)",
           overflow: "hidden",
           border: "2px solid #0d47a1",
-          marginBottom: "28px"
+          marginBottom: "28px",
+          position: "relative"
         }}>
+          {isLoading && (
+            <div style={{
+              position: "absolute",
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              background: "rgba(255,255,255,0.8)",
+              display: "flex",
+              justifyContent: "center",
+              alignItems: "center",
+              zIndex: 10,
+              borderRadius: "12px"
+            }}>
+              <div style={{ textAlign: "center" }}>
+                <div style={{ fontSize: "24px", marginBottom: "8px" }}>⏳</div>
+                <p style={{ color: "#0d47a1", fontWeight: "500" }}>Memuat data...</p>
+              </div>
+            </div>
+          )}
+          
           <div style={{ overflowX: "auto" }}>
             <table style={{
               width: "100%",
@@ -424,7 +647,7 @@ export function EChecksheetLiftBarangForm({
               </thead>
               <tbody>
                 {inspectionItems.map((item, idx) => (
-                  <tr key={item.key}>
+                  <tr key={item.id}>
                     <td style={{
                       padding: "10px",
                       borderBottom: "1px solid #0d47a1",
@@ -447,7 +670,7 @@ export function EChecksheetLiftBarangForm({
                       background: "white",
                       fontSize: "11px"
                     }}>
-                      {item.item}
+                      {item.item_group}
                     </td>
                     <td style={{
                       padding: "10px",
@@ -458,7 +681,7 @@ export function EChecksheetLiftBarangForm({
                       background: "white",
                       fontSize: "11px"
                     }}>
-                      {item.content}
+                      {item.item_check}
                     </td>
                     <td style={{
                       padding: "10px",
@@ -474,7 +697,7 @@ export function EChecksheetLiftBarangForm({
                     </td>
                     {days.map((day) => {
                       const dateKey = formatDateKey(day);
-                      const value = answers[dateKey]?.[item.key] || "";
+                      const value = answers[dateKey]?.[item.item_key] || "";
                       const dateStatus = getDateStatus(day);
                       const isEditable = dateStatus === 'today';
                       
@@ -490,12 +713,13 @@ export function EChecksheetLiftBarangForm({
                           borderRight: "1px solid #0d47a1",
                           textAlign: "center",
                           verticalAlign: "middle",
-                          background: cellBgColor
+                          background: cellBgColor,
+                          opacity: isLoading ? 0.5 : 1
                         }}>
                           {isEditable ? (
                             <select
                               value={value}
-                              onChange={(e) => handleInputChange(dateKey, item.key, e.target.value, day)}
+                              onChange={(e) => handleInputChange(dateKey, item.item_key, e.target.value, day)}
                               style={{
                                 width: "100%",
                                 padding: "6px 4px",
@@ -518,7 +742,7 @@ export function EChecksheetLiftBarangForm({
                               padding: "6px 4px",
                               fontSize: "13px",
                               fontWeight: "700",
-                              color: value ? (value === "✓" ? "#2e7d32" : "#c62828") : "#000000",
+                              color: value ? (value === "✓" ? "#2e7d32" : "#c62828") : "#999",
                               cursor: "not-allowed",
                               opacity: 0.7
                             }}>
@@ -557,14 +781,15 @@ export function EChecksheetLiftBarangForm({
                         padding: "4px",
                         border: "1px solid #0d47a1",
                         textAlign: "center",
-                        background: cellBgColor
+                        background: cellBgColor,
+                        opacity: isLoading ? 0.5 : 1
                       }}>
                         {isEditable ? (
                           <input
                             type="text"
                             value={inspector}
-                            onChange={(e) => handleInputChange(dateKey, "inspector", e.target.value, day)}
-                            placeholder="niki"
+                            onChange={(e) => handleInspectorChange(dateKey, e.target.value, day)}
+                            placeholder="inisiial"
                             style={{
                               width: "100%",
                               padding: "6px 4px",
@@ -580,7 +805,7 @@ export function EChecksheetLiftBarangForm({
                           <div style={{
                             padding: "6px 4px",
                             fontSize: "11px",
-                            color: inspector ? "#333" : "#333",
+                            color: inspector ? "#333" : "#999",
                             cursor: "not-allowed",
                             opacity: 0.7
                           }}>
@@ -596,6 +821,7 @@ export function EChecksheetLiftBarangForm({
           </div>
         </div>
 
+        {/* Action Buttons */}
         <div style={{
           display: "flex",
           gap: "12px",
@@ -625,23 +851,25 @@ export function EChecksheetLiftBarangForm({
           </button>
           <button
             onClick={handleSave}
+            disabled={isSaving || !isDateEditable(today.getDate())}
             style={{
               padding: "10px 28px",
               border: "none",
               borderRadius: "8px",
               fontSize: "13px",
-              cursor: "pointer",
+              cursor: (isSaving || !isDateEditable(today.getDate())) ? "not-allowed" : "pointer",
               fontWeight: "600",
               transition: "all 0.3s ease",
               textTransform: "uppercase",
               letterSpacing: "0.5px",
               minWidth: "140px",
-              background: "linear-gradient(135deg, #1e88e5, #0d47a1)",
+              background: isSaving ? "#9e9e9e" : isDateEditable(today.getDate()) ? "linear-gradient(135deg, #1e88e5, #0d47a1)" : "#bdbdbd",
               color: "white",
-              boxShadow: "0 2px 8px rgba(13, 71, 161, 0.2)"
+              boxShadow: "0 2px 8px rgba(13, 71, 161, 0.2)",
+              opacity: (isSaving || !isDateEditable(today.getDate())) ? 0.6 : 1
             }}
           >
-            ✓ Simpan
+            {isSaving ? "Menyimpan..." : "✓ Simpan"}
           </button>
         </div>
       </div>

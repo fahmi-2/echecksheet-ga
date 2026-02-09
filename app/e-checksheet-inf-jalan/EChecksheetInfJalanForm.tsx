@@ -5,22 +5,14 @@ import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
 import { Sidebar } from "@/components/Sidebar";
-
-interface ChecksheetEntry {
-  date: string;
-  hasilPemeriksaan: string;
-  keteranganTemuan: string;
-  tindakanPerbaikan: string;
-  pic: string;
-  dueDate: string;
-  verify: string;
-  inspector: string;
-  images: string[]; // ✅ Tambahkan array gambar
-}
-
-interface SavedData {
-  [itemKey: string]: ChecksheetEntry[];
-}
+// ✅ Import API helper
+import {
+  getItemsByType,
+  getChecklistByDate,
+  saveChecklist,
+  getAvailableDates,
+  ChecklistItem
+} from "@/lib/api/checksheet";
 
 export function EChecksheetInfJalanForm({
   areaName,
@@ -33,11 +25,17 @@ export function EChecksheetInfJalanForm({
 }) {
   const router = useRouter();
   const { user, loading } = useAuth();
+  
+  // ✅ Hardcode type slug untuk page ini
+  const TYPE_SLUG = 'inf-jalan';
 
   const [isMounted, setIsMounted] = useState(false);
   const [selectedDate, setSelectedDate] = useState<string>("");
   const [answers, setAnswers] = useState<Record<string, string>>({});
-  const [savedData, setSavedData] = useState<SavedData>({});
+  const [inspectionItems, setInspectionItems] = useState<ChecklistItem[]>([]);
+  const [areaId, setAreaId] = useState<number | null>(null);
+  const [availableDates, setAvailableDates] = useState<string[]>([]);
+  const [isSaving, setIsSaving] = useState(false);
 
   // ✅ State untuk gambar
   const [images, setImages] = useState<{ key: string; url: string }[]>([]);
@@ -53,62 +51,74 @@ export function EChecksheetInfJalanForm({
   const [showImageModal, setShowImageModal] = useState(false);
   const [currentImage, setCurrentImage] = useState<string>("");
 
+  // ✅ Load inspection items dari API
+  useEffect(() => {
+    const loadItems = async () => {
+      try {
+        const items = await getItemsByType(TYPE_SLUG);
+        console.log('Loaded inspection items:', items);
+        setInspectionItems(items);
+      } catch (error) {
+        console.error("Failed to load checklist items:", error);
+        alert("Gagal memuat daftar item checklist. Silakan coba lagi.");
+      }
+    };
+    loadItems();
+  }, []);
+
+  // ✅ Load areaId dan available dates
+  useEffect(() => {
+    if (!areaName || !kategori || !lokasi || !isMounted) return;
+    
+    const loadAreaData = async () => {
+      try {
+        // Format area name sesuai database: "Jalan Utama Produksi A • Jalan Utama • Genba A - Main Road"
+        const fullAreaName = `${areaName} • ${kategori} • ${lokasi}`;
+        
+        const areasRes = await fetch(`/api/ga/checksheet/${TYPE_SLUG}/areas`);
+        const areasData = await areasRes.json();
+        
+        if (!areasData.success) {
+          throw new Error(areasData.message || 'Gagal mengambil data area');
+        }
+        
+        // Cari area dengan case-insensitive dan trim
+        const areaItem = areasData.data.find((a: any) => 
+          a.name.trim().toLowerCase() === fullAreaName.trim().toLowerCase()
+        );
+        
+        if (areaItem) {
+          setAreaId(areaItem.id);
+          
+          // Load available dates untuk area ini
+          const dates = await getAvailableDates(TYPE_SLUG, areaItem.id);
+          setAvailableDates(dates);
+        } else {
+          console.warn(`Area not found: ${fullAreaName}`);
+          // Coba cari berdasarkan areaName saja sebagai fallback
+          const fallbackArea = areasData.data.find((a: any) => 
+            a.name.trim().toLowerCase().startsWith(areaName.trim().toLowerCase())
+          );
+          if (fallbackArea) {
+            setAreaId(fallbackArea.id);
+            const dates = await getAvailableDates(TYPE_SLUG, fallbackArea.id);
+            setAvailableDates(dates);
+          } else {
+            alert(`Area "${areaName}" tidak ditemukan di database. Silakan hubungi administrator.`);
+          }
+        }
+      } catch (error) {
+        console.error("Failed to load area data:", error);
+        alert("Gagal memuat data area. Silakan coba lagi.");
+      }
+    };
+    
+    loadAreaData();
+  }, [areaName, kategori, lokasi, isMounted]);
+
   useEffect(() => {
     setIsMounted(true);
   }, []);
-
-  const inspectionItems = [
-    {
-      key: "jalanRata",
-      no: 1,
-      item: "Jalan Rata, tidak bergelombang. Tidak rusak, tidak licin dan tidak berpotensi menyebabkan kecelakaan kerja lainnya",
-      subItems: ["Jalan Utama :", "Jalan tambahan :"]
-    },
-    {
-      key: "jalanTidakLicin",
-      no: 2,
-      item: "Jalan Tidak licin/ berlumut"
-    },
-    {
-      key: "pencahayaanMemadai",
-      no: 3,
-      item: "Pencahayaan memadai (cukup terang menyinari area jalan dan sekitarnya)"
-    },
-    {
-      key: "trotoarTidakRusak",
-      no: 4,
-      item: "Trotuar tidak rusak, dan bentuk masih utuh dan sesuai, warna masih bisa terlihat"
-    },
-    {
-      key: "boardessTrotuar",
-      no: 5,
-      item: "Boardess trotuar tidak berkarat, tidak keropos dan visualisasi jelas (Memastikan boardess dengan cara diperiksa jika diperlukan (tidak hanya secara visual) dan dicek kekuatan penyanggannya), (visualisasi sesuai fungsi, berwarna hijau atau kuning hitam sebagai larangan untuk dilewati)"
-    },
-    {
-      key: "tidakAdaTumpukan",
-      no: 6,
-      item: "Tidak ada tumpukan diatas boardess / Boardess cor"
-    },
-    {
-      key: "boardessCor",
-      no: 7,
-      item: "Boardess cor bentukan masih utuh, masih terlihat warnanya dan tidak licin"
-    }
-  ];
-
-  useEffect(() => {
-    if (!isMounted) return;
-    try {
-      const key = `e-checksheet-inf-jalan-${areaName}`;
-      const saved = localStorage.getItem(key);
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        setSavedData(parsed);
-      }
-    } catch (err) {
-      console.warn("Failed to parse saved data");
-    }
-  }, [isMounted, areaName]);
 
   useEffect(() => {
     if (!isMounted || loading) return;
@@ -215,100 +225,126 @@ export function EChecksheetInfJalanForm({
     setCurrentImage("");
   };
 
-  const handleSave = () => {
+  // ✅ Load data yang sudah ada dari API
+  const handleLoadExisting = async () => {
+    if (!selectedDate) {
+      alert("Pilih tanggal terlebih dahulu!");
+      return;
+    }
+
+    if (!areaId) {
+      alert("Area tidak valid!");
+      return;
+    }
+
+    try {
+      const data = await getChecklistByDate(TYPE_SLUG, areaId, selectedDate);
+      
+      if (data) {
+        const existingData: Record<string, string> = {};
+        const loadedImages: { key: string; url: string }[] = [];
+        
+        Object.entries(data).forEach(([itemKey, entry]) => {
+          existingData[`${itemKey}_hasil`] = entry.hasilPemeriksaan;
+          existingData[`${itemKey}_keterangan`] = entry.keteranganTemuan || "";
+          existingData[`${itemKey}_tindakan`] = entry.tindakanPerbaikan || "";
+          existingData[`${itemKey}_pic`] = entry.pic || "";
+          existingData[`${itemKey}_dueDate`] = entry.dueDate || "";
+          existingData[`${itemKey}_verify`] = entry.verify || "";
+          
+          // Load images
+          if (entry.images && entry.images.length > 0) {
+            entry.images.forEach(url => {
+              loadedImages.push({ key: itemKey, url });
+            });
+          }
+        });
+        
+        setAnswers(existingData);
+        setImages(loadedImages);
+        alert("Data berhasil dimuat!");
+      } else {
+        alert("Tidak ada data untuk tanggal ini.");
+        setAnswers({});
+        setImages([]);
+      }
+    } catch (error) {
+      console.error("Error loading existing data:", error);
+      alert("Gagal memuat data. Silakan coba lagi.");
+    }
+  };
+
+  // ✅ Save to API
+  const handleSave = async () => {
+    if (!user) {
+      alert("User belum login");
+      router.push("/login-page");
+      return;
+    }
+
     if (!selectedDate) {
       alert("Pilih tanggal pemeriksaan terlebih dahulu!");
       return;
     }
 
-    const allFieldsFilled = inspectionItems.every((item) => answers[`${item.key}_hasil`]);
+    if (!areaId) {
+      alert("Area tidak valid!");
+      return;
+    }
+
+    const allFieldsFilled = inspectionItems.every((item) => answers[`${item.item_key}_hasil`]);
     if (!allFieldsFilled) {
       alert("Mohon isi Hasil Pemeriksaan untuk semua item!");
       return;
     }
 
     try {
-      const newData: SavedData = { ...savedData };
+      setIsSaving(true);
 
+      // Format data untuk API
+      const checklistData: any = {};
+      
       inspectionItems.forEach((item) => {
-        const entry: ChecksheetEntry = {
+        const itemImages = images
+          .filter(img => img.key === item.item_key)
+          .map(img => img.url);
+        
+        checklistData[item.item_key] = {
           date: selectedDate,
-          hasilPemeriksaan: answers[`${item.key}_hasil`] || "",
-          keteranganTemuan: answers[`${item.key}_keterangan`] || "",
-          tindakanPerbaikan: answers[`${item.key}_tindakan`] || "",
-          pic: answers[`${item.key}_pic`] || "",
-          dueDate: answers[`${item.key}_dueDate`] || "",
-          verify: answers[`${item.key}_verify`] || "",
+          hasilPemeriksaan: answers[`${item.item_key}_hasil`] || "",
+          keteranganTemuan: answers[`${item.item_key}_keterangan`] || "",
+          tindakanPerbaikan: answers[`${item.item_key}_tindakan`] || "",
+          pic: answers[`${item.item_key}_pic`] || "",
+          dueDate: answers[`${item.item_key}_dueDate`] || "",
+          verify: answers[`${item.item_key}_verify`] || "",
           inspector: user.fullName || "",
-          images: images.filter(img => img.key === item.key).map(img => img.url)
+          images: itemImages,
+          notes: ""
         };
-
-        if (!newData[item.key]) {
-          newData[item.key] = [];
-        }
-
-        const existingIndex = newData[item.key].findIndex((e) => e.date === selectedDate);
-        if (existingIndex >= 0) {
-          newData[item.key][existingIndex] = entry;
-        } else {
-          newData[item.key].push(entry);
-        }
-
-        newData[item.key].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
       });
 
-      const key = `e-checksheet-inf-jalan-${areaName}`;
-      localStorage.setItem(key, JSON.stringify(newData));
-      alert(`Data berhasil disimpan untuk tanggal: ${new Date(selectedDate).toLocaleDateString("id-ID")}`);
-      router.push(`/status-ga/inf-jalan?openArea=${encodeURIComponent(areaName)}`);
-    } catch (err) {
-      console.error("Gagal menyimpan:", err);
-      alert("Gagal menyimpan data.");
-    }
-  };
+      // Save ke API
+      await saveChecklist(
+        TYPE_SLUG,
+        areaId,
+        selectedDate,
+        checklistData,
+        user.id || "unknown",
+        user.fullName || "Unknown Inspector"
+      );
 
-  const handleLoadExisting = () => {
-    if (!selectedDate) {
-      alert("Pilih tanggal terlebih dahulu!");
-      return;
-    }
-
-    const existingData: Record<string, string> = {};
-    let found = false;
-
-    inspectionItems.forEach((item) => {
-      const entries = savedData[item.key] || [];
-      const entry = entries.find((e) => e.date === selectedDate);
-      if (entry) {
-        found = true;
-        existingData[`${item.key}_hasil`] = entry.hasilPemeriksaan;
-        existingData[`${item.key}_keterangan`] = entry.keteranganTemuan;
-        existingData[`${item.key}_tindakan`] = entry.tindakanPerbaikan;
-        existingData[`${item.key}_pic`] = entry.pic;
-        existingData[`${item.key}_dueDate`] = entry.dueDate;
-        existingData[`${item.key}_verify`] = entry.verify;
-      }
-    });
-
-    if (found) {
-      setAnswers(existingData);
-      // ✅ Muat gambar
-      const loadedImages: { key: string; url: string }[] = [];
-      inspectionItems.forEach(item => {
-        const entries = savedData[item.key] || [];
-        const entry = entries.find(e => e.date === selectedDate);
-        if (entry?.images) {
-          entry.images.forEach(url => {
-            loadedImages.push({ key: item.key, url });
-          });
-        }
-      });
-      setImages(loadedImages);
-      alert("Data berhasil dimuat!");
-    } else {
-      alert("Tidak ada data untuk tanggal ini.");
-      setAnswers({});
-      setImages([]);
+      alert(`Data berhasil disimpan untuk tanggal ${new Date(selectedDate).toLocaleDateString("id-ID")}`);
+      
+      // Redirect ke status page setelah 500ms
+      setTimeout(() => {
+        router.push(`/status-ga/inf-jalan?openArea=${encodeURIComponent(areaName)}`);
+      }, 500);
+      
+    } catch (error) {
+      console.error("Error saving checklist data:", error);
+      alert("Gagal menyimpan data. Silakan coba lagi.");
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -406,7 +442,7 @@ export function EChecksheetInfJalanForm({
           </div>
 
           {/* Dropdown Riwayat Pengisian */}
-          {Object.keys(savedData).length > 0 && (
+          {availableDates.length > 0 && (
             <div style={{ display: "flex", alignItems: "center", gap: "12px", flexWrap: "wrap" }}>
               <label style={{
                 fontWeight: "700",
@@ -435,23 +471,13 @@ export function EChecksheetInfJalanForm({
                 }}
               >
                 <option value="">— Pilih tanggal lama —</option>
-                {(() => {
-                  const allDates = new Set<string>();
-                  Object.values(savedData).forEach((entries: ChecksheetEntry[]) => {
-                    if (Array.isArray(entries)) {
-                      entries.forEach(entry => {
-                        if (entry?.date) allDates.add(entry.date);
-                      });
-                    }
-                  });
-                  return Array.from(allDates)
-                    .sort((a, b) => new Date(b).getTime() - new Date(a).getTime())
-                    .map(date => (
-                      <option key={date} value={date}>
-                        {new Date(date).toLocaleDateString("id-ID", { day: "2-digit", month: "short", year: "numeric" })}
-                      </option>
-                    ));
-                })()}
+                {availableDates
+                  .sort((a, b) => new Date(b).getTime() - new Date(a).getTime())
+                  .map(date => (
+                    <option key={date} value={date}>
+                      {new Date(date).toLocaleDateString("id-ID", { day: "2-digit", month: "short", year: "numeric" })}
+                    </option>
+                  ))}
               </select>
               <button
                 onClick={handleLoadExisting}
@@ -482,7 +508,7 @@ export function EChecksheetInfJalanForm({
           </p>
         </div>
 
-        {/* Tabel APD */}
+        {/* Tabel Checklist */}
         <div style={{
           background: "white",
           borderRadius: "12px",
@@ -532,7 +558,6 @@ export function EChecksheetInfJalanForm({
                     textAlign: "center",
                     minWidth: "180px"
                   }}>KETERANGAN TEMUAN</th>
-                  {/* ✅ Kolom Dokumentasi */}
                   <th style={{
                     padding: "10px",
                     border: "1px solid #0d47a1",
@@ -577,7 +602,7 @@ export function EChecksheetInfJalanForm({
               </thead>
               <tbody>
                 {inspectionItems.map((item, index) => (
-                  <tr key={item.key}>
+                  <tr key={item.item_key}>
                     <td style={{
                       padding: "8px",
                       border: "1px solid #0d47a1",
@@ -585,7 +610,7 @@ export function EChecksheetInfJalanForm({
                       fontWeight: "600",
                       background: "white"
                     }}>
-                      {index + 1}
+                      {item.no}
                     </td>
                     <td style={{
                       padding: "8px",
@@ -594,16 +619,7 @@ export function EChecksheetInfJalanForm({
                       verticalAlign: "top",
                       background: "white"
                     }}>
-                      <div>{item.item}</div>
-                      {item.subItems && (
-                        <div style={{ marginTop: "8px", paddingLeft: "12px" }}>
-                          {item.subItems.map((sub, subIdx) => (
-                            <div key={subIdx} style={{ marginTop: "4px", fontSize: "clamp(10px, 2.5vw, 12px)", color: "#555" }}>
-                              {sub}
-                            </div>
-                          ))}
-                        </div>
-                      )}
+                      <div>{item.item_check}</div>
                     </td>
                     <td style={{
                       padding: "8px",
@@ -613,8 +629,8 @@ export function EChecksheetInfJalanForm({
                       background: "white"
                     }}>
                       <select
-                        value={answers[`${item.key}_hasil`] || ""}
-                        onChange={(e) => handleInputChange(`${item.key}_hasil`, e.target.value)}
+                        value={answers[`${item.item_key}_hasil`] || ""}
+                        onChange={(e) => handleInputChange(`${item.item_key}_hasil`, e.target.value)}
                         disabled={!selectedDate}
                         style={{
                           width: "100%",
@@ -639,8 +655,8 @@ export function EChecksheetInfJalanForm({
                       background: "white"
                     }}>
                       <textarea
-                        value={answers[`${item.key}_keterangan`] || ""}
-                        onChange={(e) => handleInputChange(`${item.key}_keterangan`, e.target.value)}
+                        value={answers[`${item.item_key}_keterangan`] || ""}
+                        onChange={(e) => handleInputChange(`${item.item_key}_keterangan`, e.target.value)}
                         disabled={!selectedDate}
                         placeholder="Keterangan..."
                         rows={2}
@@ -655,7 +671,6 @@ export function EChecksheetInfJalanForm({
                         }}
                       />
                     </td>
-                    {/* ✅ Kolom Dokumentasi */}
                     <td style={{
                       padding: "8px",
                       border: "1px solid #0d47a1",
@@ -667,31 +682,33 @@ export function EChecksheetInfJalanForm({
                         <div style={{ display: "flex", gap: "4px" }}>
                           <button
                             onClick={() => {
-                              setCurrentItemKey(item.key);
+                              setCurrentItemKey(item.item_key);
                               setShowCameraModal(true);
                             }}
+                            disabled={!selectedDate}
                             style={{
                               padding: "4px 8px",
-                              background: "#1e88e5",
+                              background: selectedDate ? "#1e88e5" : "#bdbdbd",
                               color: "white",
                               borderRadius: "4px",
                               fontSize: "11px",
-                              cursor: "pointer",
+                              cursor: selectedDate ? "pointer" : "not-allowed",
                               textAlign: "center",
-                              whiteSpace: "nowrap"
+                              whiteSpace: "nowrap",
+                              border: "none"
                             }}
                           >
                             📷 Kamera
                           </button>
                           <label
-                            htmlFor={`file-${item.key}`}
+                            htmlFor={`file-${item.item_key}`}
                             style={{
                               padding: "4px 8px",
-                              background: "#4caf50",
+                              background: selectedDate ? "#4caf50" : "#bdbdbd",
                               color: "white",
                               borderRadius: "4px",
                               fontSize: "11px",
-                              cursor: "pointer",
+                              cursor: selectedDate ? "pointer" : "not-allowed",
                               textAlign: "center",
                               whiteSpace: "nowrap"
                             }}
@@ -699,20 +716,21 @@ export function EChecksheetInfJalanForm({
                             🖼️ File
                           </label>
                           <input
-                            id={`file-${item.key}`}
+                            id={`file-${item.item_key}`}
                             type="file"
                             accept="image/*"
                             multiple
-                            onChange={(e) => handleImageUpload(e, item.key)}
+                            disabled={!selectedDate}
+                            onChange={(e) => handleImageUpload(e, item.item_key)}
                             style={{ display: "none" }}
                           />
                         </div>
                         <div style={{ display: "flex", flexWrap: "wrap", gap: "4px", marginTop: "4px" }}>
-                          {images.filter(img => img.key === item.key).map((img, idx) => (
+                          {images.filter(img => img.key === item.item_key).map((img, idx) => (
                             <div key={idx} style={{ position: "relative", width: "60px", height: "60px", borderRadius: "4px", overflow: "hidden", cursor: "pointer" }}>
                               <img
                                 src={img.url}
-                                alt={`Dokumentasi ${item.key} ${idx + 1}`}
+                                alt={`Dokumentasi ${item.item_key} ${idx + 1}`}
                                 onClick={() => openImageModal(img.url)}
                                 style={{
                                   width: "100%",
@@ -724,7 +742,7 @@ export function EChecksheetInfJalanForm({
                               <button
                                 onClick={(e) => {
                                   e.stopPropagation();
-                                  removeImage(images.findIndex(i => i.key === item.key && i.url === img.url));
+                                  removeImage(images.findIndex(i => i.key === item.item_key && i.url === img.url));
                                 }}
                                 style={{
                                   position: "absolute",
@@ -755,8 +773,8 @@ export function EChecksheetInfJalanForm({
                       background: "white"
                     }}>
                       <textarea
-                        value={answers[`${item.key}_tindakan`] || ""}
-                        onChange={(e) => handleInputChange(`${item.key}_tindakan`, e.target.value)}
+                        value={answers[`${item.item_key}_tindakan`] || ""}
+                        onChange={(e) => handleInputChange(`${item.item_key}_tindakan`, e.target.value)}
                         disabled={!selectedDate}
                         placeholder="Tindakan..."
                         rows={2}
@@ -779,8 +797,8 @@ export function EChecksheetInfJalanForm({
                     }}>
                       <input
                         type="text"
-                        value={answers[`${item.key}_pic`] || ""}
-                        onChange={(e) => handleInputChange(`${item.key}_pic`, e.target.value)}
+                        value={answers[`${item.item_key}_pic`] || ""}
+                        onChange={(e) => handleInputChange(`${item.item_key}_pic`, e.target.value)}
                         disabled={!selectedDate}
                         placeholder="PIC"
                         style={{
@@ -801,8 +819,8 @@ export function EChecksheetInfJalanForm({
                     }}>
                       <input
                         type="date"
-                        value={answers[`${item.key}_dueDate`] || ""}
-                        onChange={(e) => handleInputChange(`${item.key}_dueDate`, e.target.value)}
+                        value={answers[`${item.item_key}_dueDate`] || ""}
+                        onChange={(e) => handleInputChange(`${item.item_key}_dueDate`, e.target.value)}
                         disabled={!selectedDate}
                         style={{
                           width: "100%",
@@ -822,8 +840,8 @@ export function EChecksheetInfJalanForm({
                     }}>
                       <input
                         type="text"
-                        value={answers[`${item.key}_verify`] || ""}
-                        onChange={(e) => handleInputChange(`${item.key}_verify`, e.target.value)}
+                        value={answers[`${item.item_key}_verify`] || ""}
+                        onChange={(e) => handleInputChange(`${item.item_key}_verify`, e.target.value)}
                         disabled={!selectedDate}
                         placeholder="Verify"
                         style={{
@@ -873,25 +891,25 @@ export function EChecksheetInfJalanForm({
           </button>
           <button
             onClick={handleSave}
-            disabled={!selectedDate}
+            disabled={!selectedDate || isSaving}
             style={{
               padding: "12px 28px",
               border: "none",
               borderRadius: "8px",
               fontSize: "clamp(13px, 3vw, 14px)",
-              cursor: selectedDate ? "pointer" : "not-allowed",
+              cursor: (selectedDate && !isSaving) ? "pointer" : "not-allowed",
               fontWeight: "600",
               transition: "all 0.3s ease",
               textTransform: "uppercase",
               letterSpacing: "0.5px",
               minWidth: "160px",
-              background: selectedDate ? "linear-gradient(135deg, #1e88e5, #0d47a1)" : "#bdbdbd",
+              background: (selectedDate && !isSaving) ? "linear-gradient(135deg, #1e88e5, #0d47a1)" : "#bdbdbd",
               color: "white",
               boxShadow: "0 2px 8px rgba(13, 71, 161, 0.2)",
-              opacity: selectedDate ? 1 : 0.6
+              opacity: (selectedDate && !isSaving) ? 1 : 0.6
             }}
           >
-            ✓ Simpan Data
+            {isSaving ? "Menyimpan..." : "✓ Simpan Data"}
           </button>
         </div>
 

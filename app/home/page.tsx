@@ -33,21 +33,35 @@ interface ActivityItem {
 }
 
 export default function ModernHomePage() {
+  // ✅ SEMUA HOOKS DIPANGGIL PERTAMA KALI, TANPA KONDISI
   const { user, loading } = useAuth();
   const [activities, setActivities] = useState<ActivityItem[]>([]);
+  const [isMounted, setIsMounted] = useState(false);
 
-  // 🔁 Muat aktivitas hari ini
+  // ✅ Mount state untuk hindari hydration mismatch
   useEffect(() => {
+    setIsMounted(true);
+    return () => {
+      setIsMounted(false);
+    };
+  }, []);
+
+  // 🔁 Muat aktivitas hari ini - DIPINDAH KE ATAS SEBELUM CONDITIONAL LOGIC
+  useEffect(() => {
+    if (!isMounted) return; // Jangan jalan sebelum mount
+
+    let shouldUpdate = true; // Safety flag untuk hindari state update setelah unmount
+
     try {
       const historyStr = localStorage.getItem("checksheet_history");
       if (!historyStr) {
-        setActivities([]);
+        if (shouldUpdate) setActivities([]);
         return;
       }
 
       const history = JSON.parse(historyStr);
       if (!Array.isArray(history)) {
-        setActivities([]);
+        if (shouldUpdate) setActivities([]);
         return;
       }
 
@@ -74,14 +88,27 @@ export default function ModernHomePage() {
         status: (item.status === "NG" ? "NG" : "OK") as "OK" | "NG",
       }));
 
-      setActivities(recent);
+      if (shouldUpdate) {
+        setActivities(recent);
+      }
     } catch (e) {
       console.error("[Home] Gagal memuat riwayat checklist:", e);
-      setActivities([]);
+      if (shouldUpdate) {
+        setActivities([]);
+      }
     }
-  }, []);
 
-  // Handle loading & auth
+    return () => {
+      shouldUpdate = false; // Cleanup: tandai komponen sudah unmount
+    };
+  }, [isMounted]); // Jalankan saat isMounted berubah
+
+  // ✅ Jangan render apa pun sebelum mount di client
+  if (!isMounted) {
+    return null;
+  }
+
+  // ✅ CONDITIONAL LOGIC DILAKUKAN SETELAH SEMUA HOOKS
   if (loading) {
     return (
       <div className="modern-home-page">
@@ -96,26 +123,79 @@ export default function ModernHomePage() {
   }
 
   if (!user) {
-    return null; // atau redirect ke login
+    return null; // Redirect ke login sebaiknya ditangani di layout/route level
   }
 
+  // ✅ LOGIC BISNIS SETELAH VALIDASI AUTH
   const userName = user.fullName || "User";
+  const currentRole = user.role;
+  const dashboardLink = (() => {
+    switch (currentRole) {
+      case "inspector-ga": return "/ga-dashboard";
+      case "inspector-qa": return "/qa-dashboard";
+      case "group-leader-qa": return "/gl-dashboard";
+      default: return "/dashboard";
+    }
+  })();
 
-  // ✅ Hanya satu dashboard untuk inspector-ga
-  const dashboardLink = "/ga-dashboard";
+  const roleCards: Record<string, CardData[]> = {
+    "group-leader-qa": [
+      {
+        id: "final-assy",
+        icon: Wrench,
+        title: "Final Assy",
+        description: "Daily check untuk Final Assembly",
+        gradient: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
+        href: "/status-final-assy?subType=group-leader-qa",
+      },
+      {
+        id: "pre-assy",
+        icon: Wrench,
+        title: "Pre-Assy",
+        description: "Daily check dan CC Stripping",
+        gradient: "linear-gradient(135deg, #f093fb 0%, #f5576c 100%)",
+        href: "/status-pre-assy?subType=group-leader-qa",
+      },
+    ],
+    "inspector-qa": [
+      {
+        id: "final-assy",
+        icon: Wrench,
+        title: "Final Assy",
+        description: "Inspeksi Final Assembly",
+        gradient: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
+        href: "/status-final-assy?subType=inspector-qa",
+      },
+      {
+        id: "pre-assy",
+        icon: Wrench,
+        title: "Pre-Assy",
+        description: "Inspeksi Pre-Assembly",
+        gradient: "linear-gradient(135deg, #f093fb 0%, #f5576c 100%)",
+        href: "/status-pre-assy?subType=inspector-qa",
+      },
+      {
+        id: "pressure-jig",
+        icon: Wrench,
+        title: "Pressure Jig",
+        description: "Check Pressure Jig",
+        gradient: "linear-gradient(135deg, #fa709a 0%, #fee140 100%)",
+        href: "/status-pre-assy-pressure-jig",
+      },
+    ],
+    "inspector-ga": [
+      {
+        id: "checklist-ga",
+        icon: Building2,
+        title: "Checklist GA",
+        description: "Kebersihan, keamanan, fasilitas",
+        gradient: "linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)",
+        href: "/status-ga",
+      },
+    ],
+  };
 
-  // 🎯 Kartu hanya untuk inspector-ga
-  const gaCards: CardData[] = [
-    {
-      id: "checklist-ga",
-      icon: Building2,
-      title: "Checklist GA",
-      description: "Kebersihan, keamanan, fasilitas",
-      gradient: "linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)",
-      href: "/status-ga",
-    },
-    
-  ];
+  const currentRoleCards = roleCards[currentRole] || [];
 
   return (
     <div className="modern-home-page">
@@ -212,6 +292,7 @@ export default function ModernHomePage() {
       </main>
 
       <style jsx>{`
+        /* ... (style tetap sama, tidak diubah) ... */
         .modern-home-page {
           display: flex;
           min-height: 100vh;

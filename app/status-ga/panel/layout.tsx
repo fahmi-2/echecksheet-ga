@@ -1,6 +1,6 @@
+// app/status-ga/panel/lyout.tsx
 import type React from "react"
 import { Suspense } from "react"
-import { AuthProvider } from "@/lib/auth-context"
 
 export default function GAPanelLayout({
   children,
@@ -8,8 +8,6 @@ export default function GAPanelLayout({
   children: React.ReactNode
 }) {
   return (
-    <AuthProvider>
-      <Suspense fallback={<div>Loading...</div>}>{children}</Suspense>
-    </AuthProvider>
+    <Suspense fallback={<div>Loading...</div>}>{children}</Suspense>
   )
 }

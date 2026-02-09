@@ -1,50 +1,82 @@
-// app/ga-lift-barang/GaLiftBarangContent.tsx
+// app/status-ga/lift-barang/GaLiftBarangContent.tsx
 "use client";
-
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
-import { NavbarStatic } from "@/components/navbar-static";
 import { Sidebar } from "@/components/Sidebar";
+import QrScanner from 'qr-scanner';
+import { ArrowLeft } from "lucide-react";
 
-interface LiftItem {
+// ✅ Import API helper yang reusable
+import { 
+  getAreasByType, 
+  getAvailableDates, 
+  getChecklistByDate,
+  getItemsByType,
+  ChecklistItem
+} from "@/lib/api/checksheet";
+
+interface Area {
+  id: number;
   no: number;
-  namaLift: string;
-  area: string;
-  lokasi: string;
-}
-
-interface ChecksheetData {
-  [date: string]: {
-    limitSwitchBawah: string;
-    limitSwitchAtas: string;
-    pintuKendorPecah: string;
-    pintuEngsel: string;
-    pintuPengunci: string;
-    limitSwitchPintuLift: string;
-    cabinLift: string;
-    pushButtonNaik: string;
-    pushButtonTurun: string;
-    pushButtonEmergency: string;
-    pushButtonAtasNaik: string;
-    pushButtonAtasTurun: string;
-    pushButtonAtasEmergency: string;
-    sensorLiftTurun: string;
-    sensorLiftNaik: string;
-    bearingSliding: string;
-    kawatSeling: string;
-    bunyiAbnormalNaik: string;
-    bunyiAbnormalLiftStopper: string;
-    bunyiAbnormalLiftBawah: string;
-    inspector: string;
-  };
+  name: string;
+  location: string;
 }
 
 export function GaLiftBarangContent({ openLift }: { openLift: string }) {
   const router = useRouter();
   const { user, loading } = useAuth();
+  
+  // ✅ Hardcode type slug untuk page ini
+  const TYPE_SLUG = 'lift-barang';
+  
   const [isMounted, setIsMounted] = useState(false);
   const [showModal, setShowModal] = useState(false);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [showImageModal, setShowImageModal] = useState(false);
+  const [currentImageUrl, setCurrentImageUrl] = useState("");
+  const [areas, setAreas] = useState<Area[]>([]);
+  const [selectedArea, setSelectedArea] = useState<Area | null>(null);
+  const [currentMonth, setCurrentMonth] = useState(new Date());
+  const [availableDates, setAvailableDates] = useState<string[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const [monthData, setMonthData] = useState<Record<string, any>>({});
+  
+  // ✅ Load inspection items dari API (PENTING!)
+  const [inspectionItems, setInspectionItems] = useState<ChecklistItem[]>([]);
+  
+  // QR Scanner state
+  const [isScanning, setIsScanning] = useState(false);
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const qrScannerRef = useRef<QrScanner | null>(null);
+
+  // ✅ Load inspection items dari API
+  useEffect(() => {
+    const loadItems = async () => {
+      try {
+        const items = await getItemsByType(TYPE_SLUG);
+        console.log('Loaded inspection items:', items); // DEBUG
+        setInspectionItems(items);
+      } catch (error) {
+        console.error("Failed to load checklist items:", error);
+        alert("Gagal memuat daftar item checklist. Silakan coba lagi.");
+      }
+    };
+    loadItems();
+  }, []);
+
+  // ✅ Load areas dari API berdasarkan type
+  useEffect(() => {
+    const loadAreas = async () => {
+      try {
+        const data = await getAreasByType(TYPE_SLUG);
+        setAreas(data);
+      } catch (error) {
+        console.error("Failed to load areas:", error);
+      }
+    };
+    loadAreas();
+  }, []);
 
   useEffect(() => {
     setIsMounted(true);
@@ -60,48 +92,106 @@ export function GaLiftBarangContent({ openLift }: { openLift: string }) {
   useEffect(() => {
     if (!isMounted || loading) return;
     if (!openLift) return;
-    const found = lifts.find((l) => l.namaLift === openLift);
+    
+    const found = areas.find((item) => {
+      const parts = item.name.split(' \u0007 ');
+      return parts[0] === openLift;
+    });
+    
     if (found) {
       setTimeout(() => openDetail(found), 50);
     }
-  }, [isMounted, loading, openLift]);
+  }, [isMounted, loading, openLift, areas]);
 
-  const lifts: LiftItem[] = [
-    { no: 1, namaLift: "Lift Barang Produksi", area: "Genba A Lt. 2", lokasi: "Produksi Genba A" },
-    { no: 2, namaLift: "Lift Barang Genba B", area: "Genba B Lt. 2", lokasi: "Produksi Genba B" },
-    { no: 3, namaLift: "Lift Barang Genba C", area: "Genba C Lt. 2", lokasi: "Produksi Genba C" },
-    { no: 4, namaLift: "Lift Barang Genba D", area: "Genba D Lt. 2", lokasi: "Produksi Genba D" },
-    { no: 5, namaLift: "Lift Barang Genba E", area: "Genba E Lt. 2", lokasi: "Produksi Genba E" },
-    { no: 6, namaLift: "Lift Barang Warehouse", area: "Warehouse Lt. 2", lokasi: "Area Warehouse" },
-  ];
-
-  const [selectedLift, setSelectedLift] = useState<LiftItem | null>(null);
-  const [checksheetData, setChecksheetData] = useState<ChecksheetData | null>(null);
-  const [currentMonth, setCurrentMonth] = useState(new Date());
-
-  const openDetail = (lift: LiftItem) => {
-    setSelectedLift(lift);
-    const key = `e-checksheet-lift-${lift.namaLift}`;
-    const saved = typeof window !== "undefined" ? localStorage.getItem(key) : null;
-    if (saved) {
-      try {
-        const data = JSON.parse(saved);
-        setChecksheetData(data);
-      } catch (e) {
-        setChecksheetData(null);
-      }
-    } else {
-      setChecksheetData(null);
-    }
+  // ✅ Open detail dengan load data dari API
+  const openDetail = async (area: Area) => {
+    setSelectedArea(area);
     setShowModal(true);
+    setIsLoading(true);
+
+    try {
+      // Load available dates untuk area ini
+      const dates = await getAvailableDates(TYPE_SLUG, area.id);
+      setAvailableDates(dates);
+      
+      // Load data untuk bulan ini
+      await loadMonthData(area.id, currentMonth, dates);
+    } catch (error) {
+      console.error("Error loading detail:", error);
+      setMonthData({});
+      setAvailableDates([]);
+      alert("Gagal memuat data. Silakan coba lagi.");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // ✅ Load data untuk bulan tertentu - DIPERBAIKI
+  const loadMonthData = async (areaId: number, monthDate: Date, allDates: string[]) => {
+    setIsLoading(true);
+    try {
+      const year = monthDate.getFullYear();
+      const month = monthDate.getMonth();
+      const firstDay = new Date(year, month, 1);
+      const lastDay = new Date(year, month + 1, 0);
+      
+      // Filter tanggal yang ada di bulan ini
+      const datesInMonth = allDates.filter(dateStr => {
+        const date = new Date(dateStr);
+        return date >= firstDay && date <= lastDay;
+      });
+
+      // Fetch data untuk setiap tanggal di bulan ini
+      const dataMap: Record<string, any> = {};
+      
+      for (const dateStr of datesInMonth) {
+        try {
+          const data = await getChecklistByDate(TYPE_SLUG, areaId, dateStr);
+          
+          if (data) {
+            console.log(`✅ Data loaded for ${dateStr}:`, data); // DEBUG
+            dataMap[dateStr] = data; // Data sudah dalam format: { item_key: { hasilPemeriksaan, ... }, ... }
+          }
+        } catch (error) {
+          console.error(`Error loading data for ${dateStr}:`, error);
+        }
+      }
+      
+      console.log('📊 Final monthData:', dataMap); // DEBUG
+      setMonthData(dataMap);
+    } catch (error) {
+      console.error("Error loading month data:", error);
+      alert("Gagal memuat data bulan ini. Silakan coba lagi.");
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const closeDetail = () => {
-    setSelectedLift(null);
-    setChecksheetData(null);
+    setSelectedArea(null);
+    setMonthData({});
+    setAvailableDates([]);
     setShowModal(false);
   };
 
+  // ✅ Change month dan reload data
+  const changeMonth = async (direction: number) => {
+    const newMonth = new Date(currentMonth.getFullYear(), currentMonth.getMonth() + direction, 1);
+    setCurrentMonth(newMonth);
+    
+    if (selectedArea) {
+      setIsLoading(true);
+      try {
+        await loadMonthData(selectedArea.id, newMonth, availableDates);
+      } catch (error) {
+        console.error("Error loading month data:", error);
+      } finally {
+        setIsLoading(false);
+      }
+    }
+  };
+
+  // ✅ Get days in month
   const getDaysInMonth = (date: Date) => {
     const year = date.getFullYear();
     const month = date.getMonth();
@@ -109,6 +199,7 @@ export function GaLiftBarangContent({ openLift }: { openLift: string }) {
     return Array.from({ length: days }, (_, i) => i + 1);
   };
 
+  // ✅ Format date key untuk API - DIPERBAIKI
   const formatDateKey = (day: number) => {
     const year = currentMonth.getFullYear();
     const month = String(currentMonth.getMonth() + 1).padStart(2, "0");
@@ -116,241 +207,337 @@ export function GaLiftBarangContent({ openLift }: { openLift: string }) {
     return `${year}-${month}-${d}`;
   };
 
+  // ✅ Get month year label
   const getMonthYear = () => {
     return currentMonth.toLocaleDateString("id-ID", { month: "long", year: "numeric" });
   };
 
-  const changeMonth = (direction: number) => {
-    setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() + direction, 1));
+  // ✅ Cek apakah tanggal editable (hanya hari ini)
+  const isDateEditable = (day: number): boolean => {
+    const cellDate = new Date(currentMonth.getFullYear(), currentMonth.getMonth(), day);
+    const todayDate = new Date();
+    cellDate.setHours(0, 0, 0, 0);
+    todayDate.setHours(0, 0, 0, 0);
+    return cellDate.getTime() === todayDate.getTime();
   };
 
-  const inspectionItems = [
-    { no: 1, item: "Limit switch pintu pagar bawah", content: "Limit switch", method: "Dicoba" },
-    { no: 1, item: "Limit switch pintu pagar bawah", content: "Tidak kendor dan pecah", method: "Visual" },
-    { no: 1, item: "Limit switch pintu pagar bawah", content: "Engsel", method: "Dicoba" },
-    { no: 1, item: "Limit switch pintu pagar bawah", content: "Pengunci", method: "Dicoba" },
-    { no: 2, item: "Kondisi pintu pagar atas", content: "Limit switch", method: "Dicoba" },
-    { no: 2, item: "Kondisi pintu pagar atas", content: "Tidak kendor dan pecah", method: "Visual" },
-    { no: 2, item: "Kondisi pintu pagar atas", content: "Engsel", method: "Dicoba" },
-    { no: 2, item: "Kondisi pintu pagar atas", content: "Pengunci", method: "Dicoba" },
-    { no: 3, item: "Kondisi pintu lift", content: "Limit switch", method: "Dicoba" },
-    { no: 3, item: "Kondisi pintu lift", content: "Tidak kendor dan pecah", method: "Visual" },
-    { no: 3, item: "Kondisi pintu lift", content: "Engsel", method: "Dicoba" },
-    { no: 3, item: "Kondisi pintu lift", content: "Pengunci", method: "Dicoba" },
-    { no: 4, item: "Cabin lift", content: "Rata dengan landasan saat berhenti", method: "Visual" },
-    { no: 5, item: "Push button Bawah", content: "Naik", method: "Dicoba" },
-    { no: 5, item: "Push button Bawah", content: "Turun", method: "Dicoba" },
-    { no: 5, item: "Push button Bawah", content: "Emergency Stop", method: "Dicoba" },
-    { no: 6, item: "Push button Atas", content: "Naik", method: "Dicoba" },
-    { no: 6, item: "Push button Atas", content: "Turun", method: "Dicoba" },
-    { no: 6, item: "Push button Atas", content: "Emergency Stop", method: "Dicoba" },
-    { no: 7, item: "Sensor Lift turun", content: "Proximity Switch", method: "Dicoba" },
-    { no: 8, item: "Sensor Lift naik", content: "Proximity Switch", method: "Dicoba" },
-    { no: 9, item: "Kondisi Bearing sliding (All)", content: "Bearing Sliding", method: "Dicoba & di lihat" },
-    { no: 10, item: "Kondisi Kawat seling", content: "Kawat seling", method: "Dilihat" },
-    { no: 11, item: "Bunyi abnormal saat lift naik dan turun", content: "Bearing Sliding", method: "Dicoba" },
-    { no: 12, item: "Bunyi abnormal saat lift berhenti di Stopper atas", content: "Keranjang Lift dengan Stopper atas", method: "Dicoba" },
-    { no: 13, item: "Bunyi abnormal saat lift berhenti di bawah", content: "Keranjang Lift dengan stoper bawah", method: "Di coba" },
-  ];
+  // ✅ Get date status
+  const getDateStatus = (day: number): 'past' | 'today' | 'future' => {
+    const cellDate = new Date(currentMonth.getFullYear(), currentMonth.getMonth(), day);
+    const todayDate = new Date();
+    cellDate.setHours(0, 0, 0, 0);
+    todayDate.setHours(0, 0, 0, 0);
+    if (cellDate.getTime() < todayDate.getTime()) return 'past';
+    if (cellDate.getTime() === todayDate.getTime()) return 'today';
+    return 'future';
+  };
 
-  const fieldKeys = [
-    "limitSwitchBawah", "pintuKendorPecah1", "pintuEngsel1", "pintuPengunci1",
-    "limitSwitchAtas", "pintuKendorPecah2", "pintuEngsel2", "pintuPengunci2",
-    "limitSwitchPintuLift", "pintuKendorPecah3", "pintuEngsel3", "pintuPengunci3",
-    "cabinLift",
-    "pushButtonNaik", "pushButtonTurun", "pushButtonEmergency",
-    "pushButtonAtasNaik", "pushButtonAtasTurun", "pushButtonAtasEmergency",
-    "sensorLiftTurun", "sensorLiftNaik", "bearingSliding", "kawatSeling",
-    "bunyiAbnormalNaik", "bunyiAbnormalLiftStopper", "bunyiAbnormalLiftBawah"
-  ];
+  // ✅ Fungsi buka modal gambar
+  const openImageModal = (url: string) => {
+    setCurrentImageUrl(url);
+    setShowImageModal(true);
+  };
 
-  if (!isMounted) {
-    return null;
-  }
+  const closeImageModal = () => {
+    setShowImageModal(false);
+    setCurrentImageUrl("");
+  };
 
+  // QR Scanner functions
+  const openQrScanner = () => {
+    setIsScanning(true);
+  };
+
+  useEffect(() => {
+    return () => {
+      if (qrScannerRef.current) {
+        qrScannerRef.current.destroy();
+      }
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!isScanning || !videoRef.current) return;
+    
+    const video = videoRef.current;
+
+    const onScanSuccess = (result: string) => {
+      console.log("QR Scanned:", result);
+      setIsScanning(false);
+      if (qrScannerRef.current) {
+        qrScannerRef.current.destroy();
+        qrScannerRef.current = null;
+      }
+
+      try {
+        let urlStr = result.trim();
+
+        if (urlStr.startsWith('http')) {
+          const url = new URL(urlStr);
+          if (url.pathname === '/e-checksheet-lift-barang') {
+            router.push(urlStr);
+            return;
+          }
+        }
+
+        if (urlStr.startsWith('/e-checksheet-lift-barang?')) {
+          router.push(urlStr);
+          return;
+        }
+
+        alert("Invalid QR code. Please scan a valid lift barang inspection QR.");
+      } catch (err) {
+        alert("Invalid QR format.");
+      }
+    };
+
+    const onScanError = (error: string | Error) => {
+      console.warn("QR scan error:", error);
+    };
+
+    qrScannerRef.current = new QrScanner(
+      video,
+      onScanSuccess,
+      onScanError
+    );
+
+    qrScannerRef.current.start();
+
+    return () => {
+      if (qrScannerRef.current) {
+        qrScannerRef.current.stop();
+      }
+    };
+  }, [isScanning, router]);
+
+  // Filter data berdasarkan search
+  const filteredData = areas.filter(item => {
+    const parts = item.name.split(' \u0007 ');
+    const lokasi = parts[0] || '';
+    const area = parts[1] || '';
+    const lokasiDetail = parts[2] || '';
+    
+    return (
+      lokasi.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      area.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      lokasiDetail.toLowerCase().includes(searchTerm.toLowerCase())
+    );
+  });
+
+  if (!isMounted) return null;
   if (loading) {
     return (
       <div style={{ display: "flex", justifyContent: "center", alignItems: "center", minHeight: "100vh", background: "#f5f5f5" }}>
-        <p>Loading...</p>
+        Loading...
       </div>
     );
   }
-
   if (!user || (user.role !== "inspector-ga")) {
     return null;
   }
 
   return (
     <div style={{ minHeight: "100vh", background: "#f8f9fa" }}>
-      <Sidebar userName={user?.fullName} />
-      <div style={{ padding: "32px 24px", maxWidth: "1400px", margin: "0 auto" }}>
-        <div style={{ marginBottom: "32px" }}>
-          <div style={{
-            background: "linear-gradient(135deg, #0d47a1 0%, #1e88e5 100%)",
-            borderRadius: "12px",
-            padding: "24px 32px",
-            boxShadow: "0 4px 12px rgba(13, 71, 161, 0.15)"
-          }}>
-            <h1 style={{ margin: "0 0 8px 0", color: "white", fontSize: "28px", fontWeight: "700", letterSpacing: "-0.5px" }}>
-              GA Lift Barang Inspection
+      <Sidebar userName={user.fullName} />
+      <div style={{
+        paddingLeft: "96px",
+        paddingRight: "20px",
+        paddingTop: "24px",
+        paddingBottom: "24px",
+        maxWidth: "1400px",
+        margin: "0 auto"
+      }}>
+        {/* Header */}
+        <div style={{ marginBottom: "28px" }} className="header">
+          <button
+            onClick={() => router.push("/status-ga")}
+            className="btn-back"
+          >
+            <ArrowLeft size={18}/> Kembali
+          </button>
+          <div className="text-header">
+            <h1 style={{ margin: "0 0 6px 0", color: "white", fontSize: "26px", fontWeight: "600", letterSpacing: "-0.5px" }}>
+              🚒 Lift Barang Inspection Dashboard
             </h1>
-            <p style={{ margin: 0, color: "rgba(255, 255, 255, 0.9)", fontSize: "14px", fontWeight: "400" }}>
-              Manajemen Data Inspeksi Kelayakan Lift Barang
+            <p style={{ margin: 0, color: "#e3f2fd", fontSize: "14px", fontWeight: "400" }}>
+              Daily inspection schedule and maintenance records
             </p>
           </div>
         </div>
 
+        {/* Search + QR Scan */}
         <div style={{
           background: "white",
-          borderRadius: "12px",
-          boxShadow: "0 2px 8px rgba(0, 0, 0, 0.06)",
+          borderRadius: "8px",
+          padding: "16px 20px",
+          marginBottom: "24px",
+          boxShadow: "0 1px 3px rgba(0,0,0,0.08)",
+          border: "1px solid #e0e0e0",
+          position: "relative"
+        }}>
+          <div style={{ position: "relative" }}>
+            <input
+              type="text"
+              placeholder="Cari lokasi, area, atau detail..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              style={{
+                padding: "10px 40px 10px 16px",
+                border: "1px solid #1976d2",
+                borderRadius: "6px",
+                fontSize: "14px",
+                color: "#333",
+                width: "100%",
+                outline: "none"
+              }}
+            />
+            {/* QR Scan Button inside input */}
+            <button
+              type="button"
+              onClick={openQrScanner}
+              style={{
+                position: "absolute",
+                right: "10px",
+                top: "50%",
+                transform: "translateY(-50%)",
+                background: "transparent",
+                border: "none",
+                cursor: "pointer",
+                padding: "4px",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center"
+              }}
+              title="Scan QR Code"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#1976d2" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+                <path d="M7 7h.01"></path>
+                <path d="M17 7h.01"></path>
+                <path d="M17 17h.01"></path>
+                <path d="M7 17h.01"></path>
+              </svg>
+            </button>
+          </div>
+        </div>
+
+        {/* Table */}
+        <div style={{
+          background: "white",
+          borderRadius: "8px",
+          boxShadow: "0 1px 4px rgba(0,0,0,0.08)",
           overflow: "hidden",
-          border: "1px solid #e8e8e8"
+          border: "1px solid #e0e0e0"
         }}>
           <div style={{ overflowX: "auto" }}>
             <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "14px", minWidth: "800px" }}>
               <thead>
-                <tr>
-                  <th style={{
-                    padding: "12px 16px",
-                    textAlign: "center",
-                    background: "#f5f7fa",
-                    fontWeight: "600",
-                    color: "#0d47a1",
-                    fontSize: "13px",
-                    textTransform: "uppercase",
-                    letterSpacing: "0.5px",
-                    borderBottom: "2px solid #e8e8e8",
-                    width: "50px"
-                  }}>No</th>
-                  <th style={{
-                    padding: "12px 16px",
-                    textAlign: "left",
-                    background: "#f5f7fa",
-                    fontWeight: "600",
-                    color: "#0d47a1",
-                    fontSize: "13px",
-                    textTransform: "uppercase",
-                    letterSpacing: "0.5px",
-                    borderBottom: "2px solid #e8e8e8",
-                    minWidth: "200px"
-                  }}>Nama Lift Barang</th>
-                  <th style={{
-                    padding: "12px 16px",
-                    textAlign: "left",
-                    background: "#f5f7fa",
-                    fontWeight: "600",
-                    color: "#0d47a1",
-                    fontSize: "13px",
-                    textTransform: "uppercase",
-                    letterSpacing: "0.5px",
-                    borderBottom: "2px solid #e8e8e8",
-                    minWidth: "150px"
-                  }}>Area</th>
-                  <th style={{
-                    padding: "12px 16px",
-                    textAlign: "left",
-                    background: "#f5f7fa",
-                    fontWeight: "600",
-                    color: "#0d47a1",
-                    fontSize: "13px",
-                    textTransform: "uppercase",
-                    letterSpacing: "0.5px",
-                    borderBottom: "2px solid #e8e8e8",
-                    minWidth: "180px"
-                  }}>Lokasi</th>
-                  <th style={{
-                    padding: "12px 16px",
-                    textAlign: "center",
-                    background: "#f5f7fa",
-                    fontWeight: "600",
-                    color: "#0d47a1",
-                    fontSize: "13px",
-                    textTransform: "uppercase",
-                    letterSpacing: "0.5px",
-                    borderBottom: "2px solid #e8e8e8",
-                    minWidth: "220px"
-                  }}>Aksi</th>
+                <tr style={{ borderBottom: "2px solid #e0e0e0" }}>
+                  <th style={{ padding: "14px 16px", textAlign: "center", background: "#fafafa", fontWeight: "600", color: "#424242", fontSize: "13px" }}>No</th>
+                  <th style={{ padding: "14px 16px", textAlign: "left", background: "#fafafa", fontWeight: "600", color: "#424242", fontSize: "13px" }}>Nama Lift Barang</th>
+                  <th style={{ padding: "14px 16px", textAlign: "left", background: "#fafafa", fontWeight: "600", color: "#424242", fontSize: "13px" }}>Area</th>
+                  <th style={{ padding: "14px 16px", textAlign: "left", background: "#fafafa", fontWeight: "600", color: "#424242", fontSize: "13px" }}>Lokasi</th>
+                  <th style={{ padding: "14px 16px", textAlign: "center", background: "#fafafa", fontWeight: "600", color: "#424242", fontSize: "13px" }}>Status</th>
+                  <th style={{ padding: "14px 16px", textAlign: "center", background: "#fafafa", fontWeight: "600", color: "#424242", fontSize: "13px" }}>Actions</th>
                 </tr>
               </thead>
               <tbody>
-                {lifts.map((lift) => (
-                  <tr key={lift.no} style={{ transition: "background-color 0.2s ease" }}>
-                    <td style={{
-                      padding: "12px 16px",
-                      borderBottom: "1px solid #f0f0f0",
-                      textAlign: "center",
-                      fontWeight: "600",
-                      color: "#333"
-                    }}>{lift.no}</td>
-                    <td style={{
-                      padding: "12px 16px",
-                      borderBottom: "1px solid #f0f0f0",
-                      fontWeight: "500",
-                      color: "#1e88e5"
-                    }}>{lift.namaLift}</td>
-                    <td style={{
-                      padding: "12px 16px",
-                      borderBottom: "1px solid #f0f0f0",
-                      color: "#666",
-                      fontSize: "13px"
-                    }}>{lift.area}</td>
-                    <td style={{
-                      padding: "12px 16px",
-                      borderBottom: "1px solid #f0f0f0",
-                      color: "#666",
-                      fontSize: "13px"
-                    }}>{lift.lokasi}</td>
-                    <td style={{ padding: "12px 16px", borderBottom: "1px solid #f0f0f0" }}>
-                      <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", justifyContent: "center" }}>
-                        <button
-                          onClick={() => openDetail(lift)}
-                          style={{
-                            padding: "6px 14px",
-                            borderRadius: "6px",
-                            fontSize: "12px",
-                            fontWeight: "600",
-                            border: "none",
-                            cursor: "pointer",
-                            transition: "all 0.3s ease",
-                            textTransform: "uppercase",
-                            letterSpacing: "0.5px",
-                            background: "#1e88e5",
-                            color: "white"
-                          }}
-                        >
-                          DETAIL
-                        </button>
-                        <a
-                          href={`/e-checksheet-lift-barang?liftName=${encodeURIComponent(lift.namaLift)}&area=${encodeURIComponent(lift.area)}&lokasi=${encodeURIComponent(lift.lokasi)}`}
-                          style={{
-                            padding: "6px 14px",
-                            borderRadius: "6px",
-                            fontSize: "12px",
-                            fontWeight: "600",
-                            border: "none",
-                            cursor: "pointer",
-                            transition: "all 0.3s ease",
-                            textTransform: "uppercase",
-                            letterSpacing: "0.5px",
-                            background: "#4caf50",
+                {filteredData.map((area, idx) => {
+                  // Extract data from name field
+                  const parts = area.name.split(' \u0007 ');
+                  const lokasi = parts[0] || '';
+                  const areaName = parts[1] || '';
+                  const lokasiDetail = parts[2] || '';
+                  
+                  let statusLabel = "No Data";
+                  let statusColor = "#757575";
+                  let lastCheck = "-";
+
+                  // ✅ Cek status dari API
+                  const checkStatus = async () => {
+                    try {
+                      const dates = await getAvailableDates(TYPE_SLUG, area.id);
+                      
+                      if (dates.length > 0) {
+                        const latest = dates.sort().pop();
+                        lastCheck = new Date(latest!).toLocaleDateString("en-US", { day: "numeric", month: "short" });
+                        statusLabel = "Checked";
+                        statusColor = "#43a047";
+                      }
+                    } catch (error) {
+                      console.error("Error checking status:", error);
+                    }
+                  };
+
+                  // Panggil checkStatus
+                  checkStatus();
+
+                  return (
+                    <tr key={area.id} style={{ borderBottom: idx === filteredData.length - 1 ? "none" : "1px solid #f0f0f0" }}>
+                      <td style={{ padding: "14px 16px", textAlign: "center", fontWeight: "600", color: "#1976d2" }}>{area.no}</td>
+                      <td style={{ padding: "14px 16px", fontWeight: "500", color: "#424242" }}>{lokasi}</td>
+                      <td style={{ padding: "14px 16px", color: "#666", fontSize: "13px" }}>{areaName}</td>
+                      <td style={{ padding: "14px 16px", color: "#666" }}>{lokasiDetail}</td>
+                      <td style={{ padding: "14px 16px", textAlign: "center" }}>
+                        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "4px" }}>
+                          <span style={{
+                            padding: "4px 12px",
+                            background: statusColor,
                             color: "white",
-                            textDecoration: "none",
+                            borderRadius: "12px",
+                            fontSize: "11px",
+                            fontWeight: "600",
                             display: "inline-block"
-                          }}
-                        >
-                          CHECK
-                        </a>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
+                          }}>
+                            {statusLabel}
+                          </span>
+                          <span style={{ fontSize: "11px", color: "#9e9e9e" }}>{lastCheck}</span>
+                        </div>
+                      </td>
+                      <td style={{ padding: "14px 16px" }}>
+                        <div style={{ display: "flex", gap: "8px", justifyContent: "center" }}>
+                          <button
+                            onClick={() => openDetail(area)}
+                            style={{
+                              padding: "7px 14px",
+                              borderRadius: "5px",
+                              fontSize: "13px",
+                              fontWeight: "500",
+                              background: "#1976d2",
+                              color: "white",
+                              border: "none",
+                              cursor: "pointer"
+                            }}
+                          >
+                            View
+                          </button>
+                          <a
+                            href={`/e-checksheet-lift-barang?liftName=${encodeURIComponent(lokasi)}&area=${encodeURIComponent(areaName)}&lokasi=${encodeURIComponent(lokasiDetail)}`}
+                            style={{
+                              padding: "7px 14px",
+                              borderRadius: "5px",
+                              fontSize: "13px",
+                              fontWeight: "500",
+                              background: "#43a047",
+                              color: "white",
+                              textDecoration: "none",
+                              display: "inline-block"
+                            }}
+                          >
+                            Inspect
+                          </a>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
         </div>
 
-        {isMounted && showModal && selectedLift && (
+        {/* Modal Detail - DIPERBAIKI */}
+        {showModal && selectedArea && (
           <div
             onClick={closeDetail}
             style={{
@@ -359,7 +546,7 @@ export function GaLiftBarangContent({ openLift }: { openLift: string }) {
               left: 0,
               right: 0,
               bottom: 0,
-              background: "rgba(0, 0, 0, 0.5)",
+              background: "rgba(0,0,0,0.5)",
               display: "flex",
               justifyContent: "center",
               alignItems: "center",
@@ -371,12 +558,12 @@ export function GaLiftBarangContent({ openLift }: { openLift: string }) {
               onClick={(e) => e.stopPropagation()}
               style={{
                 background: "white",
-                borderRadius: "12px",
+                borderRadius: "8px",
                 width: "98%",
                 maxWidth: "1400px",
                 maxHeight: "90vh",
                 overflow: "hidden",
-                boxShadow: "0 20px 60px rgba(0, 0, 0, 0.3)",
+                boxShadow: "0 8px 32px rgba(0,0,0,0.3)",
                 display: "flex",
                 flexDirection: "column"
               }}
@@ -394,22 +581,22 @@ export function GaLiftBarangContent({ openLift }: { openLift: string }) {
               }}>
                 <div>
                   <h2 style={{ margin: "0 0 4px 0", color: "#0d47a1", fontSize: "20px", fontWeight: "700" }}>
-                    Detail Lift Barang
+                    Inspection History - {selectedArea.no}
                   </h2>
                   <p style={{ margin: "4px 0", color: "#1e88e5", fontSize: "14px", fontWeight: "500" }}>
-                    {selectedLift.namaLift}
+                    {selectedArea.name.split(' \u0007 ')[0]}
                   </p>
                   <p style={{ margin: "0", color: "#777", fontSize: "12px" }}>
-                    {selectedLift.area} - {selectedLift.lokasi}
+                    {selectedArea.name.split(' \u0007 ')[1]} - {selectedArea.name.split(' \u0007 ')[2]}
                   </p>
                 </div>
-                <button
-                  onClick={closeDetail}
-                  style={{
-                    background: "none",
-                    border: "none",
-                    fontSize: "28px",
-                    cursor: "pointer",
+                <button 
+                  onClick={closeDetail} 
+                  style={{ 
+                    background: "none", 
+                    border: "none", 
+                    fontSize: "28px", 
+                    cursor: "pointer", 
                     color: "#999",
                     padding: 0,
                     width: "32px",
@@ -417,7 +604,6 @@ export function GaLiftBarangContent({ openLift }: { openLift: string }) {
                     display: "flex",
                     alignItems: "center",
                     justifyContent: "center",
-                    transition: "all 0.3s ease",
                     flexShrink: 0
                   }}
                 >
@@ -426,245 +612,255 @@ export function GaLiftBarangContent({ openLift }: { openLift: string }) {
               </div>
 
               <div style={{ padding: "20px 28px", overflowY: "auto", flex: 1 }}>
-                {!checksheetData || Object.keys(checksheetData).length === 0 ? (
-                  <div style={{ textAlign: "center", padding: "40px 20px", color: "#999", fontSize: "14px" }}>
-                    <p>Belum ada data pengecekan</p>
+                <div style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  marginBottom: "20px",
+                  gap: "16px",
+                  flexWrap: "wrap"
+                }}>
+                  <button
+                    onClick={() => changeMonth(-1)}
+                    style={{
+                      padding: "8px 16px",
+                      background: "#1e88e5",
+                      color: "white",
+                      border: "none",
+                      borderRadius: "6px",
+                      cursor: "pointer",
+                      fontSize: "14px",
+                      fontWeight: "600"
+                    }}
+                  >
+                    ← Bulan Lalu
+                  </button>
+                  <h3 style={{ margin: 0, color: "#0d47a1", fontSize: "18px", fontWeight: "600" }}>
+                    {getMonthYear()}
+                  </h3>
+                  <button
+                    onClick={() => changeMonth(1)}
+                    style={{
+                      padding: "8px 16px",
+                      background: "#1e88e5",
+                      color: "white",
+                      border: "none",
+                      borderRadius: "6px",
+                      cursor: "pointer",
+                      fontSize: "14px",
+                      fontWeight: "600"
+                    }}
+                  >
+                    Bulan Depan →
+                  </button>
+                </div>
+
+                {isLoading ? (
+                  <div style={{ textAlign: "center", padding: "40px", color: "#999" }}>
+                    Loading data...
                   </div>
                 ) : (
-                  <div>
-                    <div style={{
-                      display: "flex",
-                      justifyContent: "space-between",
-                      alignItems: "center",
-                      marginBottom: "20px",
-                      gap: "16px",
-                      flexWrap: "wrap"
+                  <div style={{ overflowX: "auto" }}>
+                    <table style={{
+                      width: "100%",
+                      borderCollapse: "collapse",
+                      fontSize: "11px",
+                      minWidth: "1200px",
+                      border: "2px solid #0d47a1"
                     }}>
-                      <button
-                        onClick={() => changeMonth(-1)}
-                        style={{
-                          padding: "8px 16px",
-                          background: "#1e88e5",
-                          color: "white",
-                          border: "none",
-                          borderRadius: "6px",
-                          cursor: "pointer",
-                          fontSize: "14px",
-                          fontWeight: "600"
-                        }}
-                      >
-                        ← Bulan Lalu
-                      </button>
-                      <h3 style={{ margin: 0, color: "#0d47a1", fontSize: "18px", fontWeight: "600" }}>
-                        {getMonthYear()}
-                      </h3>
-                      <button
-                        onClick={() => changeMonth(1)}
-                        style={{
-                          padding: "8px 16px",
-                          background: "#1e88e5",
-                          color: "white",
-                          border: "none",
-                          borderRadius: "6px",
-                          cursor: "pointer",
-                          fontSize: "14px",
-                          fontWeight: "600"
-                        }}
-                      >
-                        Bulan Depan →
-                      </button>
-                    </div>
-
-                    <div style={{ overflowX: "auto" }}>
-                      <table style={{
-                        width: "100%",
-                        borderCollapse: "collapse",
-                        fontSize: "11px",
-                        minWidth: "1200px",
-                        border: "2px solid #0d47a1"
-                      }}>
-                        <thead>
-                          <tr>
-                            <th rowSpan={2} style={{
-                              padding: "10px 8px",
-                              background: "#e3f2fd",
-                              fontWeight: "600",
-                              color: "#01579b",
-                              fontSize: "10px",
-                              textAlign: "center",
-                              border: "1px solid #0d47a1",
-                              minWidth: "40px"
-                            }}>
-                              No
-                            </th>
-                            <th rowSpan={2} style={{
-                              padding: "10px 8px",
-                              background: "#e3f2fd",
-                              fontWeight: "600",
-                              color: "#01579b",
-                              fontSize: "10px",
-                              textAlign: "center",
-                              border: "1px solid #0d47a1",
-                              minWidth: "180px"
-                            }}>
-                              ITEM
-                            </th>
-                            <th rowSpan={2} style={{
-                              padding: "10px 8px",
-                              background: "#e3f2fd",
-                              fontWeight: "600",
-                              color: "#01579b",
-                              fontSize: "10px",
-                              textAlign: "center",
-                              border: "1px solid #0d47a1",
-                              minWidth: "150px"
-                            }}>
-                              CONTENT
-                            </th>
-                            <th rowSpan={2} style={{
-                              padding: "10px 8px",
-                              background: "#e3f2fd",
-                              fontWeight: "600",
-                              color: "#01579b",
-                              fontSize: "10px",
-                              textAlign: "center",
-                              border: "1px solid #0d47a1",
-                              minWidth: "80px"
-                            }}>
-                              METHODE
-                            </th>
-                            <th colSpan={getDaysInMonth(currentMonth).length} style={{
-                              padding: "10px 8px",
-                              background: "#e3f2fd",
-                              fontWeight: "600",
-                              color: "#01579b",
-                              fontSize: "10px",
-                              textAlign: "center",
-                              border: "1px solid #0d47a1"
-                            }}>
-                              Bulan: {getMonthYear()}
-                            </th>
-                          </tr>
-                          <tr>
-                            {getDaysInMonth(currentMonth).map((day) => (
+                      <thead>
+                        <tr>
+                          <th rowSpan={2} style={{
+                            padding: "10px 8px",
+                            background: "#e3f2fd",
+                            fontWeight: "600",
+                            color: "#01579b",
+                            fontSize: "10px",
+                            textAlign: "center",
+                            border: "1px solid #0d47a1",
+                            minWidth: "50px"
+                          }}>
+                            NO
+                          </th>
+                          <th rowSpan={2} style={{
+                            padding: "10px 8px",
+                            background: "#e3f2fd",
+                            fontWeight: "600",
+                            color: "#01579b",
+                            fontSize: "10px",
+                            textAlign: "center",
+                            border: "1px solid #0d47a1",
+                            minWidth: "180px"
+                          }}>
+                            ITEM
+                          </th>
+                          <th rowSpan={2} style={{
+                            padding: "10px 8px",
+                            background: "#e3f2fd",
+                            fontWeight: "600",
+                            color: "#01579b",
+                            fontSize: "10px",
+                            textAlign: "center",
+                            border: "1px solid #0d47a1",
+                            minWidth: "150px"
+                          }}>
+                            CONTENT
+                          </th>
+                          <th rowSpan={2} style={{
+                            padding: "10px 8px",
+                            background: "#e3f2fd",
+                            fontWeight: "600",
+                            color: "#01579b",
+                            fontSize: "10px",
+                            textAlign: "center",
+                            border: "1px solid #0d47a1",
+                            minWidth: "80px"
+                          }}>
+                            METHODE
+                          </th>
+                          <th colSpan={getDaysInMonth(currentMonth).length} style={{
+                            padding: "10px 8px",
+                            background: "#e3f2fd",
+                            fontWeight: "600",
+                            color: "#01579b",
+                            fontSize: "10px",
+                            textAlign: "center",
+                            border: "1px solid #0d47a1"
+                          }}>
+                            Bulan: {getMonthYear()}
+                          </th>
+                        </tr>
+                        <tr>
+                          {getDaysInMonth(currentMonth).map((day) => {
+                            const dateStatus = getDateStatus(day);
+                            const isToday = dateStatus === 'today';
+                            
+                            return (
                               <th key={day} style={{
                                 padding: "8px 4px",
-                                background: "#e3f2fd",
-                                fontWeight: "600",
-                                color: "#01579b",
+                                background: isToday ? "#fff9c4" : "#e3f2fd",
+                                fontWeight: isToday ? "700" : "600",
+                                color: isToday ? "#e65100" : "#01579b",
                                 fontSize: "10px",
                                 textAlign: "center",
-                                border: "1px solid #0d47a1",
+                                border: isToday ? "2px solid #ff6f00" : "1px solid #0d47a1",
                                 minWidth: "35px"
                               }}>
                                 {day}
+                                {isToday && <div style={{ fontSize: "9px", marginTop: "2px" }}>HARI INI</div>}
                               </th>
-                            ))}
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {inspectionItems.map((row, idx) => {
-                            const fieldKey = fieldKeys[idx];
-                            
-                            return (
-                              <tr key={idx}>
-                                <td style={{
-                                  padding: "8px 6px",
-                                  border: "1px solid #0d47a1",
-                                  textAlign: "center",
-                                  fontWeight: "500",
-                                  color: "#333",
-                                  fontSize: "10px",
-                                  background: "white"
-                                }}>
-                                  {row.no}
-                                </td>
-                                <td style={{
-                                  padding: "8px 6px",
-                                  border: "1px solid #0d47a1",
-                                  fontWeight: "500",
-                                  color: "#333",
-                                  fontSize: "10px",
-                                  background: "white"
-                                }}>
-                                  {row.item}
-                                </td>
-                                <td style={{
-                                  padding: "8px 6px",
-                                  border: "1px solid #0d47a1",
-                                  fontWeight: "400",
-                                  color: "#555",
-                                  fontSize: "10px",
-                                  background: "white"
-                                }}>
-                                  {row.content}
-                                </td>
-                                <td style={{
-                                  padding: "8px 6px",
-                                  border: "1px solid #0d47a1",
-                                  textAlign: "center",
-                                  fontWeight: "400",
-                                  color: "#555",
-                                  fontSize: "10px",
-                                  background: "white"
-                                }}>
-                                  {row.method}
-                                </td>
-                                {getDaysInMonth(currentMonth).map((day) => {
-                                  const dateKey = formatDateKey(day);
-                                  const value = (checksheetData[dateKey]?.[fieldKey as keyof ChecksheetData[string]]) || "-";
-                                  const bgColor = value === "✓" ? "#c8e6c9" : value === "✗" ? "#ffcdd2" : "#fff";
-                                  
-                                  return (
-                                    <td key={day} style={{
-                                      padding: "6px 4px",
-                                      border: "1px solid #0d47a1",
-                                      textAlign: "center",
-                                      fontSize: "12px",
-                                      fontWeight: "600",
-                                      background: bgColor,
-                                      color: value === "✓" ? "#2e7d32" : value === "✗" ? "#c62828" : "#999"
-                                    }}>
-                                      {value}
-                                    </td>
-                                  );
-                                })}
-                              </tr>
                             );
                           })}
-                          <tr style={{ background: "#f5f9ff" }}>
-                            <td colSpan={4} style={{
-                              padding: "10px 8px",
-                              border: "1px solid #0d47a1",
-                              textAlign: "right",
-                              fontWeight: "600",
-                              color: "#01579b",
-                              fontSize: "10px",
-                              background: "#e3f2fd"
-                            }}>
-                              NAMA(INISIAL)/NIK
-                            </td>
-                            {getDaysInMonth(currentMonth).map((day) => {
-                              const dateKey = formatDateKey(day);
-                              const inspector = checksheetData[dateKey]?.inspector || "-";
-                              
-                              return (
-                                <td key={day} style={{
-                                  padding: "6px 4px",
-                                  border: "1px solid #0d47a1",
-                                  textAlign: "center",
-                                  fontSize: "10px",
-                                  fontWeight: "500",
-                                  color: "#333"
-                                }}>
-                                  {inspector}
-                                </td>
-                              );
-                            })}
-                          </tr>
-                        </tbody>
-                      </table>
-                    </div>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {inspectionItems.map((item, idx) => {
+                          return (
+                            <tr key={item.id || idx}>
+                              <td style={{
+                                padding: "8px 6px",
+                                border: "1px solid #0d47a1",
+                                textAlign: "center",
+                                fontWeight: "500",
+                                color: "#333",
+                                fontSize: "10px",
+                                background: "white"
+                              }}>
+                                {item.no}
+                              </td>
+                              <td style={{
+                                padding: "8px 6px",
+                                border: "1px solid #0d47a1",
+                                fontWeight: "500",
+                                color: "#333",
+                                fontSize: "10px",
+                                background: "white"
+                              }}>
+                                {item.item_group}
+                              </td>
+                              <td style={{
+                                padding: "8px 6px",
+                                border: "1px solid #0d47a1",
+                                fontWeight: "400",
+                                color: "#555",
+                                fontSize: "10px",
+                                background: "white"
+                              }}>
+                                {item.item_check}
+                              </td>
+                              <td style={{
+                                padding: "8px 6px",
+                                border: "1px solid #0d47a1",
+                                textAlign: "center",
+                                fontWeight: "400",
+                                color: "#555",
+                                fontSize: "10px",
+                                background: "white"
+                              }}>
+                                {item.method}
+                              </td>
+                              {getDaysInMonth(currentMonth).map((day) => {
+                                const dateKey = formatDateKey(day);
+                                
+                                // ✅ PERBAIKAN UTAMA: Gunakan item.item_key dari API, bukan item.key manual
+                                const itemData = monthData[dateKey]?.[item.item_key];
+                                
+                                const value = itemData?.hasilPemeriksaan || "-";
+                                const bgColor = value === "OK" ? "#c8e6c9" : value === "NG" ? "#ffcdd2" : "#fff";
+                                const displayValue = value === "OK" ? "✓" : value === "NG" ? "✗" : "-";
+                                
+                                return (
+                                  <td key={day} style={{
+                                    padding: "6px 4px",
+                                    border: "1px solid #0d47a1",
+                                    textAlign: "center",
+                                    fontSize: "12px",
+                                    fontWeight: "600",
+                                    background: bgColor,
+                                    color: value === "OK" ? "#2e7d32" : value === "NG" ? "#c62828" : "#999"
+                                  }}>
+                                    {displayValue}
+                                  </td>
+                                );
+                              })}
+                            </tr>
+                          );
+                        })}
+                        <tr style={{ background: "#f5f9ff" }}>
+                          <td colSpan={4} style={{
+                            padding: "10px 8px",
+                            border: "1px solid #0d47a1",
+                            textAlign: "right",
+                            fontWeight: "600",
+                            color: "#01579b",
+                            fontSize: "10px",
+                            background: "#e3f2fd"
+                          }}>
+                            NAMA(INISIAL)/NIK
+                          </td>
+                          {getDaysInMonth(currentMonth).map((day) => {
+                            const dateKey = formatDateKey(day);
+                            
+                            // ✅ Ambil inspector dari item pertama (semua item memiliki inspector yang sama per hari)
+                            const firstItemKey = inspectionItems[0]?.item_key;
+                            const inspector = monthData[dateKey]?.[firstItemKey]?.inspector || "-";
+                            
+                            return (
+                              <td key={day} style={{
+                                padding: "6px 4px",
+                                border: "1px solid #0d47a1",
+                                textAlign: "center",
+                                fontSize: "10px",
+                                fontWeight: "500",
+                                color: "#333"
+                              }}>
+                                {inspector}
+                              </td>
+                            );
+                          })}
+                        </tr>
+                      </tbody>
+                    </table>
                   </div>
                 )}
               </div>
@@ -677,24 +873,129 @@ export function GaLiftBarangContent({ openLift }: { openLift: string }) {
                 borderTop: "1px solid #e8e8e8",
                 flexShrink: 0
               }}>
-                <button
-                  onClick={closeDetail}
-                  style={{
-                    padding: "8px 20px",
-                    background: "#bdbdbd",
-                    color: "white",
-                    border: "none",
-                    borderRadius: "6px",
-                    cursor: "pointer",
-                    fontSize: "13px",
+                <button 
+                  onClick={closeDetail} 
+                  style={{ 
+                    padding: "8px 20px", 
+                    background: "#bdbdbd", 
+                    color: "white", 
+                    border: "none", 
+                    borderRadius: "6px", 
                     fontWeight: "600",
-                    transition: "all 0.3s ease",
-                    textTransform: "uppercase",
-                    letterSpacing: "0.5px"
+                    cursor: "pointer",
+                    fontSize: "13px"
                   }}
                 >
                   Tutup
                 </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* QR Scanner Modal */}
+        {isScanning && (
+          <div
+            style={{
+              position: "fixed",
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              background: "rgba(0,0,0,0.8)",
+              display: "flex",
+              justifyContent: "center",
+              alignItems: "center",
+              zIndex: 2000,
+            }}
+            onClick={() => {
+              setIsScanning(false);
+              if (qrScannerRef.current) {
+                qrScannerRef.current.destroy();
+                qrScannerRef.current = null;
+              }
+            }}
+          >
+            <div
+              onClick={(e) => e.stopPropagation()}
+              style={{
+                background: "white",
+                borderRadius: "8px",
+                padding: "16px",
+                textAlign: "center",
+                maxWidth: "90vw",
+                width: "100%",
+              }}
+            >
+              <h3 style={{ margin: "0 0 12px 0", color: "#212121" }}>Scan Lift Barang QR Code</h3>
+              <video
+                ref={videoRef}
+                style={{
+                  width: "100%",
+                  maxHeight: "60vh",
+                  borderRadius: "6px",
+                  background: "#000"
+                }}
+              />
+              <p style={{ fontSize: "13px", color: "#666", marginTop: "12px" }}>
+                Point your camera at the QR code on the lift barang
+              </p>
+              <button
+                onClick={() => {
+                  setIsScanning(false);
+                  if (qrScannerRef.current) {
+                    qrScannerRef.current.destroy();
+                    qrScannerRef.current = null;
+                  }
+                }}
+                style={{
+                  marginTop: "16px",
+                  padding: "8px 20px",
+                  background: "#757575",
+                  color: "white",
+                  border: "none",
+                  borderRadius: "5px",
+                  cursor: "pointer"
+                }}
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Modal Popup Gambar Dokumentasi */}
+        {showImageModal && (
+          <div
+            onClick={closeImageModal}
+            style={{
+              position: "fixed",
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              background: "rgba(0,0,0,0.8)",
+              display: "flex",
+              justifyContent: "center",
+              alignItems: "center",
+              zIndex: 2000,
+              padding: "20px"
+            }}
+          >
+            <div onClick={(e) => e.stopPropagation()} style={{ textAlign: "center" }}>
+              <img
+                src={currentImageUrl}
+                alt="Dokumentasi"
+                style={{
+                  maxHeight: "90vh",
+                  maxWidth: "90vw",
+                  objectFit: "contain",
+                  borderRadius: "8px",
+                  border: "3px solid white"
+                }}
+              />
+              <div style={{ marginTop: "16px", color: "white", fontSize: "14px" }}>
+                Click outside to close
               </div>
             </div>
           </div>

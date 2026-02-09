@@ -7,6 +7,7 @@ import { useAuth } from "@/lib/auth-context";
 import { NavbarStatic } from "@/components/navbar-static";
 import { Sidebar } from "@/components/Sidebar";
 import QrScanner from 'qr-scanner';
+import { ArrowLeft } from "lucide-react";
 
 interface DetectorItem {
   no: number;
@@ -355,13 +356,14 @@ export function GaSmokeDetectorContent({ openArea }: { openArea: string }) {
         maxWidth: "1400px", 
         margin: "0 auto" 
         }}>
-        <div style={{ marginBottom: "28px" }}>
-          <div style={{
-            background: "#1976d2",
-            borderRadius: "8px",
-            padding: "24px 28px",
-            boxShadow: "0 2px 8px rgba(0,0,0,0.1)"
-          }}>
+        <div style={{ marginBottom: "28px" }} className="header">
+          <button 
+          onClick={() => router.push("/status-ga")}
+          className="btn-back"
+          >
+            <ArrowLeft size={18} /> Kembali
+          </button>
+          <div className="text-header">
             <h1 style={{ margin: "0 0 6px 0", color: "white", fontSize: "26px", fontWeight: "600", letterSpacing: "-0.5px" }}>
               🚨 Smoke & Heat Detector Inspection
             </h1>
