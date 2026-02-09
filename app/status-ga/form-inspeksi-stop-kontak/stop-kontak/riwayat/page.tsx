@@ -11,7 +11,10 @@ type HistoryEntry = {
   tanggal: string;
   area: string;
   pic: string;
-  data: Record<number, { hasil: "OK" | "NOK"; keterangan: string }>;
+  items: Record<number, { hasil: "OK" | "NOK"; keterangan: string; foto_path: string | null }>;
+  additionalNotes: string | null;
+  createdAt: string;
+  updatedAt: string;
 };
 
 const checklistStopKontak = [
@@ -54,17 +57,13 @@ export default function RiwayatStopKontak() {
     loadHistory();
   }, [user, router]);
 
-  const loadHistory = () => {
+  const loadHistory = async () => {
     try {
-      const historyKey = "form_inspeksi_stop_kontak_history";
-      const saved = localStorage.getItem(historyKey);
+      const response = await fetch('/api/electrical_inspections?type=stop-kontak');
+      const result = await response.json();
 
-      if (saved) {
-        const allHistory = JSON.parse(saved);
-        const filteredHistory = allHistory
-          .filter((entry: any) => entry.type === "stop-kontak")
-          .reverse();
-        setHistory(filteredHistory);
+      if (result.success && Array.isArray(result.data)) {
+        setHistory(result.data);
       }
     } catch (e) {
       console.error("Error loading history:", e);
@@ -104,7 +103,7 @@ export default function RiwayatStopKontak() {
         ) : (
           <div className="history-list">
             {history.map((entry) => {
-              const hasNOK = Object.values(entry.data).some(
+              const hasNOK = Object.values(entry.items).some(
                 (item: any) => item?.hasil === "NOK"
               );
               const isExpanded = expandedId === entry.id;
@@ -153,7 +152,7 @@ export default function RiwayatStopKontak() {
                         </thead>
                         <tbody>
                           {checklistStopKontak.map((item) => {
-                            const data = entry.data[item.no];
+                            const data = entry.items[item.no];
                             return (
                               <tr key={item.no}>
                                 <td>{item.no}</td>

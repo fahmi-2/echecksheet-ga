@@ -11,8 +11,8 @@ export default function GaSelangHydrantPage({
     openArea?: string;
   }>;
 }) {
-  const params = use(searchParams);
-  const openArea = params?.openArea || '';
+  const params = use(searchParams || Promise.resolve({ openArea: '' }));
+  const openArea = (params as { openArea?: string })?.openArea || '';
 
   return (
     <Suspense fallback={

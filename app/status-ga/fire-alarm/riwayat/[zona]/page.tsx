@@ -1,7 +1,7 @@
 // app/status-ga/fire-alarm/riwayat/[zona]/page.tsx
 "use client";
 
-import { useState, useEffect, use } from "react"; // ✅ Tambahkan `use`
+import { useState, useEffect, use } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
 import { Sidebar } from "@/components/Sidebar";
@@ -12,37 +12,36 @@ interface FireAlarmItem {
   no: number;
   zona: string;
   lokasi: string;
-  alarmBell?: string;
-  indicatorLamp?: string;
-  manualCallPoint?: string;
-  idZona?: string;
-  kebersihan?: string;
-  kondisiNok?: string;
-  tindakanPerbaikan?: string;
-  pic?: string;
-  dueDate?: string;
-  verify?: string;
+  alarmBell: string;
+  indicatorLamp: string;
+  manualCallPoint: string;
+  idZona: string;
+  kebersihan: string;
+  kondisiNok: string;
+  tindakanPerbaikan: string;
+  pic: string;
+  foto: string | null;
 }
 
 interface FireAlarmRecord {
   id: string;
   date: string;
   checker: string;
+  checkerNik?: string;
+  submittedAt: string;
   items: FireAlarmItem[];
 }
 
-// ✅ TERIMA `params` sebagai Promise
 export default function RiwayatFireAlarm({ params }: { params: Promise<{ zona: string }> }) {
   const router = useRouter();
   const { user } = useAuth();
-
-  // ✅ UNWRAP params dengan React.use()
   const { zona } = use(params);
-
+  const [previewImage, setPreviewImage] = useState<string | null>(null);
   const [records, setRecords] = useState<FireAlarmRecord[]>([]);
   const [filteredRecords, setFilteredRecords] = useState<FireAlarmRecord[]>([]);
   const [loading, setLoading] = useState(true);
-  const [filterDate, setFilterDate] = useState("");
+  const [filterDateFrom, setFilterDateFrom] = useState("");
+  const [filterDateTo, setFilterDateTo] = useState("");
   const [filterLocation, setFilterLocation] = useState("");
 
   // Validasi akses
@@ -52,53 +51,90 @@ export default function RiwayatFireAlarm({ params }: { params: Promise<{ zona: s
     }
   }, [user, router]);
 
-  // Load data berdasarkan zona
-  useEffect(() => {
-    const loadRecords = () => {
-      try {
-        const historyKey = `ga_fire_alarm_history_${zona}`;
-        const saved = localStorage.getItem(historyKey);
-        if (saved) {
-          const parsed = JSON.parse(saved);
-          const validRecords = parsed.filter((r: any) => r.items && Array.isArray(r.items));
-          setRecords(validRecords);
-          setFilteredRecords(validRecords);
+  // 🔥 LOAD DATA DARI API
+  const loadData = async () => {
+    try {
+      setLoading(true);
+
+      // Build query params
+      const queryParams = new URLSearchParams();
+      queryParams.append('zona', zona);
+      if (filterDateFrom) queryParams.append('date_from', filterDateFrom);
+      if (filterDateTo) queryParams.append('date_to', filterDateTo);
+      if (filterLocation) queryParams.append('lokasi', filterLocation);
+      queryParams.append('limit', '100');
+      queryParams.append('offset', '0');
+
+      const response = await fetch(`/api/fire-alarm/history?${queryParams.toString()}`);
+
+      if (response.ok) {
+        const data = await response.json();
+        if (data.success) {
+          setRecords(data.data || []);
+          setFilteredRecords(data.data || []);
+        } else {
+          alert('Gagal memuat riwayat: ' + data.message);
         }
-      } catch (e) {
-        console.error(`Gagal memuat riwayat ${zona}:`, e);
-      } finally {
-        setLoading(false);
+      } else {
+        alert('Gagal mengambil data dari server');
       }
-    };
+    } catch (error) {
+      console.error('Error loading history:', error);
+      alert('Gagal memuat riwayat: ' + (error as any).message);
+    } finally {
+      setLoading(false);
+    }
+  };
 
-    loadRecords();
-  }, [zona]); // ✅ Re-load saat zona berubah
-
-  // Terapkan filter
   useEffect(() => {
-    let filtered = records.filter(r => r.items && Array.isArray(r.items));
-
-    if (filterDate) {
-      filtered = filtered.filter(r => r.date === filterDate);
+    if (zona) {
+      loadData();
     }
+  }, [zona, filterDateFrom, filterDateTo, filterLocation]);
 
-    if (filterLocation) {
-      filtered = filtered.filter(r =>
-        r.items.some(item => item.lokasi === filterLocation)
-      );
-    }
-
-    setFilteredRecords(filtered);
-  }, [filterDate, filterLocation, records]);
-
-  // Ambil daftar lokasi unik
+  // Ambil daftar lokasi unik dari records
   const locations = Array.from(
     new Set(
       records
-        .filter(r => r.items && Array.isArray(r.items))
-        .flatMap(r => r.items.map(i => i.lokasi))
+        .flatMap((r) => r.items || [])
+        .map((i) => i.lokasi)
+        .filter(Boolean)
     )
   ).sort();
+
+  const openImagePreview = (src: string) => {
+    if (src) {
+      const imageUrl = src.startsWith('data:') 
+        ? src 
+        : `${process.env.NEXT_PUBLIC_BASE_URL || ''}${src}`;
+      setPreviewImage(imageUrl);
+    }
+  };
+
+  const closeImagePreview = () => {
+    setPreviewImage(null);
+  };
+
+  const handleDelete = async (recordId: string) => {
+    if (!confirm("Yakin ingin menghapus data ini?")) return;
+
+    try {
+      const response = await fetch(`/api/fire-alarm/delete?id=${recordId}`, {
+        method: 'DELETE',
+      });
+
+      if (response.ok) {
+        await loadData();
+        alert('Data berhasil dihapus!');
+      } else {
+        const error = await response.json();
+        alert('Gagal menghapus data: ' + error.message);
+      }
+    } catch (error) {
+      console.error('Delete error:', error);
+      alert('Terjadi kesalahan saat menghapus data');
+    }
+  };
 
   if (!user) return null;
 
@@ -107,7 +143,7 @@ export default function RiwayatFireAlarm({ params }: { params: Promise<{ zona: s
       <Sidebar userName={user.fullName} />
 
       <div className="page-content">
-        {/* Header Banner Biru Gradasi */}
+        {/* Header Banner */}
         <div className="header-banner">
           <button
             onClick={() => router.push("/status-ga/fire-alarm")}
@@ -124,11 +160,20 @@ export default function RiwayatFireAlarm({ params }: { params: Promise<{ zona: s
         {/* Filter */}
         <div className="date-filter">
           <div className="filter-group">
-            <label>Tanggal:</label>
+            <label>Dari Tanggal:</label>
             <input
               type="date"
-              value={filterDate}
-              onChange={(e) => setFilterDate(e.target.value)}
+              value={filterDateFrom}
+              onChange={(e) => setFilterDateFrom(e.target.value)}
+              className="date-input"
+            />
+          </div>
+          <div className="filter-group">
+            <label>Sampai Tanggal:</label>
+            <input
+              type="date"
+              value={filterDateTo}
+              onChange={(e) => setFilterDateTo(e.target.value)}
               className="date-input"
             />
           </div>
@@ -140,14 +185,17 @@ export default function RiwayatFireAlarm({ params }: { params: Promise<{ zona: s
               className="location-select"
             >
               <option value="">Semua Lokasi</option>
-              {locations.map(loc => (
-                <option key={loc} value={loc}>{loc}</option>
+              {locations.map((loc) => (
+                <option key={loc} value={loc}>
+                  {loc}
+                </option>
               ))}
             </select>
           </div>
           <button
             onClick={() => {
-              setFilterDate("");
+              setFilterDateFrom("");
+              setFilterDateTo("");
               setFilterLocation("");
             }}
             className="clear-filter"
@@ -159,75 +207,110 @@ export default function RiwayatFireAlarm({ params }: { params: Promise<{ zona: s
           </Link>
         </div>
 
-        {/* Daftar Riwayat */}
-        <div className="riwayat-container">
-          {filteredRecords.length === 0 ? (
-            <div className="empty-state">
-              Belum ada data Inspeksi Fire Alarm.
-            </div>
-          ) : (
-            <div className="data-tables">
-              {filteredRecords.map((record) => (
-                <div key={record.id} className="data-section">
-                  <div className="section-header">
-                    <span>Tanggal: {record.date}</span>
-                    <span>Petugas: {record.checker}</span>
-                  </div>
-                  <div className="table-wrapper">
-                    <table className="apd-table">
-                      <thead>
-                        <tr>
-                          <th>No</th>
-                          <th>Zona</th>
-                          <th>Lokasi</th>
-                          <th>Alarm Bell</th>
-                          <th>Indicator Lamp</th>
-                          <th>Manual Call Point</th>
-                          <th>ID Zona</th>
-                          <th>Kebersihan</th>
-                          <th>Kondisi N-OK</th>
-                          <th>Tindakan Perbaikan</th>
-                          <th>PIC</th>
-                          <th>Due Date</th>
-                          <th>Verify</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {record.items.map((item) => (
-                          <tr key={`${record.id}-${item.no}`}>
-                            <td>{item.no}</td>
-                            <td>{item.zona}</td>
-                            <td>{item.lokasi}</td>
-                            <td className={item.alarmBell === "NG" ? "status-ng" : ""}>
-                              {item.alarmBell || "-"}
-                            </td>
-                            <td className={item.indicatorLamp === "NG" ? "status-ng" : ""}>
-                              {item.indicatorLamp || "-"}
-                            </td>
-                            <td className={item.manualCallPoint === "NG" ? "status-ng" : ""}>
-                              {item.manualCallPoint || "-"}
-                            </td>
-                            <td className={item.idZona === "NG" ? "status-ng" : ""}>
-                              {item.idZona || "-"}
-                            </td>
-                            <td className={item.kebersihan === "NG" ? "status-ng" : ""}>
-                              {item.kebersihan || "-"}
-                            </td>
-                            <td>{item.kondisiNok || "-"}</td>
-                            <td>{item.tindakanPerbaikan || "-"}</td>
-                            <td>{item.pic || "-"}</td>
-                            <td>{item.dueDate || "-"}</td>
-                            <td>{item.verify || "-"}</td>
+        {/* Loading State */}
+        {loading ? (
+          <div className="loading-container">
+            <div className="spinner"></div>
+            <p>Memuat data...</p>
+          </div>
+        ) : (
+          <div className="riwayat-container">
+            {filteredRecords.length === 0 ? (
+              <div className="empty-state">Belum ada data Inspeksi Fire Alarm.</div>
+            ) : (
+              <div className="data-tables">
+                {filteredRecords.map((record) => (
+                  <div key={record.id} className="data-section">
+                    <div className="section-header">
+                      <span>Tanggal: {record.date}</span>
+                      <span>Petugas: {record.checker}</span>
+                      <div className="section-actions">
+                        <button
+                          onClick={() => handleDelete(record.id)}
+                          className="delete-btn"
+                          title="Hapus data"
+                        >
+                          🗑️
+                        </button>
+                      </div>
+                    </div>
+                    <div className="table-wrapper">
+                      <table className="apd-table">
+                        <thead>
+                          <tr>
+                            <th>No</th>
+                            <th>Zona</th>
+                            <th>Lokasi</th>
+                            <th>Alarm Bell</th>
+                            <th>Indicator Lamp</th>
+                            <th>Manual Call Point</th>
+                            <th>ID Zona</th>
+                            <th>Kebersihan</th>
+                            <th>Kondisi N-OK</th>
+                            <th>Tindakan Perbaikan</th>
+                            <th>PIC</th>
+                            <th>Foto</th>
                           </tr>
-                        ))}
-                      </tbody>
-                    </table>
+                        </thead>
+                        <tbody>
+                          {record.items.map((item) => (
+                            <tr key={`${record.id}-${item.no}`}>
+                              <td>{item.no}</td>
+                              <td>{item.zona}</td>
+                              <td>{item.lokasi}</td>
+                              <td className={item.alarmBell === "NG" ? "status-ng" : ""}>
+                                {item.alarmBell || "-"}
+                              </td>
+                              <td className={item.indicatorLamp === "NG" ? "status-ng" : ""}>
+                                {item.indicatorLamp || "-"}
+                              </td>
+                              <td className={item.manualCallPoint === "NG" ? "status-ng" : ""}>
+                                {item.manualCallPoint || "-"}
+                              </td>
+                              <td className={item.idZona === "NG" ? "status-ng" : ""}>
+                                {item.idZona || "-"}
+                              </td>
+                              <td className={item.kebersihan === "NG" ? "status-ng" : ""}>
+                                {item.kebersihan || "-"}
+                              </td>
+                              <td>{item.kondisiNok || "-"}</td>
+                              <td>{item.tindakanPerbaikan || "-"}</td>
+                              <td>{item.pic || "-"}</td>
+                              <td>
+                                {item.foto ? (
+                                  <img
+                                    src={item.foto.startsWith('data:') 
+                                      ? item.foto 
+                                      : `${process.env.NEXT_PUBLIC_BASE_URL || ''}${item.foto}`}
+                                    alt="Foto"
+                                    className="history-image clickable"
+                                    onClick={() => openImagePreview(item.foto!)}
+                                  />
+                                ) : (
+                                  "-"
+                                )}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
                   </div>
-                </div>
-              ))}
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Image Preview Modal */}
+        {previewImage && (
+          <div className="image-modal" onClick={closeImagePreview}>
+            <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+              <button className="close-btn" onClick={closeImagePreview}>✕</button>
+              <img src={previewImage} alt="Zoom" className="modal-image" />
             </div>
-          )}
-        </div>
+          </div>
+        )}
       </div>
 
       <style jsx>{`
@@ -242,9 +325,9 @@ export default function RiwayatFireAlarm({ params }: { params: Promise<{ zona: s
           padding: 24px;
           max-width: 1400px;
           margin: 0 auto;
+          color: #1e293b;
         }
 
-        /* Header Banner Biru Gradasi */
         .header-banner {
           background: linear-gradient(135deg, #1976d2 0%, #0d47a1 100%);
           color: white;
@@ -284,7 +367,6 @@ export default function RiwayatFireAlarm({ params }: { params: Promise<{ zona: s
           text-align: center;
         }
 
-        /* Filter */
         .date-filter {
           display: flex;
           gap: 16px;
@@ -292,7 +374,7 @@ export default function RiwayatFireAlarm({ params }: { params: Promise<{ zona: s
           padding: 16px;
           background: white;
           border-radius: 12px;
-          box-shadow: 0 2px 6px rgba(0,0,0,0.05);
+          box-shadow: 0 2px 6px rgba(0, 0, 0, 0.05);
           flex-wrap: wrap;
           align-items: center;
         }
@@ -329,6 +411,10 @@ export default function RiwayatFireAlarm({ params }: { params: Promise<{ zona: s
           font-weight: 600;
         }
 
+        .clear-filter:hover {
+          background: #b91c1c;
+        }
+
         .btn-add {
           padding: 8px 16px;
           background: #1e88e5;
@@ -340,11 +426,14 @@ export default function RiwayatFireAlarm({ params }: { params: Promise<{ zona: s
           white-space: nowrap;
         }
 
-        /* Riwayat Container */
+        .btn-add:hover {
+          background: #1565c0;
+        }
+
         .riwayat-container {
           background: white;
           border-radius: 12px;
-          box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+          box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
           padding: 24px;
         }
 
@@ -353,6 +442,31 @@ export default function RiwayatFireAlarm({ params }: { params: Promise<{ zona: s
           padding: 40px 20px;
           color: #64748b;
           font-size: 1.1rem;
+        }
+
+        .loading-container {
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          justify-content: center;
+          padding: 60px 20px;
+          background: white;
+          border-radius: 12px;
+          border: 1px solid #e2e8f0;
+        }
+
+        .spinner {
+          width: 40px;
+          height: 40px;
+          border: 4px solid #e2e8f0;
+          border-top-color: #1976d2;
+          border-radius: 50%;
+          animation: spin 0.8s linear infinite;
+          margin-bottom: 16px;
+        }
+
+        @keyframes spin {
+          to { transform: rotate(360deg); }
         }
 
         .data-tables {
@@ -372,9 +486,28 @@ export default function RiwayatFireAlarm({ params }: { params: Promise<{ zona: s
           padding: 12px 16px;
           display: flex;
           justify-content: space-between;
+          align-items: center;
           font-size: 0.9rem;
           color: #475569;
           font-weight: 600;
+        }
+
+        .section-actions {
+          display: flex;
+          gap: 8px;
+        }
+
+        .delete-btn {
+          background: none;
+          border: none;
+          font-size: 1.2rem;
+          cursor: pointer;
+          color: #f44336;
+          transition: transform 0.2s;
+        }
+
+        .delete-btn:hover {
+          transform: scale(1.1);
         }
 
         .table-wrapper {
@@ -392,6 +525,7 @@ export default function RiwayatFireAlarm({ params }: { params: Promise<{ zona: s
           padding: 10px;
           text-align: left;
           border-bottom: 1px solid #e2e8f0;
+          color: #334155;
         }
 
         .apd-table th {
@@ -408,6 +542,73 @@ export default function RiwayatFireAlarm({ params }: { params: Promise<{ zona: s
           font-weight: 600;
           border-radius: 4px;
           padding: 2px 6px;
+        }
+
+        .history-image {
+          width: 50px;
+          height: 50px;
+          object-fit: cover;
+          border-radius: 4px;
+          border: 1px solid #ddd;
+          cursor: pointer;
+          transition: transform 0.2s;
+        }
+
+        .history-image:hover {
+          transform: scale(1.1);
+        }
+
+        /* Zoom Image Modal */
+        .image-modal {
+          position: fixed;
+          top: 0;
+          left: 0;
+          width: 100vw;
+          height: 100vh;
+          background: rgba(0, 0, 0, 0.9);
+          display: flex;
+          justify-content: center;
+          align-items: center;
+          z-index: 1000;
+          cursor: pointer;
+        }
+
+        .modal-content {
+          position: relative;
+          max-width: 90vw;
+          max-height: 90vh;
+          cursor: default;
+        }
+
+        .close-btn {
+          position: absolute;
+          top: -40px;
+          right: 0;
+          background: #fff;
+          color: #000;
+          border: none;
+          width: 32px;
+          height: 32px;
+          border-radius: 50%;
+          font-weight: bold;
+          cursor: pointer;
+          font-size: 18px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+        }
+
+        .close-btn:hover {
+          background: #e0e0e0;
+          transform: scale(1.1);
+        }
+
+        .modal-image {
+          max-width: 100%;
+          max-height: 80vh;
+          object-fit: contain;
+          border: 2px solid white;
+          border-radius: 8px;
         }
 
         @media (max-width: 768px) {
@@ -438,6 +639,11 @@ export default function RiwayatFireAlarm({ params }: { params: Promise<{ zona: s
           .apd-table th,
           .apd-table td {
             padding: 6px;
+          }
+
+          .history-image {
+            width: 40px;
+            height: 40px;
           }
         }
       `}</style>

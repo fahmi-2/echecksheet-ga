@@ -1,124 +1,174 @@
 // app/exit-lamp-pintu-darurat/riwayat/titik-kumpul/page.tsx
-"use client"
+"use client";
 
-import { useState, useEffect } from "react"
-import { useRouter } from "next/navigation"
-import { useAuth } from "@/lib/auth-context"
+import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
+import { useAuth } from "@/lib/auth-context";
 import { Sidebar } from "@/components/Sidebar";
-import Link from "next/link"
+import Link from "next/link";
+import { ArrowLeft } from "lucide-react";
 
 interface TitikKumpulItem {
-  no: number
-  lokasi: string
-  areaAman: string
-  identitasTitikKumpul: string
-  areaMobilPMK: string
-  keterangan: string
-  tindakanPerbaikan: string
-  pic: string
-  dueDate: string
-  verifikasi: string
-  ttdPic: string
+  no: number;
+  lokasi: string;
+  areaAman: string;
+  identitasTitikKumpul: string;
+  areaMobilPMK: string;
+  keterangan: string;
+  tindakanPerbaikan: string;
+  pic: string;
+  foto: string;
 }
 
 interface JalurEvakuasiItem {
-  no: number
-  pertanyaan: string
-  hasilCek: string
-  keterangan: string
-  tindakanPerbaikan: string
-  pic: string
-  dueDate: string
-  verifikasi: string
-  ttdPic: string
+  no: number;
+  pertanyaan: string;
+  hasilCek: string;
+  keterangan: string;
+  tindakanPerbaikan: string;
+  pic: string;
+  foto: string;
 }
 
 interface TitikKumpulRecord {
-  id: string
-  date: string
-  category: string
-  titikKumpul: TitikKumpulItem[]
-  jalurEvakuasi: JalurEvakuasiItem[]
-  checker: string
-  submittedAt: string
+  id: string;
+  date: string;
+  category: string;
+  titikKumpul: TitikKumpulItem[];
+  jalurEvakuasi: JalurEvakuasiItem[];
+  checker: string;
+  submittedAt: string;
 }
 
 export default function RiwayatTitikKumpul() {
-  const router = useRouter()
-  const { user } = useAuth()
+  const router = useRouter();
+  const { user } = useAuth();
 
-  const [records, setRecords] = useState<TitikKumpulRecord[]>([])
-  const [filteredRecords, setFilteredRecords] = useState<TitikKumpulRecord[]>([])
-  const [loading, setLoading] = useState(true)
-  const [filterDate, setFilterDate] = useState("")
-  const [filterLocation, setFilterLocation] = useState("")
+  const [records, setRecords] = useState<TitikKumpulRecord[]>([]);
+  const [filteredRecords, setFilteredRecords] = useState<TitikKumpulRecord[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [filterDate, setFilterDate] = useState("");
+  const [filterLocation, setFilterLocation] = useState("");
+  const [previewImage, setPreviewImage] = useState<string | null>(null);
 
   // Validasi akses
   useEffect(() => {
     if (!user || user.role !== "inspector-ga") {
-      router.push("/home")
+      router.push("/home");
     }
-  }, [user, router])
+  }, [user, router]);
 
-  // Load data
+  // ✅ Load data dari API (BUKAN localStorage)
   useEffect(() => {
-    const loadRecords = () => {
+    const loadRecords = async () => {
       try {
-        const historyKey = "ga_exit_history_titik-kumpul"
-        const saved = localStorage.getItem(historyKey)
-        if (saved) {
-          const parsed = JSON.parse(saved)
-          setRecords(parsed)
-          setFilteredRecords(parsed)
+        setLoading(true);
+        
+        // ✅ Fetch data dari API
+        const response = await fetch('/api/titik-kumpul/history');
+        
+        if (!response.ok) {
+          const errorText = await response.text();
+          console.error('API Error:', errorText);
+          throw new Error(`HTTP ${response.status}: ${errorText}`);
         }
-      } catch (e) {
-        console.error("Gagal memuat riwayat Titik Kumpul:", e)
+        
+        const data = await response.json();
+        
+        // ✅ Format data agar sesuai dengan interface
+        const formattedData = data.map((record: any) => ({
+          id: record.id.toString(), // Convert number ke string
+          date: record.date,
+          category: "titik-kumpul", // Tambahkan category
+          checker: record.checker,
+          submittedAt: record.submittedAt,
+          titikKumpul: record.titikKumpul.map((item: any, index: number) => ({
+            no: index + 1,
+            lokasi: item.lokasi,
+            areaAman: item.areaAman || '',
+            identitasTitikKumpul: item.identitasTitikKumpul || '',
+            areaMobilPMK: item.areaMobilPMK || '',
+            keterangan: item.keterangan || '',
+            tindakanPerbaikan: item.tindakanPerbaikan || '',
+            pic: item.pic || '',
+            foto: item.foto || ''
+          })),
+          jalurEvakuasi: record.jalurEvakuasi.map((item: any, index: number) => ({
+            no: index + 1,
+            pertanyaan: item.pertanyaan,
+            hasilCek: item.hasilCek || '',
+            keterangan: item.keterangan || '',
+            tindakanPerbaikan: item.tindakanPerbaikan || '',
+            pic: item.pic || '',
+            foto: item.foto || ''
+          }))
+        }));
+        
+        console.log('✅ Riwayat Titik Kumpul loaded:', formattedData);
+        setRecords(formattedData);
+        setFilteredRecords(formattedData);
+      } catch (error) {
+        console.error('❌ Load error:', error);
+        alert('Gagal memuat riwayat: ' + (error as Error).message);
       } finally {
-        setLoading(false)
+        setLoading(false);
       }
-    }
-
-    loadRecords()
-  }, [])
+    };
+    
+    loadRecords();
+  }, []); // ✅ Hanya load sekali saat component mount
 
   // Terapkan filter
   useEffect(() => {
-  let filtered = records.filter(r => r.titikKumpul && r.jalurEvakuasi) // ✅ Hanya ambil data baru
+    let filtered = records.filter((r) => r.titikKumpul && r.jalurEvakuasi);
 
-  if (filterDate) {
-    filtered = filtered.filter(r => r.date === filterDate)
-  }
+    if (filterDate) {
+      filtered = filtered.filter((r) => r.date === filterDate);
+    }
 
-  if (filterLocation) {
-    filtered = filtered.filter(r => 
-      r.titikKumpul.some(item => item.lokasi === filterLocation)
-    )
-  }
+    if (filterLocation) {
+      filtered = filtered.filter((r) =>
+        r.titikKumpul.some((item) => item.lokasi === filterLocation)
+      );
+    }
 
-  setFilteredRecords(filtered)
-}, [filterDate, filterLocation, records])
+    setFilteredRecords(filtered);
+  }, [filterDate, filterLocation, records]);
 
   // Ambil daftar lokasi unik
   const locations = Array.from(
-  new Set(
-    records
-      .filter(r => r.titikKumpul) // ✅ Pastikan ada titikKumpul
-      .flatMap(r => r.titikKumpul.map(i => i.lokasi))
-  )
-).sort()
+    new Set(
+      records
+        .filter((r) => r.titikKumpul)
+        .flatMap((r) => r.titikKumpul.map((i) => i.lokasi))
+    )
+  ).sort();
 
-  if (!user) return null
+  const openImagePreview = (src: string) => {
+    if (src) setPreviewImage(src);
+  };
+
+  const closeImagePreview = () => {
+    setPreviewImage(null);
+  };
+
+  if (!user) return null;
 
   return (
     <div className="app-page">
       <Sidebar userName={user.fullName} />
 
       <div className="page-content">
-        <div className="header">
-          <h1>📍 Riwayat Titik Kumpul & Jalur Evakuasi</h1>
-          <div className="user-info">
-            <span>Selamat datang, {user.fullName}</span>
-          </div>
+        <div className="header-banner">
+          <button
+            onClick={() => router.push("/status-ga/exit-lamp-pintu-darurat")}
+            className="btn-back"
+            aria-label="Kembali"
+          >
+            <ArrowLeft size={18} />
+            <span>Kembali</span>
+          </button>
+          <h1 className="page-title">📍 Riwayat Titik Kumpul & Jalur Evakuasi</h1>
         </div>
 
         {/* Filter */}
@@ -140,15 +190,17 @@ export default function RiwayatTitikKumpul() {
               className="location-select"
             >
               <option value="">Semua Lokasi</option>
-              {locations.map(loc => (
-                <option key={loc} value={loc}>{loc}</option>
+              {locations.map((loc) => (
+                <option key={loc} value={loc}>
+                  {loc}
+                </option>
               ))}
             </select>
           </div>
           <button
             onClick={() => {
-              setFilterDate("")
-              setFilterLocation("")
+              setFilterDate("");
+              setFilterLocation("");
             }}
             className="clear-filter"
           >
@@ -161,123 +213,205 @@ export default function RiwayatTitikKumpul() {
 
         {/* Daftar Riwayat */}
         <div className="riwayat-container">
-          {filteredRecords.length === 0 ? (
+          {loading ? (
+            <div className="loading-state">⏳ Memuat data...</div>
+          ) : filteredRecords.length === 0 ? (
             <div className="empty-state">
-              Belum ada data Titik Kumpul.
+              {records.length === 0 
+                ? "Belum ada data Titik Kumpul." 
+                : "Tidak ada data yang sesuai filter."}
             </div>
           ) : (
             <div className="data-tables">
               {filteredRecords.map((record) => (
                 <div key={record.id} className="data-section">
                   <div className="section-header">
-                    <span>Tanggal: {record.date}</span>
-                    <span>Petugas: {record.checker}</span>
+                    <span>📅 Tanggal: {new Date(record.date).toLocaleDateString('id-ID')}</span>
+                    <span>👤 Petugas: {record.checker}</span>
                   </div>
 
                   {/* C.1 AREA EVAKUASI (TITIK KUMPUL) */}
                   <h3 className="subsection-title">C.1 AREA EVAKUASI (TITIK KUMPUL)</h3>
-                  <table className="apd-table">
-                    <thead>
-                      <tr>
-                        <th>No</th>
-                        <th>Lokasi</th>
-                        <th>Area Aman</th>
-                        <th>Identitas Titik Kumpul</th>
-                        <th>Area Mobil PMK</th>
-                        <th>Keterangan</th>
-                        <th>Tindakan Perbaikan</th>
-                        <th>PIC</th>
-                        <th>Due Date</th>
-                        <th>Verifikasi</th>
-                        <th>Ttd PIC</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {record.titikKumpul.map((item) => (
-                        <tr key={`${record.id}-tk-${item.no}`}>
-                          <td>{item.no}</td>
-                          <td>{item.lokasi}</td>
-                          <td>{item.areaAman}</td>
-                          <td>{item.identitasTitikKumpul}</td>
-                          <td>{item.areaMobilPMK}</td>
-                          <td>{item.keterangan || "-"}</td>
-                          <td>{item.tindakanPerbaikan || "-"}</td>
-                          <td>{item.pic || "-"}</td>
-                          <td>{item.dueDate || "-"}</td>
-                          <td>{item.verifikasi || "-"}</td>
-                          <td>{item.ttdPic || "-"}</td>
+                  <div className="table-wrapper">
+                    <table className="apd-table">
+                      <thead>
+                        <tr>
+                          <th>No</th>
+                          <th>Lokasi</th>
+                          <th>Area Aman</th>
+                          <th>Identitas</th>
+                          <th>Mobil PMK</th>
+                          <th>Keterangan</th>
+                          <th>Foto</th>
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                      </thead>
+                      <tbody>
+                        {record.titikKumpul.map((item) => (
+                          <tr key={`${record.id}-tk-${item.no}`}>
+                            <td>{item.no}</td>
+                            <td>{item.lokasi}</td>
+                            <td className={item.areaAman === "NG" ? "status-ng" : ""}>
+                              {item.areaAman || "-"}
+                            </td>
+                            <td className={item.identitasTitikKumpul === "NG" ? "status-ng" : ""}>
+                              {item.identitasTitikKumpul || "-"}
+                            </td>
+                            <td className={item.areaMobilPMK === "NG" ? "status-ng" : ""}>
+                              {item.areaMobilPMK || "-"}
+                            </td>
+                            <td>{item.keterangan || "-"}</td>
+                            <td>
+                              {item.foto ? (
+                                <img
+                                  src={item.foto.startsWith('http') || item.foto.startsWith('data:') 
+                                    ? item.foto 
+                                    : `/uploads${item.foto.split('uploads')[1]}`}
+                                  alt="Foto"
+                                  className="history-image clickable"
+                                  onClick={() => openImagePreview(item.foto)}
+                                  onError={(e) => {
+                                    console.error('Image load error:', item.foto);
+                                    (e.target as HTMLImageElement).style.display = 'none';
+                                  }}
+                                />
+                              ) : (
+                                "-"
+                              )}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
 
                   {/* C.2 JALUR EVAKUASI */}
-                  <h3 className="subsection-title" style={{ marginTop: "24px" }}>C.2 JALUR EVAKUASI</h3>
-                  <table className="apd-table">
-                    <thead>
-                      <tr>
-                        <th>No</th>
-                        <th>Item Pengecekan</th>
-                        <th>Hasil Cek</th>
-                        <th>Keterangan</th>
-                        <th>Tindakan Perbaikan</th>
-                        <th>PIC</th>
-                        <th>Due Date</th>
-                        <th>Verifikasi</th>
-                        <th>Ttd PIC</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {record.jalurEvakuasi.map((item) => (
-                        <tr key={`${record.id}-je-${item.no}`}>
-                          <td>{item.no}</td>
-                          <td>{item.pertanyaan}</td>
-                          <td>{item.hasilCek}</td>
-                          <td>{item.keterangan || "-"}</td>
-                          <td>{item.tindakanPerbaikan || "-"}</td>
-                          <td>{item.pic || "-"}</td>
-                          <td>{item.dueDate || "-"}</td>
-                          <td>{item.verifikasi || "-"}</td>
-                          <td>{item.ttdPic || "-"}</td>
+                  <h3 className="subsection-title" style={{ marginTop: "24px" }}>
+                    C.2 JALUR EVAKUASI
+                  </h3>
+                  <div className="table-wrapper">
+                    <table className="apd-table">
+                      <thead>
+                        <tr>
+                          <th>No</th>
+                          <th>Item Pengecekan</th>
+                          <th>Hasil Cek</th>
+                          <th>Keterangan</th>
+                          <th>Foto</th>
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                      </thead>
+                      <tbody>
+                        {record.jalurEvakuasi.map((item) => (
+                          <tr key={`${record.id}-je-${item.no}`}>
+                            <td>{item.no}</td>
+                            <td>{item.pertanyaan}</td>
+                            <td className={item.hasilCek === "NG" ? "status-ng" : ""}>
+                              {item.hasilCek || "-"}
+                            </td>
+                            <td>{item.keterangan || "-"}</td>
+                            <td>
+                              {item.foto ? (
+                                <img
+                                  src={item.foto.startsWith('http') || item.foto.startsWith('data:') 
+                                    ? item.foto 
+                                    : `/uploads${item.foto.split('uploads')[1]}`}
+                                  alt="Foto"
+                                  className="history-image clickable"
+                                  onClick={() => openImagePreview(item.foto)}
+                                  onError={(e) => {
+                                    console.error('Image load error:', item.foto);
+                                    (e.target as HTMLImageElement).style.display = 'none';
+                                  }}
+                                />
+                              ) : (
+                                "-"
+                              )}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
                 </div>
               ))}
             </div>
           )}
         </div>
+
+        {/* Image Preview Modal */}
+        {previewImage && (
+          <div className="image-modal" onClick={closeImagePreview}>
+            <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+              <button className="close-btn" onClick={closeImagePreview}>✕</button>
+              <img src={previewImage} alt="Zoom" className="modal-image" />
+            </div>
+          </div>
+        )}
       </div>
 
       <style jsx>{`
+        .app-page {
+          display: flex;
+          min-height: 100vh;
+          background-color: #f7f9fc;
+        }
+
         .page-content {
+          flex: 1;
+          padding: 24px;
           max-width: 1400px;
           margin: 0 auto;
-          padding: 24px;
+          color: #1e293b;
         }
 
-        .header h1 {
-          margin: 0;
-          color: #ffffff;
-          font-size: 2rem;
-        }
-
-        .user-info {
+        /* Header Banner Biru Gradasi */
+        .header-banner {
+          background: linear-gradient(135deg, #1976d2 0%, #0d47a1 100%);
+          color: white;
+          padding: 20px 24px;
+          border-radius: 16px;
+          margin-bottom: 24px;
+          box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
           display: flex;
           align-items: center;
           gap: 16px;
-          font-size: 0.95rem;
-          color: #666;
         }
 
+        .btn-back {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          padding: 6px 12px;
+          background: rgba(255, 255, 255, 0.2);
+          color: white;
+          border: none;
+          border-radius: 8px;
+          cursor: pointer;
+          font-weight: 600;
+          font-size: 0.9rem;
+          transition: background 0.2s;
+        }
+
+        .btn-back:hover {
+          background: rgba(255, 255, 255, 0.3);
+        }
+
+        .page-title {
+          margin: 0;
+          font-size: 1.6rem;
+          font-weight: 700;
+          flex: 1;
+          text-align: center;
+        }
+
+        /* Filter */
         .date-filter {
           display: flex;
           gap: 16px;
           margin-bottom: 24px;
           padding: 16px;
-          background: #f5f9ff;
-          border-radius: 8px;
+          background: white;
+          border-radius: 12px;
+          box-shadow: 0 2px 6px rgba(0, 0, 0, 0.05);
           flex-wrap: wrap;
           align-items: center;
         }
@@ -297,20 +431,21 @@ export default function RiwayatTitikKumpul() {
         .date-input,
         .location-select {
           padding: 8px 12px;
-          border: 1px solid #ccc;
-          border-radius: 6px;
+          border: 1px solid #cbd5e1;
+          border-radius: 8px;
           font-size: 0.95rem;
-          min-width: 180px;
+          min-width: 160px;
         }
 
         .clear-filter {
           padding: 8px 16px;
-          background: #f44336;
+          background: #dc2626;
           color: white;
           border: none;
-          border-radius: 6px;
+          border-radius: 8px;
           cursor: pointer;
           font-size: 0.9rem;
+          font-weight: 600;
         }
 
         .btn-add {
@@ -318,23 +453,32 @@ export default function RiwayatTitikKumpul() {
           background: #1e88e5;
           color: white;
           text-decoration: none;
-          border-radius: 6px;
+          border-radius: 8px;
           font-weight: 600;
           margin-left: auto;
+          white-space: nowrap;
         }
 
+        /* Riwayat Container */
         .riwayat-container {
           background: white;
           border-radius: 12px;
-          box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+          box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
           padding: 24px;
+          min-height: 400px;
         }
 
+        .loading-state,
         .empty-state {
           text-align: center;
           padding: 40px 20px;
-          color: #666;
+          color: #64748b;
           font-size: 1.1rem;
+        }
+
+        .loading-state {
+          color: #1e88e5;
+          font-weight: 600;
         }
 
         .data-tables {
@@ -344,60 +488,173 @@ export default function RiwayatTitikKumpul() {
         }
 
         .data-section {
-          border: 1px solid #eee;
-          border-radius: 8px;
+          border: 1px solid #e2e8f0;
+          border-radius: 10px;
           overflow: hidden;
         }
 
         .section-header {
-          background: #f5f9ff;
+          background: #f1f5f9;
           padding: 12px 16px;
           display: flex;
           justify-content: space-between;
           font-size: 0.9rem;
-          color: #666;
+          color: #475569;
+          font-weight: 600;
+          flex-wrap: wrap;
+          gap: 12px;
         }
 
         .subsection-title {
           margin: 24px 0 12px;
-          color: #0d47a1;
-          font-size: 1.1rem;
+          color: white;
+          font-size: 1.2rem;
+          padding-bottom: 6px;
+          border-bottom: 1px solid rgba(255, 255, 255, 0.3);
+        }
+
+        .table-wrapper {
+          overflow-x: auto;
         }
 
         .apd-table {
           width: 100%;
           border-collapse: collapse;
-          font-size: 0.8rem;
+          font-size: 0.85rem;
         }
 
         .apd-table th,
         .apd-table td {
-          padding: 8px;
+          padding: 10px;
           text-align: left;
-          border-bottom: 1px solid #eee;
+          border-bottom: 1px solid #e2e8f0;
         }
 
         .apd-table th {
-          background: #f9f9f9;
-          font-weight: 600;
+          background: #f8fafc;
+          font-weight: 700;
+          color: #1e293b;
+          position: sticky;
+          top: 0;
         }
 
-        @media (max-width: 1024px) {
+        .status-ng {
+          background: #fee2e2;
+          color: #dc2626;
+          font-weight: 600;
+          border-radius: 4px;
+          padding: 2px 6px;
+        }
+
+        .history-image {
+          width: 50px;
+          height: 50px;
+          object-fit: cover;
+          border-radius: 4px;
+          border: 1px solid #ddd;
+        }
+
+        .history-image.clickable {
+          cursor: zoom-in;
+          transition: transform 0.2s;
+        }
+
+        .history-image.clickable:hover {
+          transform: scale(1.05);
+        }
+
+        /* Image Modal */
+        .image-modal {
+          position: fixed;
+          top: 0;
+          left: 0;
+          width: 100vw;
+          height: 100vh;
+          background: rgba(0, 0, 0, 0.9);
+          display: flex;
+          justify-content: center;
+          align-items: center;
+          z-index: 1000;
+          cursor: pointer;
+        }
+
+        .modal-content {
+          position: relative;
+          max-width: 90vw;
+          max-height: 90vh;
+          cursor: default;
+        }
+
+        .close-btn {
+          position: absolute;
+          top: -40px;
+          right: 0;
+          background: #fff;
+          color: #000;
+          border: none;
+          width: 32px;
+          height: 32px;
+          border-radius: 50%;
+          font-weight: bold;
+          cursor: pointer;
+          font-size: 18px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+        }
+
+        .modal-image {
+          max-width: 100%;
+          max-height: 80vh;
+          object-fit: contain;
+          border: 2px solid white;
+          border-radius: 8px;
+          background: white;
+          padding: 10px;
+        }
+
+        @media (max-width: 768px) {
+          .header-banner {
+            flex-direction: column;
+            text-align: center;
+            gap: 12px;
+          }
+
+          .page-title {
+            font-size: 1.4rem;
+          }
+
           .date-filter {
             flex-direction: column;
-            align-items: flex-start;
+            align-items: stretch;
+          }
+
+          .btn-add {
+            margin-left: 0;
+            align-self: flex-start;
           }
 
           .apd-table {
-            font-size: 0.7rem;
+            font-size: 0.75rem;
           }
 
           .apd-table th,
           .apd-table td {
-            padding: 4px;
+            padding: 6px;
+          }
+
+          .history-image {
+            width: 40px;
+            height: 40px;
+          }
+
+          .section-header {
+            flex-direction: column;
+            align-items: flex-start;
           }
         }
       `}</style>
     </div>
-  )
+  );
 }

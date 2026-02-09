@@ -35,6 +35,10 @@ export default function InspeksiPreventifLiftBarangSelector() {
       <Sidebar userName={user.fullName} />
 
       <div className="page-content">
+        <div className="header-section">
+          <button onClick={() => router.push("/status-ga")} className="btn-back">← Kembali</button>
+        </div>
+
         <h1 className="title">📋 Inspeksi & Preventif Lift Barang</h1>
         <p className="subtitle">Pilih jenis checksheet yang ingin diisi:</p>
 
@@ -84,6 +88,35 @@ export default function InspeksiPreventifLiftBarangSelector() {
           margin: 40px auto;
           padding: 24px;
           text-align: center;
+        }
+
+        .header-section {
+          display: flex;
+          justify-content: flex-start;
+          margin-bottom: 24px;
+        }
+
+        .btn-back {
+          padding: 10px 20px;
+          background: linear-gradient(135deg, #1e88e5 0%, #1565c0 100%);
+          color: white;
+          border: none;
+          border-radius: 8px;
+          cursor: pointer;
+          font-weight: 600;
+          font-size: 0.95rem;
+          transition: all 0.3s ease;
+          box-shadow: 0 2px 8px rgba(30, 136, 229, 0.15);
+        }
+
+        .btn-back:hover {
+          background: linear-gradient(135deg, #1565c0 0%, #0d47a1 100%);
+          box-shadow: 0 4px 12px rgba(30, 136, 229, 0.25);
+          transform: translateY(-2px);
+        }
+
+        .btn-back:active {
+          transform: translateY(0);
         }
 
         .title {

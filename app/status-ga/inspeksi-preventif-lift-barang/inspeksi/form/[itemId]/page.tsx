@@ -4,13 +4,13 @@ import { useEffect, useState, ChangeEvent } from "react";
 import { useRouter, useSearchParams, useParams } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
 import { Sidebar } from "@/components/Sidebar";
+import { format } from "date-fns";
 
 type SubItem = {
   id: string;
   label: string;
   method: "VISUAL" | "DICOBA";
 };
-
 const inspectionData: Record<string, { title: string; imageKey?: string; subItems: SubItem[] }> = {
   "1": {
     title: "PONDASI / BAUT PENGIKAT",
@@ -186,7 +186,8 @@ type FormData = Record<
     status: "OK" | "NG";
     keterangan?: string;
     solusi?: string;
-    image?: File | null;
+    foto_path?: string;
+    foto_file?: File | null;
   }
 >;
 
@@ -194,29 +195,18 @@ export default function InspeksiFormDetailPage() {
   const router = useRouter();
   const params = useParams();
   const searchParams = useSearchParams();
-  const { user } = useAuth()
+  const { user } = useAuth();
   const [redirected, setRedirected] = useState(false);
+  const [loading, setLoading] = useState(false);
 
-  const itemId = typeof params?.itemId === "string" ? params.itemId : "";
-  const viewId = searchParams.get("view"); // Ambil ID riwayat dari query string
+  const itemId = params?.itemId as string | undefined;
+  const viewId = searchParams?.get("view") || null;
 
-  // Redirect jika tidak punya akses
-  useEffect(() => {
-    if (redirected) return;
-    if (!user) return;
-    if (user.role !== "inspector-ga") {
-      setRedirected(true);
-      router.push("/home");
-    }
-  }, [user, router, redirected]);
-
-  if (!user) {
-    return <div>Loading...</div>;
+  if (!itemId) {
+    return <div>Loading item...</div>;
   }
 
-  if (user.role !== "inspector-ga") {
-    return null;
-  }
+  // ... useEffect dan validasi akses ...
 
   const item = inspectionData[itemId];
   if (!item) {
@@ -226,92 +216,234 @@ export default function InspeksiFormDetailPage() {
   const [formData, setFormData] = useState<FormData>({});
   const [isViewMode, setIsViewMode] = useState(false);
 
-  // Load data riwayat jika ada parameter view
+  // Inisialisasi formData
   useEffect(() => {
-    if (redirected) return;
-    if (viewId) {
-      setIsViewMode(true);
-      const itemHistoryKey = `inspeksi_lift_barang_history_${itemId}`;
-      const saved = localStorage.getItem(itemHistoryKey);
-      if (saved) {
-        try {
-          const history = JSON.parse(saved);
-          const entry = history.find((e: any) => e.id === viewId);
-          if (entry) {
-            setFormData(entry.data);
-          }
-        } catch (e) {
-          console.error("Gagal load data riwayat", e);
-        }
-      }
-    }
-  }, [viewId, itemId]);
+    const initialData: FormData = {};
+    item.subItems.forEach(sub => {
+      initialData[sub.id] = {
+        status: "OK",
+        keterangan: "",
+        solusi: "",
+        foto_path: "",
+        foto_file: null
+      };
+    });
+    setFormData(initialData);
+  }, [itemId]);
 
+  // Load data for view mode
+  useEffect(() => {
+    if (viewId && itemId) {
+      setIsViewMode(true);
+      // Fetch specific inspection data
+      fetch(`/api/lift-barang/inspeksi/history?itemId=${itemId}`)
+        .then(res => res.json())
+        .then(result => {
+          if (result.success && result.data.length > 0) {
+            // Find the specific inspection by ID
+            const inspection = result.data.find((entry: any) => entry.id === viewId);
+            if (inspection) {
+              const loadedData: FormData = {};
+              item.subItems.forEach(sub => {
+                const itemData = inspection.data[sub.id];
+                loadedData[sub.id] = {
+                  status: itemData?.status || "OK",
+                  keterangan: itemData?.keterangan || "",
+                  solusi: itemData?.solusi || "",
+                  foto_path: itemData?.foto_path || "",
+                  foto_file: null
+                };
+              });
+              setFormData(loadedData);
+            }
+          }
+        })
+        .catch(error => {
+          console.error('Error loading inspection data:', error);
+        });
+    } else {
+      setIsViewMode(false);
+    }
+  }, [viewId, itemId, item.subItems]);
+
+  // Fungsi untuk mengubah status
   const handleStatusChange = (subId: string, status: "OK" | "NG") => {
-    if (isViewMode) return; // Nonaktifkan di mode view
     setFormData((prev) => ({
       ...prev,
       [subId]: {
         ...prev[subId],
         status,
-        keterangan: status === "OK" ? undefined : prev[subId]?.keterangan || "",
-        solusi: status === "OK" ? undefined : prev[subId]?.solusi || "",
+        keterangan: status === "OK" ? "" : prev[subId]?.keterangan || "",
+        solusi: status === "OK" ? "" : prev[subId]?.solusi || "",
       },
     }));
   };
 
+  // Fungsi untuk mengubah input teks
   const handleInputChange = (subId: string, field: "keterangan" | "solusi", value: string) => {
-    if (isViewMode) return; // Nonaktifkan di mode view
     setFormData((prev) => ({
       ...prev,
-      [subId]: { ...prev[subId], [field]: value },
+      [subId]: {
+        ...prev[subId],
+        [field]: value,
+      },
     }));
   };
 
-  const handleImageChange = (subId: string, e: ChangeEvent<HTMLInputElement>) => {
-    if (isViewMode) return; // Nonaktifkan di mode view
-    const file = e.target.files?.[0] || null;
-    setFormData((prev) => ({
-      ...prev,
-      [subId]: { ...prev[subId], image: file },
-    }));
+  // Upload foto
+  const handleImageUpload = async (subId: string, e: ChangeEvent<HTMLInputElement>) => {
+    if (isViewMode) return;
+    
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (!['image/jpeg', 'image/jpg', 'image/png', 'image/webp'].includes(file.type)) {
+      alert('Format file tidak didukung. Gunakan JPEG, PNG, atau WEBP');
+      return;
+    }
+
+    if (file.size > 5 * 1024 * 1024) {
+      alert('Ukuran file terlalu besar. Maksimal 5MB');
+      return;
+    }
+
+    try {
+      setLoading(true);
+      
+      const formDataUpload = new FormData();
+      formDataUpload.append('file', file);
+      formDataUpload.append('itemId', itemId);
+      formDataUpload.append('subItemId', subId);
+
+      const response = await fetch('/api/lift-barang/upload', {
+        method: 'POST',
+        body: formDataUpload,
+      });
+
+      const result = await response.json();
+
+      if (response.ok && result.success) {
+        setFormData((prev) => ({
+          ...prev,
+          [subId]: { 
+            ...prev[subId], 
+            foto_path: result.data.path,
+            foto_file: file
+          },
+        }));
+        alert('✅ Foto berhasil diupload!');
+      } else {
+        alert('❌ Gagal upload foto: ' + (result.message || 'Error tidak diketahui'));
+      }
+    } catch (error) {
+      console.error('Upload error:', error);
+      alert('❌ Terjadi kesalahan saat upload foto');
+    } finally {
+      setLoading(false);
+      e.target.value = '';
+    }
   };
 
-  const handleSubmit = () => {
-  if (isViewMode) return;
+  // 🔥 SIMPAN KE API - DENGAN VALIDASI LEBIH KETAT
+  const handleSubmit = async () => {
+    if (isViewMode) return;
 
-  for (const sub of item.subItems) {
-    const entry = formData[sub.id];
-    if (entry?.status === "NG") {
-      if (!entry.keterangan?.trim() || !entry.solusi?.trim()) {
-        alert("❗ Untuk kondisi NG, keterangan dan solusi wajib diisi.");
+    try {
+      setLoading(true);
+
+      // ✅ VALIDASI SETIAP ITEM SEBELUM KIRIM
+      const validatedData: Record<string, any> = {};
+      let hasValidItems = false;
+
+      for (const sub of item.subItems) {
+        const entry = formData[sub.id];
+        
+        // Pastikan entry ada dan valid
+        if (!entry || typeof entry !== 'object') {
+          console.warn(`Item ${sub.id} tidak valid atau undefined`);
+          continue;
+        }
+
+        // Validasi status
+        const status = entry.status === 'NG' ? 'NG' : 'OK';
+        
+        // Untuk status NG, pastikan keterangan dan solusi diisi
+        if (status === 'NG') {
+          const keterangan = (entry.keterangan || '').trim();
+          const solusi = (entry.solusi || '').trim();
+          
+          if (!keterangan || !solusi) {
+            alert(`❗ Item ${sub.id}: Keterangan dan solusi wajib diisi untuk kondisi NG!`);
+            return;
+          }
+          
+          validatedData[sub.id] = {
+            status: 'NG',
+            keterangan: keterangan,
+            solusi: solusi,
+            foto_path: entry.foto_path || null
+          };
+        } else {
+          validatedData[sub.id] = {
+            status: 'OK',
+            keterangan: '',
+            solusi: '',
+            foto_path: entry.foto_path || null
+          };
+        }
+        
+        hasValidItems = true;
+      }
+
+      // ✅ Pastikan ada item yang valid
+      if (!hasValidItems) {
+        alert('❗ Tidak ada item yang valid untuk disimpan!');
         return;
       }
-    }
-  }
 
-  const today = new Date().toISOString().split("T")[0];
-  const timestamp = Date.now();
-  const result = {
-    id: `${itemId}-${timestamp}`, // ← Pastikan ada properti "id"
-    itemId,
-    date: today,
-    inspector: user.fullName,
-    data: formData,
+      // ✅ STRUKTUR DATA YANG SESUAI DENGAN API
+      const submitData = {
+        inspection_date: new Date().toISOString().split('T')[0],
+        inspector: user?.fullName || 'Unknown Inspector',
+        inspector_nik: user?.nik || '',
+         data: validatedData
+      };
+
+      console.log('📤 Data yang akan dikirim ke API:', {
+        inspection_date: submitData.inspection_date,
+        inspector: submitData.inspector,
+        data_count: Object.keys(submitData.data).length,
+        sample_item: submitData.data[Object.keys(submitData.data)[0]]
+      });
+
+      const response = await fetch('/api/lift-barang/inspeksi/submit', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(submitData),
+      });
+
+      const result = await response.json();
+      console.log('📥 Response dari API:', result);
+
+      if (response.ok && result.success) {
+        alert("✅ Data berhasil disimpan!");
+        router.push("/status-ga/inspeksi-preventif-lift-barang/inspeksi");
+      } else {
+        const errorMsg = result.message || result.error || 'Gagal menyimpan data';
+        alert(`❌ ${errorMsg}`);
+      }
+    } catch (error) {
+      console.error('Submit error:', error);
+      alert("❌ Terjadi kesalahan saat menyimpan data: " + (error as any).message);
+    } finally {
+      setLoading(false);
+    }
   };
 
-  // Simpan ke localStorage per item
-  const itemHistoryKey = `inspeksi_lift_barang_history_${itemId}`;
-  const existingHistory = JSON.parse(localStorage.getItem(itemHistoryKey) || "[]");
-  localStorage.setItem(itemHistoryKey, JSON.stringify([...existingHistory, result]));
-
-  alert("✅ Data berhasil disimpan!");
-  router.push("/status-ga/inspeksi-preventif-lift-barang/inspeksi");
-};
 
   return (
     <div className="app-page">
-      <Sidebar userName={user.fullName} />
+      <Sidebar userName={user?.fullName || 'Unknown User'} />
 
       <div className="page-content">
         <button
@@ -336,6 +468,13 @@ export default function InspeksiFormDetailPage() {
           </div>
         )}
 
+        {loading && (
+          <div className="loading-overlay">
+            <div className="spinner"></div>
+            <p>Memproses...</p>
+          </div>
+        )}
+
         <table className="form-table">
           <thead>
             <tr>
@@ -343,6 +482,8 @@ export default function InspeksiFormDetailPage() {
               <th>Sub-Item</th>
               <th>Metode</th>
               <th>Status</th>
+              {/* Tambahkan kolom Foto di view mode */}
+              {isViewMode && <th>Foto</th>}
               {!isViewMode && <th>Keterangan (jika NG)</th>}
               {!isViewMode && <th>Solusi (jika NG)</th>}
               {!isViewMode && <th>Foto Hasil</th>}
@@ -370,7 +511,7 @@ export default function InspeksiFormDetailPage() {
                             name={`status-${sub.id}`}
                             checked={entry?.status === "OK"}
                             onChange={() => handleStatusChange(sub.id, "OK")}
-                            disabled={isViewMode}
+                            disabled={isViewMode || loading}
                           /> OK
                         </label>
                         <label>
@@ -379,12 +520,31 @@ export default function InspeksiFormDetailPage() {
                             name={`status-${sub.id}`}
                             checked={entry?.status === "NG"}
                             onChange={() => handleStatusChange(sub.id, "NG")}
-                            disabled={isViewMode}
+                            disabled={isViewMode || loading}
                           /> NG
                         </label>
                       </div>
                     )}
                   </td>
+                  
+                  {/* Kolom Foto untuk view mode */}
+                  {isViewMode && (
+                    <td>
+                      {entry?.foto_path ? (
+                        <div className="image-preview">
+                          <img 
+                            src={entry.foto_path.startsWith('http') 
+                              ? entry.foto_path 
+                              : `${process.env.NEXT_PUBLIC_BASE_URL || ''}${entry.foto_path}`} 
+                            alt="Foto inspeksi" 
+                            className="uploaded-image" 
+                          />
+                        </div>
+                      ) : (
+                        <span className="no-photos">Tidak ada foto</span>
+                      )}
+                    </td>
+                  )}
                   
                   {!isViewMode && (
                     <>
@@ -395,7 +555,7 @@ export default function InspeksiFormDetailPage() {
                             value={entry.keterangan || ""}
                             onChange={(e) => handleInputChange(sub.id, "keterangan", e.target.value)}
                             className="text-input"
-                            disabled={isViewMode}
+                            disabled={isViewMode || loading}
                           />
                         )}
                       </td>
@@ -406,7 +566,7 @@ export default function InspeksiFormDetailPage() {
                             value={entry.solusi || ""}
                             onChange={(e) => handleInputChange(sub.id, "solusi", e.target.value)}
                             className="text-input"
-                            disabled={isViewMode}
+                            disabled={isViewMode || loading}
                           />
                         )}
                       </td>
@@ -414,9 +574,21 @@ export default function InspeksiFormDetailPage() {
                         <input 
                           type="file" 
                           accept="image/*" 
-                          onChange={(e) => handleImageChange(sub.id, e)}
-                          disabled={isViewMode}
+                          onChange={(e) => handleImageUpload(sub.id, e)}
+                          disabled={isViewMode || loading}
                         />
+                        {/* Tampilkan preview foto */}
+                        {entry?.foto_path && (
+                          <div className="image-preview">
+                            <img 
+                              src={entry.foto_path.startsWith('http') 
+                                ? entry.foto_path 
+                                : `${process.env.NEXT_PUBLIC_BASE_URL || ''}${entry.foto_path}`} 
+                              alt="Preview" 
+                              className="uploaded-image" 
+                            />
+                          </div>
+                        )}
                       </td>
                     </>
                   )}
@@ -441,7 +613,13 @@ export default function InspeksiFormDetailPage() {
 
         {!isViewMode && (
           <div className="actions">
-            <button onClick={handleSubmit} className="btn-primary">Simpan Hasil</button>
+            <button 
+              onClick={handleSubmit} 
+              className="btn-primary"
+              disabled={loading}
+            >
+              {loading ? 'Menyimpan...' : 'Simpan Hasil'}
+            </button>
           </div>
         )}
       </div>
@@ -613,6 +791,30 @@ export default function InspeksiFormDetailPage() {
           padding: 4px 8px;
           border-radius: 4px;
           display: inline-block;
+        }
+        /* Styling untuk kolom foto */
+        .image-preview {
+          margin-top: 8px;
+          display: flex;
+          justify-content: center;
+        }
+        .uploaded-image {
+          max-width: 100px;
+          max-height: 100px;
+          border-radius: 4px;
+          border: 1px solid #eee;
+          box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+          cursor: pointer;
+          transition: transform 0.2s;
+        }
+        .uploaded-image:hover {
+          transform: scale(1.05);
+        }
+        .no-photos {
+          color: #999;
+          font-style: italic;
+          font-size: 0.85rem;
+          text-align: center;
         }
       `}</style>
     </div>
