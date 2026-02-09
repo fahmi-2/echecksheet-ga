@@ -5,18 +5,22 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
 import { Sidebar } from "@/components/Sidebar";
-import Link from "next/link";
+import { AlertTriangle, FileText, BarChart2, ArrowLeft } from "lucide-react";
 
 export default function ChecksheetToiletListPage() {
   const router = useRouter();
   const { user } = useAuth();
   const today = new Date().toISOString().split("T")[0];
+  const [searchTerm, setSearchTerm] = useState("");
+  const [redirected, setRedirected] = useState(false);
 
   useEffect(() => {
+    if (redirected) return;
     if (!user || user.role !== "inspector-ga") {
+      setRedirected(true);
       router.push("/home");
     }
-  }, [user, router]);
+  }, [user, router, redirected]);
 
   const areas = [
     { id: "toilet-driver", title: "TOILET - DRIVER", desc: "Toilet laki & perempuan" },
@@ -46,228 +50,348 @@ export default function ChecksheetToiletListPage() {
     }
   };
 
+  const filteredAreas = areas.filter(area =>
+    area.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    area.desc.toLowerCase().includes(searchTerm.toLowerCase())
+  );
+
   if (!user) return null;
 
   return (
     <div className="app-page">
       <Sidebar userName={user.fullName} />
+
       <div className="page-content">
-        <div className="header-section">
-          <div className="header-content">
-            <h1>🚻 Checksheet Toilet</h1>
-            <p className="header-subtitle">Daily check kebersihan dan kondisi toilet</p>
+        {/* Header Banner */}
+        <div className="header-banner">
+          <button
+            onClick={() => router.push("/status-ga")}
+            className="btn-back"
+            aria-label="Kembali ke halaman utama"
+          >
+            <ArrowLeft size={18} />
+            <span>Kembali</span>
+          </button>
+
+          <div className="header-title">
+            <AlertTriangle size={28} color="#ffffff" />
+            Checksheet Toilet
+          </div>
+
+          <div className="header-subtitle">Daily check kebersihan dan kondisi toilet</div>
+        </div>
+
+        {/* 🔍 Search Bar */}
+        <div className="search-container">
+          <div className="search-box">
+            <input
+              type="text"
+              placeholder="Cari lokasi toilet..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="search-input"
+            />
           </div>
         </div>
 
-        <div className="cards-grid">
-          {areas.map((area) => (
-            <div key={area.id} className="card">
-              <div className={`card-header ${checkIfFilled(area.id) ? 'filled' : 'not-filled'}`}>
-                <div className="emoji">🚽</div>
-                <h2>{area.title}</h2>
-              </div>
-              <p className="card-desc">{area.desc}</p>
-              <div className="card-actions">
-                <Link 
-                  href={`/status-ga/checksheet-toilet/${area.id}`} 
-                  className={`btn ${checkIfFilled(area.id) ? 'btn-filled' : 'btn-primary'}`}
-                >
-                  {checkIfFilled(area.id) ? "✅ Sudah Diisi" : "📝 Isi Checklist"}
-                </Link>
-                <Link
-                  href={`/status-ga/checksheet-toilet/riwayat/${area.id}`}
-                  className="btn btn-history"
-                >
-                  📊 Riwayat
-                </Link>
-              </div>
-            </div>
-          ))}
-        </div>
+        {/* Grid Area */}
+        {filteredAreas.length === 0 ? (
+          <div className="no-results">
+            Tidak ada toilet ditemukan untuk "{searchTerm}"
+          </div>
+        ) : (
+          <div className="categories-grid">
+            {filteredAreas.map((area) => {
+              const filled = checkIfFilled(area.id);
+              return (
+                <div key={area.id} className="category-card">
+                  <div className={`card-header ${filled ? "filled" : ""}`}>
+                    <h2>{area.title}</h2>
+                  </div>
+                  <p className="card-desc">{area.desc}</p>
+                  <div className="card-actions">
+                    <button
+                      onClick={() => router.push(`/status-ga/checksheet-toilet/${area.id}`)}
+                      className={`btn-checklist ${filled ? "btn-filled" : ""}`}
+                    >
+                      <FileText size={16} />
+                      {filled ? "Sudah Diisi" : "Isi Checklist"}
+                    </button>
+                    <button
+                      onClick={() => router.push(`/status-ga/checksheet-toilet/riwayat/${area.id}`)}
+                      className="btn-riwayat"
+                    >
+                      <BarChart2 size={16} />
+                      Riwayat
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
       </div>
 
       <style jsx>{`
         .app-page {
+          display: flex;
           min-height: 100vh;
-          background: #f8f9fa;
+          background-color: #f7f9fc;
         }
 
         .page-content {
-          padding: 32px 24px;
+          flex: 1;
+          padding: 24px;
           max-width: 1400px;
           margin: 0 auto;
-          margin-left: 75px; /* ← SESUAIKAN DENGAN LEBAR SIDEBAR */
         }
 
-        .header-section {
-          margin-bottom: 32px;
-        }
-
-        .header-content {
-          background: linear-gradient(135deg, #0059f1 0%, #13d9ef 100%);
-          border-radius: 12px;
-          padding: 24px 32px;
-          box-shadow: 0 4px 12px rgba(211, 47, 47, 0.2);
-        }
-
-        .header-content h1 {
-          margin: 0 0 8px 0;
+        /* Header Banner */
+        .header-banner {
+          background: linear-gradient(135deg, #1976d2 0%, #0d47a1 100%);
           color: white;
-          font-size: 28px;
-          font-weight: 700;
-          letter-spacing: -0.5px;
-        }
-        .header-subtitle {
-          margin: 0;
-          color: rgba(255, 255, 255, 0.9);
-          font-size: 14px;
-          font-weight: 400;
-        }
-
-        .cards-grid {
-          display: grid;
-          grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
-          gap: 24px;
-        }
-
-        .card {
-          background: white;
-          border-radius: 12px;
-          box-shadow: 0 4px 12px rgba(0,0,0,0.08);
-          overflow: hidden;
-          transition: transform 0.3s ease;
-        }
-
-        .card:hover {
-          transform: translateY(-4px);
-        }
-
-        .card-header {
-          padding: 20px;
+          padding: 16px 24px;
+          border-radius: 16px;
+          margin-bottom: 24px;
+          box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
           display: flex;
           align-items: center;
           gap: 16px;
         }
 
+        .btn-back {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          padding: 6px 12px;
+          background: rgba(255, 255, 255, 0.2);
+          color: white;
+          border: none;
+          border-radius: 8px;
+          cursor: pointer;
+          font-weight: 600;
+          transition: all 0.3s ease;
+          font-size: 0.9rem;
+          outline: none;
+        }
+
+        .btn-back:hover {
+          background: rgba(255, 255, 255, 0.3);
+          transform: translateY(-1px);
+        }
+
+        .header-title {
+          font-size: 1.8rem;
+          font-weight: 700;
+          margin: 0;
+          display: flex;
+          align-items: center;
+          gap: 12px;
+          flex: 1;
+        }
+
+        .header-subtitle {
+          font-size: 0.9rem;
+          opacity: 0.9;
+          margin: 0;
+          font-weight: 400;
+          text-align: right;
+          flex-shrink: 0;
+        }
+
+        /* Search Bar */
+        .search-container {
+          margin-bottom: 24px;
+        }
+
+        .search-box {
+          position: relative;
+          display: flex;
+          align-items: center;
+          border: 2px solid #cbd5e1;
+          border-radius: 12px;
+          overflow: hidden;
+          background: white;
+        }
+
+        .search-input {
+          flex: 1;
+          padding: 14px 20px;
+          font-size: 1rem;
+          border: none;
+          outline: none;
+        }
+
+        /* No Results */
+        .no-results {
+          text-align: center;
+          padding: 40px;
+          color: #64748b;
+          font-size: 1.1rem;
+          background: white;
+          border-radius: 12px;
+          border: 1px solid #e2e8f0;
+        }
+
+        /* Grid Zona */
+        .categories-grid {
+          display: grid;
+          grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+          gap: 24px;
+        }
+
+        .category-card {
+          background: white;
+          border-radius: 16px;
+          box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+          overflow: hidden;
+          transition: all 0.3s ease;
+          border: 2px solid #e2e8f0;
+        }
+
+        .category-card:hover {
+          transform: translateY(-6px);
+          box-shadow: 0 8px 20px rgba(0, 0, 0, 0.15);
+          border-color: #3b82f6;
+        }
+
+        .card-header {
+          padding: 20px;
+          background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          border-bottom: 2px solid #bbdefb;
+        }
+
         .card-header.filled {
-          background: linear-gradient(135deg, #e8f5e9, #c8e6c9);
-        }
-
-        .card-header.not-filled {
-          background: linear-gradient(135deg, #0796de, #17ddfc);
-        }
-
-        .emoji {
-          font-size: 2rem;
+          background: linear-gradient(135deg, #e8f5e9 0%, #c8e6c9 100%);
+          border-color: #c8e6c9;
         }
 
         .card-header h2 {
           margin: 0;
           font-size: 1.3rem;
-          color: #ffffff;
+          color: #0d47a1;
+          font-weight: 700;
         }
 
         .card-desc {
-          padding: 0 20px;
-          color: #666;
+          padding: 16px 20px;
+          color: #475569;
           line-height: 1.5;
-          margin: 16px 0;
+          margin: 0;
+          text-align: center;
         }
 
         .card-actions {
-          padding: 0 20px 20px;
+          padding: 16px 20px;
           display: flex;
           gap: 12px;
+          border-top: 1px solid #e2e8f0;
         }
 
-        .btn {
-          display: inline-flex;
+        .btn-checklist,
+        .btn-riwayat {
+          flex: 1;
+          display: flex;
           align-items: center;
           justify-content: center;
-          padding: 10px 16px;
-          border-radius: 6px;
+          gap: 8px;
+          padding: 10px 12px;
+          border-radius: 8px;
           font-weight: 600;
+          font-size: 0.9rem;
           text-decoration: none;
+          transition: all 0.25s ease;
+          text-align: center;
+          min-height: 42px;
           cursor: pointer;
-          transition: all 0.3s ease;
-          white-space: nowrap;
-          text-transform: uppercase;
-          letter-spacing: 0.5px;
           border: none;
-          color: white;
-          background: #0036fa;
+          outline: none;
         }
 
-        /* Primary Button */
-.btn-primary {
-  background: #0036fa;
-  color: white;
-  padding: 10px 16px;
-  border-radius: 6px;
-  font-weight: 600;
-  text-decoration: none;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  transition: all 0.3s ease;
-  white-space: nowrap;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  border: none;
-  cursor: pointer;
-}
+        .btn-checklist {
+          background: #dc2626;
+          color: white;
+        }
 
-.btn-primary:hover {
-  background: #00bfff;
-  box-shadow: 0 2px 8px rgba(0, 54, 250, 0.3);
-}
+        .btn-checklist:hover {
+          background: #b91c1c;
+          transform: scale(1.03);
+          box-shadow: 0 4px 8px rgba(185, 28, 28, 0.3);
+        }
 
-        
-/* Filled Button */
-.btn-filled {
-  background: #4caf50;
-  color: white;
-  padding: 10px 16px;
-  border-radius: 6px;
-  font-weight: 600;
-  text-decoration: none;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  transition: all 0.3s ease;
-  white-space: nowrap;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  border: none;
-  cursor: pointer;
-}
+        .btn-checklist.btn-filled {
+          background: #16a34a;
+          cursor: not-allowed;
+        }
 
-.btn-filled:hover {
-  background: #388e3c;
-  box-shadow: 0 2px 8px rgba(76, 175, 80, 0.3);
-}
+        .btn-checklist.btn-filled:hover {
+          background: #16a34a;
+          transform: none;
+          box-shadow: none;
+        }
 
- 
-/* History Button */
-.btn-history {
-  background: #0d47a1 !important;
-  color: white !important;  
-  padding: 8px 12px !important;
-}
+        .btn-riwayat {
+          background: #f1f5f9;
+          color: #334155;
+          border: 1px solid #cbd5e1;
+        }
 
-.btn-history:hover {
-  background: #1565c0;
-  box-shadow: 0 2px 8px rgba(13, 71, 161, 0.3);
-}
+        .btn-riwayat:hover {
+          background: #e2e8f0;
+          border-color: #94a8c9;
+          color: #1e293b;
+          transform: scale(1.03);
+          box-shadow: 0 4px 8px rgba(0, 0, 0, 0.08);
+        }
 
+        /* Responsif Mobile */
         @media (max-width: 768px) {
           .page-content {
-            margin-left: 0;
             padding: 16px 12px;
           }
 
-          .cards-grid {
+          .header-banner {
+            flex-direction: column;
+            text-align: center;
+            gap: 12px;
+            padding: 16px;
+          }
+
+          .btn-back {
+            align-self: flex-start;
+            padding: 6px 12px;
+            gap: 6px;
+            font-size: 0.85rem;
+          }
+
+          .header-title {
+            font-size: 1.6rem;
+            justify-content: center;
+          }
+
+          .header-subtitle {
+            text-align: center;
+            align-self: flex-end;
+          }
+
+          .search-container {
+            margin-top: 16px;
+          }
+
+          .categories-grid {
             grid-template-columns: 1fr;
+          }
+
+          .card-actions {
+            flex-direction: column;
+          }
+
+          .btn-checklist,
+          .btn-riwayat {
+            width: 100%;
           }
         }
       `}</style>

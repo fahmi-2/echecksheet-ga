@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
 import { Sidebar } from "@/components/Sidebar";
+import { ArrowLeft } from "lucide-react"; // ✅ Import icon ArrowLeft
 
 type InspectionItem = {
   id: string;
@@ -90,9 +91,23 @@ export default function InspeksiLiftBarangListPage() {
       <Sidebar userName={user.fullName} />
 
       <div className="page-content">
+        {/* ✅ Header dengan Tombol Kembali */}
         <div className="header">
-          <h1>📋 A. Inspeksi Lift Barang (3 Bulanan)</h1>
-          <p className="subtitle">Ringkasan item inspeksi — klik “Input” untuk mengisi</p>
+          <div className="header-left">
+            <button
+              onClick={() => router.push("/status-ga/inspeksi-preventif-lift-barang")}
+              className="btn-back"
+              aria-label="Kembali ke halaman sebelumnya"
+            >
+              <ArrowLeft size={18} />
+              <span>Kembali</span>
+            </button>
+          </div>
+          
+          <div className="header-center">
+            <h1>📋 A. Inspeksi Lift Barang (3 Bulanan)</h1>
+            <p className="subtitle">Ringkasan item inspeksi — klik "Input" untuk mengisi</p>
+          </div>
         </div>
 
         <table className="summary-table">
@@ -159,14 +174,64 @@ export default function InspeksiLiftBarangListPage() {
           margin: 0 auto;
           padding: 24px;
         }
+        
+        /* ✅ Header Layout */
+        .header {
+          display: flex;
+          justify-content: space-between;
+          align-items: flex-start;
+          margin-bottom: 24px;
+          gap: 24px;
+        }
+        
+        .header-left {
+          display: flex;
+          align-items: center;
+        }
+        
+        .header-center {
+          flex: 1;
+        }
+        
+        /* ✅ Tombol Kembali */
+        .btn-back {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          padding: 8px 16px;
+          background: rgba(255, 255, 255, 0.2);
+          color: white;
+          border: 2px solid rgba(255, 255, 255, 0.4);
+          border-radius: 8px;
+          cursor: pointer;
+          font-weight: 600;
+          font-size: 0.9rem;
+          text-decoration: none;
+          transition: all 0.3s ease;
+          white-space: nowrap;
+          box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+        }
+        
+        .btn-back:hover {
+          background: rgba(255, 255, 255, 0.3);
+          border-color: rgba(255, 255, 255, 0.6);
+          transform: translateY(-2px);
+          box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+        }
+        
+        .btn-back:active {
+          transform: translateY(0);
+        }
+        
         .header h1 {
           color: #0d47a1;
           margin-bottom: 8px;
           font-size: 1.8rem;
+          margin: 0;
         }
         .subtitle {
           color: #666;
-          margin-bottom: 24px;
+          margin-bottom: 0;
           font-size: 1rem;
         }
         .summary-table {
@@ -308,6 +373,46 @@ export default function InspeksiLiftBarangListPage() {
 
 .image-wrapper:hover .thumb {
   transform: scale(1.05);
+}
+
+/* ✅ Responsive untuk mobile */
+@media (max-width: 768px) {
+  .header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 16px;
+  }
+  
+  .header-left {
+    width: 100%;
+  }
+  
+  .btn-back {
+    width: fit-content;
+    padding: 6px 12px;
+    font-size: 0.85rem;
+  }
+  
+  .header h1 {
+    font-size: 1.5rem;
+  }
+  
+  .summary-table {
+    display: block;
+    overflow-x: auto;
+  }
+  
+  .summary-table th,
+  .summary-table td {
+    padding: 10px 12px;
+    font-size: 0.85rem;
+  }
+  
+  .btn-action,
+  .btn-history {
+    padding: 6px 10px;
+    font-size: 0.8rem;
+  }
 }
       `}</style>
     </div>

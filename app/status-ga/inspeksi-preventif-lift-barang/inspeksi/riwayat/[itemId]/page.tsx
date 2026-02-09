@@ -11,6 +11,7 @@ type HistoryEntry = {
   date: string;
   inspector: string;
   data: Record<string, any>;
+  photos: string[]; // Tambahkan properti photos
 };
 
 const itemTitles: Record<string, string> = {
@@ -69,7 +70,7 @@ export default function RiwayatInspeksiPerItemPage() {
     loadHistory(itemId);
   }, [user, itemId, router]);
 
-  const loadHistory = (id: string) => {
+  const loadHistory = async (id: string) => {
     try {
       if (user?.role !== "inspector-ga") {
         router.push("/home");
@@ -82,14 +83,26 @@ export default function RiwayatInspeksiPerItemPage() {
         return;
       }
 
-      const itemHistoryKey = `inspeksi_lift_barang_history_${id}`;
-      const saved = localStorage.getItem(itemHistoryKey);
-      
-      if (saved) {
-        const history: HistoryEntry[] = JSON.parse(saved);
-        const sortedHistory = history.reverse();
-        
-        setHistory(sortedHistory);
+      // Fetch history from API
+      const response = await fetch(`/api/lift-barang/inspeksi/history?itemId=${id}`);
+      const result = await response.json();
+
+      if (response.ok && result.success) {
+        // Transform API data to match HistoryEntry format
+        const transformedHistory: HistoryEntry[] = result.data.map((entry: any) => {
+          
+          return {
+            id: entry.id,
+            itemId: id,
+            date: entry.inspection_date,
+            inspector: entry.inspector,
+            data: entry.data,
+          };
+        });
+
+        setHistory(transformedHistory);
+      } else {
+        setError(result.message || "Gagal memuat riwayat");
       }
     } catch (e) {
       console.error("Error loading history:", e);
@@ -195,7 +208,7 @@ export default function RiwayatInspeksiPerItemPage() {
           color: #f44336;
         }
         .page-content {
-          max-width: 1000px;
+          max-width: 1200px;
           margin: 0 auto;
           padding: 24px;
           background: #fafafa;
@@ -287,6 +300,7 @@ export default function RiwayatInspeksiPerItemPage() {
         .btn-view:active {
           transform: translateY(0);
         }
+        
       `}</style>
     </div>
   );

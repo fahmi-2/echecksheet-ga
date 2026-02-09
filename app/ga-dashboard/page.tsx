@@ -14,7 +14,7 @@ import {
   Legend,
 } from "chart.js";
 import { Doughnut, Bar, Line } from "react-chartjs-2";
-import { Sidebar } from "@/components/Sidebar"; // ✅ Gunakan Sidebar seperti di home
+import { Sidebar } from "@/components/Sidebar";
 import { useAuth } from "@/lib/auth-context";
 
 ChartJS.register(
@@ -28,28 +28,16 @@ ChartJS.register(
   Legend
 );
 
-const getCategoryFilter = (role: string) => {
-  switch (role) {
-    case "inspector-ga":
-      return ["Toilet", "Fire Safety", "Lift Barang", "APD", "Evakuasi"];
-    case "inspector":
-    case "group-leader":
-      return ["Final Assy", "Pre-Assy", "Pressure Jig"];
-    default:
-      return null;
-  }
-};
+// ✅ Hanya kategori GA
+const GA_CATEGORIES = ["Toilet", "Fire Safety", "Lift Barang", "APD", "Evakuasi", "Fire Alarm"];
 
 const parseChecksheetInfo = (area: string): string => {
   const lower = area.toLowerCase();
   if (lower.includes("toilet")) return "Toilet";
-  if (lower.includes("hydrant") || lower.includes("apar")) return "Fire Safety";
+  if (lower.includes("hydrant") || lower.includes("apar") || lower.includes("fire alarm")) return "Fire Safety";
   if (lower.includes("lift") && lower.includes("barang")) return "Lift Barang";
   if (lower.includes("apd")) return "APD";
   if (lower.includes("exit") || lower.includes("pintu darurat") || lower.includes("evakuasi")) return "Evakuasi";
-  if (lower.includes("final assy")) return "Final Assy";
-  if (lower.includes("pre-assy") || lower.includes("pre assy")) return "Pre-Assy";
-  if (lower.includes("pressure jig")) return "Pressure Jig";
   return "Lainnya";
 };
 
@@ -68,14 +56,14 @@ export default function ModernDashboard() {
     }
   }, []);
 
+  // ✅ Filter hanya untuk GA categories
   const filteredHistory = useMemo(() => {
     if (!user) return [];
-    const allowedCategories = getCategoryFilter(user.role);
-    if (!allowedCategories) return history;
-
+    
+    // Hanya tampilkan data GA
     return history.filter(item => {
       const category = parseChecksheetInfo(item.area || item.machine || "");
-      return allowedCategories.includes(category);
+      return GA_CATEGORIES.includes(category);
     });
   }, [history, user]);
 
@@ -132,11 +120,11 @@ export default function ModernDashboard() {
       datasets: [{
         label: "Jumlah Checklist/Hari",
         data: dailyCounts,
-        borderColor: "#8B5CF6",
-        backgroundColor: "rgba(139, 92, 246, 0.1)",
+        borderColor: "#4FACFE",
+        backgroundColor: "rgba(79, 172, 254, 0.1)",
         fill: true,
         tension: 0.4,
-        pointBackgroundColor: "#8B5CF6",
+        pointBackgroundColor: "#4FACFE",
         pointRadius: 4,
       }],
     };
@@ -195,8 +183,8 @@ export default function ModernDashboard() {
       <main className="main-content">
         <header className="header">
           <div>
-            <h1 className="page-title">📊 Dashboard Analitik</h1>
-            <p className="page-subtitle">Wawasan berbasis data untuk peningkatan kualitas inspeksi</p>
+            <h1 className="page-title">📊 Dashboard GA - General Affairs</h1>
+            <p className="page-subtitle">Wawasan berbasis data untuk peningkatan kualitas inspeksi GA</p>
           </div>
         </header>
 
@@ -227,14 +215,14 @@ export default function ModernDashboard() {
         {total > 0 && (
           <div className="insight-banner">
             <span className="insight-text">
-              📌 Performa minggu ini: <strong>{completionRate}%</strong> checklist dalam kondisi OK. 
+              📌 Performa minggu ini: <strong>{completionRate}%</strong> checklist GA dalam kondisi OK. 
               Fokus pada area dengan temuan NG tertinggi!
             </span>
           </div>
         )}
 
         <div className="chart-box large">
-          <h3 className="chart-title">📈 Aktivitas Checklist (7 Hari Terakhir)</h3>
+          <h3 className="chart-title">📈 Aktivitas Checklist GA (7 Hari Terakhir)</h3>
           <div className="chart-container large">
             {trendData.labels.length > 0 ? (
               <Line 
@@ -263,7 +251,7 @@ export default function ModernDashboard() {
 
         <div className="charts-section">
           <div className="chart-box">
-            <h3 className="chart-title">🔍 Distribusi Jenis Checklist</h3>
+            <h3 className="chart-title">🔍 Distribusi Jenis Checklist GA</h3>
             <div className="chart-container small">
               {distributionData.labels.length > 0 ? (
                 <Doughnut
@@ -272,8 +260,8 @@ export default function ModernDashboard() {
                     datasets: [{
                       data: distributionData.data,
                       backgroundColor: [
-                        "#8B5CF6", "#EC4899", "#10B981", "#F59E0B", "#3B82F6",
-                        "#EF4444", "#06B6D4", "#84CC16"
+                        "#4FACFE", "#00F2FE", "#10B981", "#F59E0B", "#EF4444",
+                        "#3B82F6", "#8B5CF6", "#EC4899"
                       ],
                       borderWidth: 0,
                     }],
@@ -298,7 +286,7 @@ export default function ModernDashboard() {
           </div>
 
           <div className="chart-box">
-            <h3 className="chart-title">⚖️ Rasio OK vs NG per Kategori</h3>
+            <h3 className="chart-title">⚖️ Rasio OK vs NG per Kategori GA</h3>
             <div className="chart-container">
               {ratioData.labels.length > 0 ? (
                 <Bar
@@ -328,7 +316,7 @@ export default function ModernDashboard() {
           </div>
 
           <div className="chart-box">
-            <h3 className="chart-title">🏆 Top 5 Pengisi Checklist</h3>
+            <h3 className="chart-title">🏆 Top 5 Pengisi Checklist GA</h3>
             <div className="top-users">
               {topUsers.length > 0 ? (
                 topUsers.map((user, i) => (
@@ -348,7 +336,7 @@ export default function ModernDashboard() {
         </div>
 
         <div className="section">
-          <h2 className="section-title">📜 Riwayat Checklist Lengkap</h2>
+          <h2 className="section-title">📜 Riwayat Checklist GA Lengkap</h2>
           {filteredHistory.length > 0 ? (
             <div className="history-table-container">
               <table className="history-table">
@@ -387,7 +375,7 @@ export default function ModernDashboard() {
               </table>
             </div>
           ) : (
-            <p className="empty-activity">Belum ada riwayat checklist.</p>
+            <p className="empty-activity">Belum ada riwayat checklist GA.</p>
           )}
         </div>
       </main>
@@ -409,7 +397,6 @@ export default function ModernDashboard() {
           padding-top: 20px;
         }
 
-        /* --- SISA STYLE TETAP SAMA --- */
         .header {
           margin-bottom: 28px;
         }
@@ -417,13 +404,13 @@ export default function ModernDashboard() {
         .page-title {
           font-size: 28px;
           font-weight: 800;
-          color: #ffffff;
+          color: #1e40af;
           margin: 0;
         }
 
         .page-subtitle {
           font-size: 16px;
-          color: #ffffff;
+          color: #4f46e5;
           margin-top: 4px;
         }
 
@@ -447,11 +434,11 @@ export default function ModernDashboard() {
           border-left: 4px solid #cbd5e1;
         }
 
-        .stat-card.primary { border-left-color: #8B5CF6; }
+        .stat-card.primary { border-left-color: #4FACFE; }
         .stat-card.success { border-left-color: #10B981; }
         .stat-card.warning { border-left-color: #F59E0B; }
         .stat-card.info { border-left-color: #3B82F6; }
-        .stat-card.accent { border-left-color: #EC4899; }
+        .stat-card.accent { border-left-color: #00F2FE; }
 
         .stat-value {
           font-size: 26px;
@@ -551,7 +538,7 @@ export default function ModernDashboard() {
         }
 
         .user-item:hover {
-          background: #eef2ff;
+          background: #e0f2fe;
         }
 
         .user-info {
@@ -562,8 +549,8 @@ export default function ModernDashboard() {
 
         .user-rank {
           font-weight: 700;
-          color: #8B5CF6;
-          background: #ede9fe;
+          color: #4FACFE;
+          background: #e0f2fe;
           padding: 2px 8px;
           border-radius: 6px;
           font-size: 13px;
@@ -575,8 +562,8 @@ export default function ModernDashboard() {
         }
 
         .user-count {
-          background: #e0e7ff;
-          color: #4f46e5;
+          background: #dbeafe;
+          color: #1e40af;
           padding: 4px 10px;
           border-radius: 20px;
           font-size: 13px;

@@ -1,11 +1,11 @@
 // app/status-ga/riwayat-apd/page.tsx
 "use client"
-
 import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { useAuth } from "@/lib/auth-context"
 import { Sidebar } from "@/components/Sidebar";
 import Link from "next/link"
+import { ArrowLeft } from "lucide-react"
 
 interface ApdItem {
   no: number
@@ -15,7 +15,6 @@ interface ApdItem {
   dept: string
   jobDesc: string
   jumlah: number
-  ttd: string
   keterangan: string
 }
 
@@ -24,6 +23,7 @@ interface ApdRecord {
   jenisApd: string
   date: string
   checker: string
+  checkerNik?: string
   items: ApdItem[]
   submittedAt: string
 }
@@ -31,7 +31,7 @@ interface ApdRecord {
 export default function RiwayatApdPage() {
   const router = useRouter()
   const { user } = useAuth()
-
+  
   // Jenis APD dari Excel
   const apdTypes = [
     "SARUNG TANGAN BINTIL",
@@ -39,7 +39,7 @@ export default function RiwayatApdPage() {
     "SARUNG TANGAN KULIT",
     "SARUNG TANGAN GREEN NITRIL",
     "SARUNG TANGAN LAS",
-    "SARUNG TANGAN RESIISTANCE",
+    "SARUNG TANGAN RESISTANCE",
     "SARUNG TANGAN SHOWA BO500",
     "SARUNG TANGAN SHOWA 380",
     "SARUNG TANGAN PU (COMET) (KHUSUS OA)",
@@ -51,7 +51,7 @@ export default function RiwayatApdPage() {
     "KACAMATA GERINDRA",
     "KACAMATA LAS KING",
     "CELEMEK SAKU",
-    "CELEMEK TANPA SKAU",
+    "CELEMEK TANPA SAKU",
     "CELEMEK KULIT",
     "CELEMEK SISUI",
     "CELEMEK DIP SOLDER",
@@ -64,7 +64,7 @@ export default function RiwayatApdPage() {
     "TOPENG LAS",
     "VISOR HOLDER",
     "VISOR HOLDER FC48, ANSI Z87+",
-    "FACE SHEILD",
+    "FACE SHIELD",
     "EAR MUFF",
     "SLEAVE",
     "HELMET",
@@ -85,7 +85,7 @@ export default function RiwayatApdPage() {
   const [loading, setLoading] = useState(true)
   const [editMode, setEditMode] = useState<{ recordId: string; itemIndex: number } | null>(null)
   const [editItem, setEditItem] = useState<ApdItem | null>(null)
-
+  
   // Filter tanggal
   const [filterDateFrom, setFilterDateFrom] = useState("")
   const [filterDateTo, setFilterDateTo] = useState("")
@@ -97,39 +97,45 @@ export default function RiwayatApdPage() {
     }
   }, [user, router])
 
-  // Load data dari localStorage
-  useEffect(() => {
-    const loadRecords = () => {
-      try {
-        const history = localStorage.getItem("ga_apd_history")
-        if (history) {
-          const parsed = JSON.parse(history)
-          setRecords(parsed)
-          setFilteredRecords(parsed)
+  // 🔥 FUNGSI LOAD DATA DARI API
+  const loadData = async () => {
+    try {
+      setLoading(true)
+      
+      // Build query params
+      const queryParams = new URLSearchParams()
+      if (filterDateFrom) queryParams.append('date_from', filterDateFrom)
+      if (filterDateTo) queryParams.append('date_to', filterDateTo)
+      queryParams.append('limit', '100')
+      queryParams.append('offset', '0')
+
+      const response = await fetch(`/api/apd/history?${queryParams.toString()}`)
+      
+      if (response.ok) {
+        const data = await response.json()
+        if (data.success) {
+          setRecords(data.data || [])
+          setFilteredRecords(data.data || [])
+        } else {
+          alert('Gagal memuat  ' + data.message)
         }
-      } catch (e) {
-        console.error("Gagal memuat riwayat APD:", e)
-      } finally {
-        setLoading(false)
+      } else {
+        alert('Gagal mengambil data dari server')
       }
+    } catch (error) {
+      console.error('Error loading APD history:', error)
+      alert('Gagal memuat riwayat: ' + (error as any).message)
+    } finally {
+      setLoading(false)
     }
+  }
 
-    loadRecords()
-  }, [])
-
-  // Terapkan filter tanggal
+  // Load data saat komponen mount atau filter berubah
   useEffect(() => {
-    let filtered = records
-
-    if (filterDateFrom) {
-      filtered = filtered.filter(r => r.date >= filterDateFrom)
+    if (user) {
+      loadData()
     }
-    if (filterDateTo) {
-      filtered = filtered.filter(r => r.date <= filterDateTo)
-    }
-
-    setFilteredRecords(filtered)
-  }, [filterDateFrom, filterDateTo, records])
+  }, [user, filterDateFrom, filterDateTo])
 
   // Filter data berdasarkan jenis APD
   const getRecordsByType = (type: string) => {
@@ -142,25 +148,46 @@ export default function RiwayatApdPage() {
     setEditItem({ ...item })
   }
 
-  // Simpan edit
-  const handleSaveEdit = () => {
+  // 🔥 SIMPAN EDIT KE API
+  const handleSaveEdit = async () => {
     if (!editMode || !editItem) return
-
-    const updatedRecords = records.map(record => {
-      if (record.id === editMode.recordId) {
-        const updatedItems = [...record.items]
-        updatedItems[editMode.itemIndex] = editItem
-        return { ...record, items: updatedItems }
+    
+    try {
+      // Cari record yang sedang di-edit
+      const record = records.find(r => r.id === editMode.recordId)
+      if (!record) {
+        alert('Data tidak ditemukan')
+        return
       }
-      return record
-    })
 
-    // Simpan ke localStorage
-    localStorage.setItem("ga_apd_history", JSON.stringify(updatedRecords))
-    setRecords(updatedRecords)
-    setFilteredRecords(updatedRecords)
-    setEditMode(null)
-    setEditItem(null)
+      // Update hanya item yang di-edit
+      const updatedItems = record.items.map((item, idx) => 
+        idx === editMode.itemIndex ? editItem : item
+      )
+
+      const response = await fetch('/api/apd/edit', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          recordId: editMode.recordId,
+          items: updatedItems
+        })
+      })
+      
+      if (response.ok) {
+        // Reload data
+        await loadData()
+        setEditMode(null)
+        setEditItem(null)
+        alert('Data berhasil diupdate!')
+      } else {
+        const error = await response.json()
+        alert('Gagal update  ' + error.message)
+      }
+    } catch (error) {
+      console.error('Error updating item:', error)
+      alert('Terjadi kesalahan saat update data')
+    }
   }
 
   // Batal edit
@@ -169,13 +196,26 @@ export default function RiwayatApdPage() {
     setEditItem(null)
   }
 
-  // Hapus data
-  const handleDelete = (recordId: string) => {
-    if (confirm("Yakin ingin menghapus data ini?")) {
-      const updated = records.filter(r => r.id !== recordId)
-      localStorage.setItem("ga_apd_history", JSON.stringify(updated))
-      setRecords(updated)
-      setFilteredRecords(updated)
+  // 🔥 HAPUS DATA DARI API
+  const handleDelete = async (recordId: string) => {
+    if (!confirm("Yakin ingin menghapus data ini?")) return
+    
+    try {
+      const response = await fetch(`/api/apd/delete?id=${recordId}`, {
+        method: 'DELETE'
+      })
+      
+      if (response.ok) {
+        // Reload data
+        await loadData()
+        alert('Data berhasil dihapus!')
+      } else {
+        const error = await response.json()
+        alert('Gagal menghapus  ' + error.message)
+      }
+    } catch (error) {
+      console.error('Error deleting record:', error)
+      alert('Terjadi kesalahan saat menghapus data')
     }
   }
 
@@ -184,13 +224,24 @@ export default function RiwayatApdPage() {
   return (
     <div className="app-page">
       <Sidebar userName={user.fullName} />
-
       <div className="page-content">
-        <div className="header">
-          <h1>📋 Riwayat Pengambilan APD</h1>
-          <div className="user-info">
-            <span>Selamat datang, {user.fullName}</span>
+        {/* Header dengan tombol kembali */}
+        <div className="header-banner">
+          <button
+            onClick={() => router.push("/status-ga/e-checksheet-apd")}
+            className="btn-back"
+          >
+            <ArrowLeft size={18} />
+            <span>Kembali</span>
+          </button>
+
+          <div className="header-title">
+            <h1>📋 Riwayat Pengambilan APD</h1>
           </div>
+        </div>
+
+        <div className="user-info">
+          <span>Selamat datang, {user.fullName}</span>
         </div>
 
         {/* Filter Tanggal */}
@@ -257,7 +308,12 @@ export default function RiwayatApdPage() {
                   </Link>
                 </div>
 
-                {getRecordsByType(selectedType).length === 0 ? (
+                {loading ? (
+                  <div className="loading-container">
+                    <div className="spinner"></div>
+                    <p>Memuat data...</p>
+                  </div>
+                ) : getRecordsByType(selectedType).length === 0 ? (
                   <div className="empty-state">
                     Belum ada data untuk {selectedType}.
                   </div>
@@ -278,6 +334,7 @@ export default function RiwayatApdPage() {
                             </button>
                           </div>
                         </div>
+
                         <table className="apd-table">
                           <thead>
                             <tr>
@@ -288,7 +345,6 @@ export default function RiwayatApdPage() {
                               <th>Dept</th>
                               <th>Job Desc</th>
                               <th>Jumlah</th>
-                              <th>TTD</th>
                               <th>Keterangan</th>
                               <th>Aksi</th>
                             </tr>
@@ -313,12 +369,12 @@ export default function RiwayatApdPage() {
                                   {editMode?.recordId === record.id && editMode.itemIndex === idx ? (
                                     <input
                                       type="text"
-                                      value={editItem?.niki || ""}
+                                      value={editItem?.nik || ""}
                                       onChange={(e) => setEditItem(prev => prev ? { ...prev, nik: e.target.value } : null)}
                                       className="edit-input"
                                     />
                                   ) : (
-                                    item.niki
+                                    item.nik
                                   )}
                                 </td>
                                 <td>
@@ -374,18 +430,6 @@ export default function RiwayatApdPage() {
                                   {editMode?.recordId === record.id && editMode.itemIndex === idx ? (
                                     <input
                                       type="text"
-                                      value={editItem?.ttd || ""}
-                                      onChange={(e) => setEditItem(prev => prev ? { ...prev, ttd: e.target.value } : null)}
-                                      className="edit-input"
-                                    />
-                                  ) : (
-                                    item.ttd || "-"
-                                  )}
-                                </td>
-                                <td>
-                                  {editMode?.recordId === record.id && editMode.itemIndex === idx ? (
-                                    <input
-                                      type="text"
                                       value={editItem?.keterangan || ""}
                                       onChange={(e) => setEditItem(prev => prev ? { ...prev, keterangan: e.target.value } : null)}
                                       className="edit-input"
@@ -397,8 +441,8 @@ export default function RiwayatApdPage() {
                                 <td>
                                   {editMode?.recordId === record.id && editMode.itemIndex === idx ? (
                                     <div className="edit-actions">
-                                      <button onClick={handleSaveEdit} className="save-btn">💾</button>
-                                      <button onClick={handleCancelEdit} className="cancel-btn">❌</button>
+                                      <button onClick={handleSaveEdit} className="save-btn" title="Simpan">💾</button>
+                                      <button onClick={handleCancelEdit} className="cancel-btn" title="Batal">❌</button>
                                     </div>
                                   ) : (
                                     <button
@@ -429,16 +473,56 @@ export default function RiwayatApdPage() {
       </div>
 
       <style jsx>{`
+        .app-page {
+          display: flex;
+          min-height: 100vh;
+          background-color: #f7f9fc;
+        }
+        
         .page-content {
+          flex: 1;
           max-width: 1400px;
           margin: 0 auto;
           padding: 24px;
         }
 
-        .header h1 {
+        /* Header Banner */
+        .header-banner {
+          background: linear-gradient(135deg, #1976d2 0%, #0d47a1 100%);
+          color: white;
+          padding: 16px 24px;
+          border-radius: 16px;
+          margin-bottom: 24px;
+          box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+          display: flex;
+          align-items: center;
+          gap: 16px;
+        }
+
+        .btn-back {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          padding: 6px 12px;
+          background: rgba(255, 255, 255, 0.2);
+          color: white;
+          border: none;
+          border-radius: 8px;
+          cursor: pointer;
+          font-weight: 600;
+          transition: all 0.3s ease;
+          font-size: 0.9rem;
+        }
+
+        .btn-back:hover {
+          background: rgba(255, 255, 255, 0.3);
+        }
+
+        .header-title {
+          font-size: 1.8rem;
+          font-weight: 700;
           margin: 0;
-          color: #ffffffff;
-          font-size: 2rem;
+          flex: 1;
         }
 
         .user-info {
@@ -446,7 +530,8 @@ export default function RiwayatApdPage() {
           align-items: center;
           gap: 16px;
           font-size: 0.95rem;
-          color: #ffffffff;
+          color: #666;
+          margin-bottom: 16px;
         }
 
         /* Filter Tanggal */
@@ -512,7 +597,7 @@ export default function RiwayatApdPage() {
 
         .sidebar h3 {
           margin: 0 0 16px;
-          color: #000000ff;
+          color: #0d47a1;
           font-size: 1.2rem;
         }
 
@@ -522,7 +607,6 @@ export default function RiwayatApdPage() {
           margin: 0;
           max-height: 600px;
           overflow-y: auto;
-          color: #333;
         }
 
         .apd-list li {
@@ -579,7 +663,7 @@ export default function RiwayatApdPage() {
           align-items: center;
           margin-bottom: 24px;
           padding-bottom: 12px;
-          border-bottom: 2px solid #0093fcff;
+          border-bottom: 2px solid #1e88e5;
         }
 
         .content-header h2 {
@@ -605,8 +689,33 @@ export default function RiwayatApdPage() {
         .empty-state {
           text-align: center;
           padding: 40px 20px;
-          color: #000000ff;
+          color: #666;
           font-size: 1.1rem;
+        }
+
+        .loading-container {
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          justify-content: center;
+          padding: 60px 20px;
+          background: white;
+          border-radius: 12px;
+          border: 1px solid #e2e8f0;
+        }
+
+        .spinner {
+          width: 40px;
+          height: 40px;
+          border: 4px solid #e2e8f0;
+          border-top-color: #1976d2;
+          border-radius: 50%;
+          animation: spin 0.8s linear infinite;
+          margin-bottom: 16px;
+        }
+
+        @keyframes spin {
+          to { transform: rotate(360deg); }
         }
 
         .data-tables {
@@ -619,7 +728,6 @@ export default function RiwayatApdPage() {
           border: 1px solid #eee;
           border-radius: 8px;
           overflow: hidden;
-          color: #333;  
         }
 
         .section-header {
@@ -629,7 +737,7 @@ export default function RiwayatApdPage() {
           justify-content: space-between;
           align-items: center;
           font-size: 0.9rem;
-          color: #000000ff;
+          color: #333;
         }
 
         .section-actions {
@@ -643,6 +751,7 @@ export default function RiwayatApdPage() {
           font-size: 1.2rem;
           cursor: pointer;
           color: #f44336;
+          transition: transform 0.2s;
         }
 
         .delete-btn:hover {
@@ -659,11 +768,11 @@ export default function RiwayatApdPage() {
         .apd-table td {
           padding: 10px;
           text-align: left;
-          border-bottom: 1px solid #050505ff;
+          border-bottom: 1px solid #eee;
         }
 
         .apd-table th {
-          background: #e6ff05ff;
+          background: #e3f2fd;
           font-weight: 600;
           position: sticky;
           top: 0;
@@ -696,8 +805,16 @@ export default function RiwayatApdPage() {
           color: #4caf50;
         }
 
+        .save-btn:hover {
+          transform: scale(1.1);
+        }
+
         .cancel-btn {
           color: #f44336;
+        }
+
+        .cancel-btn:hover {
+          transform: scale(1.1);
         }
 
         .edit-actions {
@@ -713,7 +830,6 @@ export default function RiwayatApdPage() {
           .sidebar {
             width: 100%;
             max-height: 300px;
-            colror: #333;
           }
 
           .date-filter {

@@ -6,23 +6,27 @@ import { useAuth } from "@/lib/auth-context";
 import { Sidebar } from "@/components/Sidebar";
 
 type PreventiveHistoryEntry = {
-  id?: string;
+  id: string;
   date: string;
   inspector: string;
-  items?: Record<string, any>;
+  items: Record<string, any>;
   additionalNotes?: string;
+  created_at: string;
+  updated_at?: string;
 };
 
 export default function RiwayatPreventivePage() {
   const router = useRouter();
-  const { user } = useAuth()
+  const { user } = useAuth();
   const [redirected, setRedirected] = useState(false);
   const [history, setHistory] = useState<PreventiveHistoryEntry[]>([]);
   const [filteredHistory, setFilteredHistory] = useState<PreventiveHistoryEntry[]>([]);
   const [selectedDate, setSelectedDate] = useState<string>("");
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [editFormData, setEditFormData] = useState<Record<number, { hasil: string; catatan?: string }>>({});
+  const [editFormData, setEditFormData] = useState<Record<number, { status: string; keterangan?: string; foto_path?: string }>>({});
   const [editAdditionalNotes, setEditAdditionalNotes] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     if (redirected) return;
@@ -33,31 +37,35 @@ export default function RiwayatPreventivePage() {
       return;
     }
 
+    loadHistory();
+  }, [user, router, redirected]);
+
+  const loadHistory = async () => {
     try {
-      const allKeys = Object.keys(localStorage).filter(key =>
-        key.startsWith("preventive_lift_barang_") && key !== "preventive_lift_barang_riwayat_semua"
-      );
+      setLoading(true);
+      const response = await fetch('/api/lift-barang/preventive');
+      const result = await response.json();
 
-      const allEntries = allKeys
-        .map(key => {
-          const item = localStorage.getItem(key);
-          return item ? JSON.parse(item) : null;
-        })
-        .filter(Boolean)
-        .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-
-      setHistory(allEntries as PreventiveHistoryEntry[]);
-      setFilteredHistory(allEntries as PreventiveHistoryEntry[]);
+      if (response.ok && result.success) {
+        // Sort by date descending
+        const sortedHistory = result.data.sort((a: PreventiveHistoryEntry, b: PreventiveHistoryEntry) => 
+          new Date(b.date).getTime() - new Date(a.date).getTime()
+        );
+        setHistory(sortedHistory);
+        setFilteredHistory(sortedHistory);
+      } else {
+        setError(result.message || "Gagal memuat riwayat");
+      }
     } catch (error) {
       console.error("Error loading history:", error);
-      setHistory([]);
-      setFilteredHistory([]);
+      setError("Terjadi kesalahan saat memuat riwayat");
+    } finally {
+      setLoading(false);
     }
-  }, [user, router, redirected]);
+  };
 
   // Filter berdasarkan tanggal
   useEffect(() => {
-    if (redirected) return;
     if (!selectedDate) {
       setFilteredHistory(history);
     } else {
@@ -66,11 +74,25 @@ export default function RiwayatPreventivePage() {
     }
   }, [selectedDate, history]);
 
-  const handleEditStart = (entry: PreventiveHistoryEntry) => {
-    setEditingId(entry.id || "");
-    setEditFormData(entry.items || {});
-    setEditAdditionalNotes(entry.additionalNotes || "");
-  };
+  // Dalam fungsi handleEditStart
+const handleEditStart = (entry: PreventiveHistoryEntry) => {
+  setEditingId(entry.id || "");
+  
+  // Transform items structure for edit form
+  const transformedItems: Record<number, { status: string; keterangan?: string; foto_path?: string }> = {};
+  
+  // Dengan struktur data baru
+  Object.entries(entry.items).forEach(([id, item]) => {
+    transformedItems[Number(id)] = {
+      status: item.status,
+      keterangan: item.keterangan || '',
+      foto_path: item.foto_path || ''
+    };
+  });
+  
+  setEditFormData(transformedItems);
+  setEditAdditionalNotes(entry.additionalNotes || "");
+};
 
   const handleEditCancel = () => {
     setEditingId(null);
@@ -85,74 +107,177 @@ export default function RiwayatPreventivePage() {
     }));
   };
 
-  const handleEditSave = () => {
-    // Validasi semua field terisi
-    const emptyFields = [1, 2, 3, 4, 5].filter(id => !editFormData[id]?.hasil?.trim());
-    if (emptyFields.length > 0) {
-      alert(`❗ Field berikut masih kosong:\n${emptyFields.map(id => getCheckItemName(id)).join(", ")}`);
-      return;
+  const handleEditSave = async () => {
+    // Validasi semua field terisi untuk status NG
+    const ngItems = Object.entries(editFormData).filter(([_, data]) => data.status === "NG");
+    for (const [id, data] of ngItems) {
+      if (!data.keterangan?.trim()) {
+        alert(`❗ Keterangan wajib diisi untuk item "${getCheckItemName(parseInt(id))}" yang berstatus NG.`);
+        return;
+      }
     }
 
-    const entryToUpdate = history.find(e => e.id === editingId);
-    if (!entryToUpdate) return;
+    if (!editingId) return;
 
-    const allKeys = Object.keys(localStorage).filter(key =>
-      key.startsWith("preventive_lift_barang_") && key !== "preventive_lift_barang_riwayat_semua"
-    );
+    try {
+      setLoading(true);
 
-    const storageKey = allKeys.find(key => {
-      const item = localStorage.getItem(key);
-      const parsed = item ? JSON.parse(item) : null;
-      return parsed?.id === editingId;
-    });
+      // Transform edit data to API format
+      const itemsToUpdate: Record<number, any> = {};
+      Object.entries(editFormData).forEach(([key, value]) => {
+        const id = parseInt(key);
+        itemsToUpdate[id] = {
+          status: value.status,
+          keterangan: value.keterangan || '',
+          foto_path: value.foto_path || null
+        };
+      });
 
-    if (storageKey) {
-      const updatedEntry = {
-        ...entryToUpdate,
-        items: editFormData,
-        additionalNotes: editAdditionalNotes,
-        updatedAt: new Date().toISOString(),
+      const updateData = {
+        items: itemsToUpdate,
+        additional_notes: editAdditionalNotes.trim()
       };
 
-      localStorage.setItem(storageKey, JSON.stringify(updatedEntry));
+      const response = await fetch(`/api/lift-barang/preventive/${editingId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updateData),
+      });
 
-      // Update history list
-      const updatedHistory = history.map(h => h.id === editingId ? updatedEntry : h);
-      setHistory(updatedHistory);
-      setFilteredHistory(updatedHistory);
+      const result = await response.json();
 
-      alert("✅ Data berhasil diperbarui!");
-      handleEditCancel();
+      if (response.ok && result.success) {
+        // Reload history after update
+        await loadHistory();
+        alert("✅ Data berhasil diperbarui!");
+        handleEditCancel();
+      } else {
+        alert(`❌ Gagal memperbarui data: ${result.message || 'Error tidak diketahui'}`);
+      }
+    } catch (error) {
+      console.error('Update error:', error);
+      alert("❌ Terjadi kesalahan saat memperbarui data");
+    } finally {
+      setLoading(false);
     }
   };
 
-  const handleDeleteEntry = (id: string) => {
-    if (!confirm("Apakah Anda yakin ingin menghapus data ini?")) return;
+  const handleDeleteEntry = async (id: string) => {
+    if (!confirm("Apakah Anda yakin ingin menghapus data ini? Tindakan ini tidak dapat dibatalkan.")) return;
 
-    const allKeys = Object.keys(localStorage).filter(key =>
-      key.startsWith("preventive_lift_barang_")
-    );
+    try {
+      setLoading(true);
 
-    const storageKey = allKeys.find(key => {
-      const item = localStorage.getItem(key);
-      const parsed = item ? JSON.parse(item) : null;
-      return parsed?.id === id;
-    });
+      const response = await fetch(`/api/lift-barang/preventive/${id}`, {
+        method: 'DELETE',
+      });
 
-    if (storageKey) {
-      localStorage.removeItem(storageKey);
-      const updatedHistory = history.filter(h => h.id !== id);
-      setHistory(updatedHistory);
-      setFilteredHistory(updatedHistory);
-      alert("✅ Data berhasil dihapus!");
+      const result = await response.json();
+
+      if (response.ok && result.success) {
+        // Reload history after delete
+        await loadHistory();
+        alert("✅ Data berhasil dihapus!");
+      } else {
+        alert(`❌ Gagal menghapus data: ${result.message || 'Error tidak diketahui'}`);
+      }
+    } catch (error) {
+      console.error('Delete error:', error);
+      alert("❌ Terjadi kesalahan saat menghapus data");
+    } finally {
+      setLoading(false);
     }
   };
 
   if (!user) return <div>Loading...</div>;
   if (user.role !== "inspector-ga") return null;
 
-  // Dapatkan daftar tanggal unik untuk dropdown
-  const uniqueDates = [...new Set(history.map(entry => entry.date))].sort().reverse();
+  if (loading && !error) {
+    return (
+      <div className="app-page">
+        <Sidebar userName={user.fullName} />
+        <div className="loading-container">
+          <div className="spinner"></div>
+          <p>Memuat riwayat...</p>
+        </div>
+        <style jsx>{`
+          .loading-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 60vh;
+          }
+          .spinner {
+            border: 4px solid rgba(30, 136, 229, 0.2);
+            border-top: 4px solid #1e88e5;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin-bottom: 16px;
+          }
+          @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+          }
+          p {
+            color: #555;
+            font-size: 1.1rem;
+          }
+        `}</style>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="app-page">
+        <Sidebar userName={user.fullName} />
+        <div className="error-container">
+          <div className="error-icon">❌</div>
+          <p>{error}</p>
+          <button onClick={loadHistory} className="retry-btn">Coba Lagi</button>
+        </div>
+        <style jsx>{`
+          .error-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 60vh;
+            text-align: center;
+            padding: 24px;
+          }
+          .error-icon {
+            font-size: 3rem;
+            margin-bottom: 16px;
+            color: #f44336;
+          }
+          p {
+            color: #555;
+            font-size: 1.2rem;
+            margin-bottom: 24px;
+            max-width: 600px;
+          }
+          .retry-btn {
+            padding: 10px 24px;
+            background: linear-gradient(135deg, #1e88e5 0%, #1565c0 100%);
+            color: white;
+            border: none;
+            border-radius: 6px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+          }
+          .retry-btn:hover {
+            background: linear-gradient(135deg, #1565c0 0%, #0d47a1 100%);
+            transform: translateY(-2px);
+          }
+        `}</style>
+      </div>
+    );
+  }
 
   return (
     <div className="app-page">
@@ -160,7 +285,7 @@ export default function RiwayatPreventivePage() {
 
       <div className="page-content">
         <div className="header-section">
-          <button onClick={() => router.back()} className="btn-back">← Kembali</button>
+          <button onClick={() => router.push("/status-ga/inspeksi-preventif-lift-barang/preventif")} className="btn-back">← Kembali ke Menu</button>
           <h1>🔧 Riwayat Preventive Lift Barang</h1>
         </div>
 
@@ -186,8 +311,8 @@ export default function RiwayatPreventivePage() {
           <p className="empty-message">Tidak ada riwayat preventive maintenance{selectedDate ? ` pada tanggal ${new Date(selectedDate).toLocaleDateString('id-ID')}` : ''}.</p>
         ) : (
           <div className="history-list">
-            {filteredHistory.map((entry, index) => (
-              <div key={`${entry.date}-${index}`} className="history-card">
+            {filteredHistory.map((entry) => (
+              <div key={entry.id} className="history-card">
                 {editingId === entry.id ? (
                   // EDIT MODE
                   <div className="edit-mode">
@@ -201,8 +326,9 @@ export default function RiwayatPreventivePage() {
                         <tr>
                           <th>No</th>
                           <th>Check Item</th>
-                          <th>Hasil *</th>
-                          <th>Catatan</th>
+                          <th>Status</th>
+                          <th>Keterangan</th>
+                          <th>Foto</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -211,19 +337,45 @@ export default function RiwayatPreventivePage() {
                             <td>{id}</td>
                             <td>{getCheckItemName(id)}</td>
                             <td>
-                              <input
-                                type="text"
-                                value={editFormData[id]?.hasil || ""}
-                                onChange={(e) => handleEditFieldChange(id, "hasil", e.target.value)}
-                                className="edit-input"
-                              />
+                              <div className="radio-group">
+                                <label>
+                                  <input
+                                    type="radio"
+                                    name={`edit-status-${id}`}
+                                    checked={editFormData[id]?.status === "OK"}
+                                    onChange={() => handleEditFieldChange(id, "status", "OK")}
+                                  /> OK
+                                </label>
+                                <label>
+                                  <input
+                                    type="radio"
+                                    name={`edit-status-${id}`}
+                                    checked={editFormData[id]?.status === "NG"}
+                                    onChange={() => handleEditFieldChange(id, "status", "NG")}
+                                  /> NG
+                                </label>
+                              </div>
                             </td>
                             <td>
                               <textarea
-                                value={editFormData[id]?.catatan || ""}
-                                onChange={(e) => handleEditFieldChange(id, "catatan", e.target.value)}
+                                value={editFormData[id]?.keterangan || ""}
+                                onChange={(e) => handleEditFieldChange(id, "keterangan", e.target.value)}
                                 className="edit-textarea"
+                                placeholder={editFormData[id]?.status === "NG" ? "Wajib diisi untuk NG" : "Opsional"}
                               />
+                            </td>
+                            <td>
+                              {editFormData[id]?.foto_path ? (
+                                <div className="image-preview">
+                                  <img 
+                                    src={getPhotoUrl(editFormData[id].foto_path)} 
+                                    alt="Foto preventive" 
+                                    className="preview-image" 
+                                  />
+                                </div>
+                              ) : (
+                                <span className="no-photos">Tidak ada foto</span>
+                              )}
                             </td>
                           </tr>
                         ))}
@@ -236,12 +388,15 @@ export default function RiwayatPreventivePage() {
                         value={editAdditionalNotes}
                         onChange={(e) => setEditAdditionalNotes(e.target.value)}
                         className="edit-textarea full"
+                        placeholder="Opsional"
                       />
                     </div>
 
                     <div className="edit-actions">
-                      <button onClick={handleEditCancel} className="btn-cancel">Batal</button>
-                      <button onClick={handleEditSave} className="btn-save">✅ Simpan Perubahan</button>
+                      <button onClick={handleEditCancel} className="btn-cancel" disabled={loading}>Batal</button>
+                      <button onClick={handleEditSave} className="btn-save" disabled={loading}>
+                        {loading ? 'Menyimpan...' : '✅ Simpan Perubahan'}
+                      </button>
                     </div>
                   </div>
                 ) : (
@@ -250,6 +405,10 @@ export default function RiwayatPreventivePage() {
                     <div className="card-header">
                       <h3>Tanggal: {new Date(entry.date).toLocaleDateString('id-ID')}</h3>
                       <p>Inspector: {entry.inspector}</p>
+                      <p className="timestamp">Dibuat: {new Date(entry.created_at).toLocaleString('id-ID')}</p>
+                      {entry.updated_at && (
+                        <p className="timestamp updated">Diperbarui: {new Date(entry.updated_at).toLocaleString('id-ID')}</p>
+                      )}
                     </div>
 
                     <table className="history-table">
@@ -257,28 +416,46 @@ export default function RiwayatPreventivePage() {
                         <tr>
                           <th>No</th>
                           <th>Check Item</th>
-                          <th>Hasil/Status</th>
-                          <th>Keterangan/Catatan</th>
+                          <th>Status</th>
+                          <th>Keterangan</th>
+                          <th>Foto</th>
                         </tr>
                       </thead>
                       <tbody>
                         {entry.items && typeof entry.items === 'object' ? (
                           Object.entries(entry.items).map(([id, data]) => {
-                            const hasil = data?.hasil || data?.status || '-';
-                            const catatan = data?.catatan || data?.keterangan || '-';
+                            const status = (data as any)?.status || '-';
+                            const keterangan = (data as any)?.keterangan || (data as any)?.catatan || '-';
+                            const foto_path = (data as any)?.foto_path;
                             
                             return (
                               <tr key={id}>
                                 <td>{id}</td>
                                 <td>{getCheckItemName(Number(id))}</td>
-                                <td className="status-cell">{hasil}</td>
-                                <td>{catatan}</td>
+                                <td className={status === "NG" ? "status-ng-cell" : "status-ok-cell"}>
+                                  {status}
+                                </td>
+                                <td>{keterangan || '-'}</td>
+                                <td>
+                                  {foto_path ? (
+                                    <div className="image-preview">
+                                      <img 
+                                        src={getPhotoUrl(foto_path)} 
+                                        alt={`Foto item ${id}`} 
+                                        className="preview-image" 
+                                        onClick={() => window.open(getPhotoUrl(foto_path), '_blank')}
+                                      />
+                                    </div>
+                                  ) : (
+                                    <span className="no-photos">Tidak ada foto</span>
+                                  )}
+                                </td>
                               </tr>
                             );
                           })
                         ) : (
                           <tr>
-                            <td colSpan={4} style={{ textAlign: 'center', color: '#666' }}>
+                            <td colSpan={5} style={{ textAlign: 'center', color: '#666' }}>
                               Tidak ada data item
                             </td>
                           </tr>
@@ -294,8 +471,8 @@ export default function RiwayatPreventivePage() {
                     )}
 
                     <div className="card-actions">
-                      <button onClick={() => handleEditStart(entry)} className="btn-edit">✏️ Edit</button>
-                      <button onClick={() => handleDeleteEntry(entry.id || "")} className="btn-delete">🗑️ Hapus</button>
+                      <button onClick={() => handleEditStart(entry)} className="btn-edit" disabled={loading}>✏️ Edit</button>
+                      <button onClick={() => handleDeleteEntry(entry.id)} className="btn-delete" disabled={loading}>🗑️ Hapus</button>
                     </div>
                   </>
                 )}
@@ -320,26 +497,27 @@ export default function RiwayatPreventivePage() {
         }
 
         .btn-back {
-          padding: 8px 16px;
-          background: #f5f5f5;
-          color: #333;
-          border: 1px solid #ddd;
-          border-radius: 6px;
-          font-weight: 600;
+          padding: 10px 16px;
+          background: white;
+          border: 1.5px solid #e0e0e0;
+          border-radius: 8px;
           cursor: pointer;
-          transition: all 0.3s;
-          font-size: 0.95rem;
+          font-weight: 600;
+          color: #1565c0;
+          transition: all 0.3s ease;
         }
-
         .btn-back:hover {
-          background: #e0e0e0;
-          border-color: #999;
+          background: #f5f5f5;
+          border-color: #1565c0;
+          transform: translateX(-2px);
+          box-shadow: 0 2px 6px rgba(21, 101, 192, 0.15);
         }
 
         .header-section h1 {
           color: #0277bd;
           margin: 0;
           flex: 1;
+          text-align: center;
         }
         
         /* Filter Section */
@@ -360,6 +538,7 @@ export default function RiwayatPreventivePage() {
           border-radius: 6px;
           background: white;
           min-width: 200px;
+          font-size: 0.95rem;
         }
 
         .empty-message {
@@ -367,6 +546,9 @@ export default function RiwayatPreventivePage() {
           color: #999;
           padding: 40px 20px;
           font-size: 1.1rem;
+          background: #f9f9f9;
+          border-radius: 8px;
+          margin-top: 24px;
         }
         
         .history-list {
@@ -379,19 +561,34 @@ export default function RiwayatPreventivePage() {
           border-radius: 8px;
           box-shadow: 0 2px 6px rgba(0,0,0,0.1);
           overflow: hidden;
+          transition: transform 0.2s;
+        }
+        .history-card:hover {
+          transform: translateY(-2px);
         }
         .card-header {
-          background: #e1f5fe;
+          background: #e3f2fd;
           padding: 16px 24px;
-          border-bottom: 1px solid #eee;
+          border-bottom: 1px solid #bbdefb;
         }
         .card-header h3 {
           margin: 0 0 8px;
-          color: #01579b;
+          color: #0d47a1;
+          font-size: 1.25rem;
         }
         .card-header p {
-          margin: 0;
-          color: #555;
+          margin: 4px 0;
+          color: #546e7a;
+          font-size: 0.95rem;
+        }
+        .timestamp {
+          margin: 2px 0;
+          color: #666;
+          font-size: 0.85rem;
+        }
+        .timestamp.updated {
+          color: #1565c0;
+          font-weight: 500;
         }
         .history-table {
           width: 100%;
@@ -406,10 +603,15 @@ export default function RiwayatPreventivePage() {
         .history-table th {
           background: #f5fbff;
           font-weight: 600;
+          color: #01579b;
         }
-        .status-cell {
+        .status-ok-cell {
+          color: #2e7d32;
           font-weight: 600;
-          color: #0277bd;
+        }
+        .status-ng-cell {
+          color: #c62828;
+          font-weight: 600;
         }
         .additional-notes {
           padding: 16px 24px;
@@ -431,35 +633,45 @@ export default function RiwayatPreventivePage() {
           padding: 24px;
         }
         .edit-mode .card-header {
-          background: #fff3e0;
+          background: #fff8e1;
           padding: 16px;
           margin: -24px -24px 20px -24px;
-          border-bottom: 2px solid #ffb74d;
+          border-bottom: 2px solid #ffc107;
         }
-        .edit-input, .edit-textarea {
+        .radio-group {
+          display: flex;
+          gap: 12px;
+        }
+        .radio-group label {
+          display: flex;
+          align-items: center;
+          gap: 6px;
+          font-size: 0.9rem;
+          cursor: pointer;
+        }
+        .edit-textarea {
           width: 100%;
-          padding: 8px;
+          min-height: 60px;
+          padding: 8px 12px;
           border: 2px solid #bbdefb;
           border-radius: 4px;
           font-family: inherit;
-          font-size: 0.9rem;
+          font-size: 0.95rem;
+          resize: vertical;
         }
-        .edit-input:focus, .edit-textarea:focus {
+        .edit-textarea:focus {
           outline: none;
           border-color: #1e88e5;
           box-shadow: 0 0 0 3px rgba(30, 136, 229, 0.1);
-        }
-        .edit-textarea {
-          min-height: 60px;
-          resize: vertical;
         }
         .edit-textarea.full {
           min-height: 100px;
         }
         .edit-mode-notes {
           margin: 20px 0;
-          background: #fff3e0;
-          border-left: 4px solid #ffb74d;
+          background: #fff8e1;
+          border-left: 4px solid #ffc107;
+          padding-left: 16px;
         }
         .edit-actions {
           display: flex;
@@ -473,17 +685,25 @@ export default function RiwayatPreventivePage() {
           border-radius: 6px;
           font-weight: 600;
           cursor: pointer;
+          min-width: 120px;
         }
         .btn-cancel {
           background: #f5f5f5;
           color: #333;
         }
+        .btn-cancel:hover:not(:disabled) {
+          background: #e0e0e0;
+        }
         .btn-save {
           background: #4caf50;
           color: white;
         }
-        .btn-save:hover {
+        .btn-save:hover:not(:disabled) {
           background: #45a049;
+        }
+        .btn-save:disabled {
+          opacity: 0.7;
+          cursor: not-allowed;
         }
 
         /* Card Actions */
@@ -491,11 +711,11 @@ export default function RiwayatPreventivePage() {
           display: flex;
           gap: 12px;
           padding: 16px 24px;
-          background: #f9f9f9;
+          background: #f5f5f5;
           border-top: 1px solid #eee;
         }
         .btn-edit, .btn-delete {
-          padding: 8px 16px;
+          padding: 10px 16px;
           border: none;
           border-radius: 6px;
           font-weight: 600;
@@ -507,15 +727,44 @@ export default function RiwayatPreventivePage() {
           background: #1e88e5;
           color: white;
         }
-        .btn-edit:hover {
+        .btn-edit:hover:not(:disabled) {
           background: #1565c0;
         }
         .btn-delete {
           background: #f44336;
           color: white;
         }
-        .btn-delete:hover {
+        .btn-delete:hover:not(:disabled) {
           background: #da190b;
+        }
+        .btn-edit:disabled, .btn-delete:disabled {
+          opacity: 0.7;
+          cursor: not-allowed;
+        }
+
+        /* Styling untuk foto */
+        .image-preview {
+          text-align: center;
+          cursor: pointer;
+        }
+        .preview-image {
+          max-width: 100px;
+          max-height: 100px;
+          border-radius: 4px;
+          border: 1px solid #e0e0e0;
+          box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+          transition: transform 0.2s, box-shadow 0.2s;
+        }
+        .preview-image:hover {
+          transform: scale(1.05);
+          box-shadow: 0 4px 8px rgba(0,0,0,0.15);
+        }
+        .no-photos {
+          color: #999;
+          font-style: italic;
+          font-size: 0.85rem;
+          display: block;
+          text-align: center;
         }
 
         @media (max-width: 768px) {
@@ -523,26 +772,27 @@ export default function RiwayatPreventivePage() {
             flex-direction: column;
             align-items: flex-start;
           }
-
           .header-section h1 {
             width: 100%;
+            text-align: left;
+            margin-top: 8px;
           }
-
           .history-table {
             font-size: 0.85rem;
           }
-
           .history-table th,
           .history-table td {
             padding: 8px 12px;
           }
-
           .card-actions {
             flex-direction: column;
           }
-
           .btn-edit, .btn-delete {
             width: 100%;
+          }
+          .preview-image {
+            max-width: 70px;
+            max-height: 70px;
           }
         }
       `}</style>
@@ -559,4 +809,26 @@ function getCheckItemName(id: number): string {
     5: "Limit Switch",
   };
   return items[id] || `Item ${id}`;
+}
+
+// Fungsi untuk menangani URL foto dengan benar
+function getPhotoUrl(path: string | undefined): string {
+  if (!path) return '/placeholder-image.png';
+  
+  // Jika path sudah berupa URL lengkap, kembalikan saja
+  if (path.startsWith('http://') || path.startsWith('https://')) {
+    return path;
+  }
+  
+  // Jika path dimulai dengan /, gunakan path tersebut
+  if (path.startsWith('/')) {
+    return path;
+  }
+  
+  // Jika tidak, gunakan NEXT_PUBLIC_BASE_URL dengan penanganan trailing slash
+  const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || '';
+  const hasTrailingSlash = baseUrl.endsWith('/');
+  const basePath = hasTrailingSlash ? baseUrl : `${baseUrl}/`;
+  
+  return `${basePath}${path}`;
 }

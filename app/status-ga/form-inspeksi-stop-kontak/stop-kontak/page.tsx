@@ -43,6 +43,7 @@ export default function FormStopKontak() {
   });
 
   const [checkData, setCheckData] = useState<Record<number, CheckData>>({});
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
     if (!user) return;
@@ -68,7 +69,7 @@ export default function FormStopKontak() {
     }));
   };
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     if (!meta.area.trim()) {
       alert("❗ Area harus diisi");
       return;
@@ -80,21 +81,39 @@ export default function FormStopKontak() {
       return;
     }
 
-    const result = {
-      id: `stopkontak-${Date.now()}`,
-      type: "stop-kontak",
-      tanggal: meta.tanggal,
-      area: meta.area,
-      pic: meta.pic,
-      data: checkData,
-    };
+    setIsSubmitting(true);
+    try {
+      const payload = {
+        type: "stop-kontak",
+        tanggal: meta.tanggal,
+        area: meta.area,
+        pic: meta.pic,
+        data: checkData,
+        additional_notes: ""
+      };
 
-    const historyKey = "form_inspeksi_stop_kontak_history";
-    const existing = JSON.parse(localStorage.getItem(historyKey) || "[]");
-    localStorage.setItem(historyKey, JSON.stringify([...existing, result]));
+      const response = await fetch('/api/electrical_inspections', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(payload)
+      });
 
-    alert("✅ Data berhasil disimpan!");
-    router.push("/status-ga/form-inspeksi-stop-kontak/stop-kontak/riwayat");
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result.message || 'Gagal menyimpan data');
+      }
+
+      alert("✅ Data berhasil disimpan!");
+      router.push("/status-ga/form-inspeksi-stop-kontak/stop-kontak/riwayat");
+    } catch (error) {
+      console.error('Error submitting form:', error);
+      alert(`❌ ${(error as Error).message}`);
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -188,7 +207,13 @@ export default function FormStopKontak() {
         </table>
 
         <div className="actions">
-          <button className="submit-btn" onClick={handleSubmit}>💾 Simpan Checksheet</button>
+          <button 
+            className="submit-btn" 
+            onClick={handleSubmit}
+            disabled={isSubmitting}
+          >
+            {isSubmitting ? '⏳ Menyimpan...' : '💾 Simpan Checksheet'}
+          </button>
         </div>
       </div>
 
