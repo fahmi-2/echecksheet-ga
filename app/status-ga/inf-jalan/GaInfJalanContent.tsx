@@ -5,42 +5,72 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
 import { Sidebar } from "@/components/Sidebar";
+// ✅ Import API helper
+import {
+  getAreasByType,
+  getAvailableDates,
+  getChecklistByDate,
+  getItemsByType,
+  ChecklistItem
+} from "@/lib/api/checksheet";
+import { ArrowLeft } from "lucide-react";
 
-interface InfJalanItem {
+interface Area {
+  id: number;
   no: number;
-  namaArea: string;
-  kategori: string;
-  lokasi: string;
-}
-
-interface ChecksheetEntry {
-  date: string;
-  hasilPemeriksaan: string;
-  keteranganTemuan: string;
-  tindakanPerbaikan: string;
-  pic: string;
-  dueDate: string;
-  verify: string;
-  inspector: string;
-  images?: string[]; // ✅ Support array gambar
-}
-
-interface ChecksheetData {
-  [itemKey: string]: ChecksheetEntry[];
+  name: string;
+  location: string;
 }
 
 export function GaInfJalanContent({ openArea }: { openArea: string }) {
   const router = useRouter();
   const { user, loading } = useAuth();
+  
+  // ✅ Hardcode type slug untuk page ini
+  const TYPE_SLUG = 'inf-jalan';
 
   const [isMounted, setIsMounted] = useState(false);
   const [showModal, setShowModal] = useState(false);
   const [filterKategori, setFilterKategori] = useState<string>("all");
   const [searchTerm, setSearchTerm] = useState("");
+  const [areas, setAreas] = useState<Area[]>([]);
+  const [selectedArea, setSelectedArea] = useState<Area | null>(null);
+  const [availableDates, setAvailableDates] = useState<string[]>([]);
+  const [selectedDate, setSelectedDate] = useState<string>("");
+  const [checksheetData, setChecksheetData] = useState<any>(null);
+  const [inspectionItems, setInspectionItems] = useState<ChecklistItem[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
 
   // ✅ State untuk modal gambar
   const [showImageModal, setShowImageModal] = useState(false);
   const [currentImageUrl, setCurrentImageUrl] = useState("");
+
+  // ✅ Load inspection items dari API
+  useEffect(() => {
+    const loadItems = async () => {
+      try {
+        const items = await getItemsByType(TYPE_SLUG);
+        console.log('Loaded inspection items:', items);
+        setInspectionItems(items);
+      } catch (error) {
+        console.error("Failed to load checklist items:", error);
+      }
+    };
+    loadItems();
+  }, []);
+
+  // ✅ Load areas dari API berdasarkan type
+  useEffect(() => {
+    const loadAreas = async () => {
+      try {
+        const data = await getAreasByType(TYPE_SLUG);
+        setAreas(data);
+      } catch (error) {
+        console.error("Failed to load areas:", error);
+      }
+    };
+    loadAreas();
+  }, []);
 
   useEffect(() => {
     setIsMounted(true);
@@ -56,77 +86,73 @@ export function GaInfJalanContent({ openArea }: { openArea: string }) {
   useEffect(() => {
     if (!isMounted || loading) return;
     if (!openArea) return;
-    const found = infraJalan.find((item) => item.namaArea === openArea);
+    const found = areas.find((item) => {
+      const parts = item.name.split(' \u0007 ');
+      return parts[0] === openArea;
+    });
     if (found) {
       setTimeout(() => openDetail(found), 50);
     }
-  }, [isMounted, loading, openArea]);
+  }, [isMounted, loading, openArea, areas]);
 
-  const infraJalan: InfJalanItem[] = [
-    { no: 1, namaArea: "Jalan Utama Produksi A", kategori: "Jalan Utama", lokasi: "Genba A - Main Road" },
-    { no: 2, namaArea: "Jalan Utama Produksi B", kategori: "Jalan Utama", lokasi: "Genba B - Main Road" },
-    { no: 3, namaArea: "Jalan Utama Produksi C", kategori: "Jalan Utama", lokasi: "Genba C - Main Road" },
-    { no: 4, namaArea: "Jalan Utama Warehouse", kategori: "Jalan Utama", lokasi: "Warehouse Area" },
-    { no: 5, namaArea: "Jalan Tambahan Genba A", kategori: "Jalan Tambahan", lokasi: "Genba A - Secondary" },
-    { no: 6, namaArea: "Jalan Tambahan Genba B", kategori: "Jalan Tambahan", lokasi: "Genba B - Secondary" },
-    { no: 7, namaArea: "Trotuar Area Genba A", kategori: "Trotuar", lokasi: "Genba A - Sidewalk" },
-    { no: 8, namaArea: "Trotuar Area Genba B", kategori: "Trotuar", lokasi: "Genba B - Sidewalk" },
-    { no: 9, namaArea: "Trotuar Area Genba C", kategori: "Trotuar", lokasi: "Genba C - Sidewalk" },
-    { no: 10, namaArea: "Boardess Area Produksi A", kategori: "Boardess", lokasi: "Genba A - Safety Border" },
-    { no: 11, namaArea: "Boardess Area Produksi B", kategori: "Boardess", lokasi: "Genba B - Safety Border" },
-    { no: 12, namaArea: "Boardess Area Warehouse", kategori: "Boardess", lokasi: "Warehouse - Safety Border" },
-    { no: 13, namaArea: "Parking Area Roads", kategori: "Jalan Utama", lokasi: "Parking Zone" },
-    { no: 14, namaArea: "Pedestrian Walkway", kategori: "Trotuar", lokasi: "Main Building" },
-    { no: 15, namaArea: "Loading Dock Area", kategori: "Jalan Tambahan", lokasi: "Warehouse Loading" },
-  ];
-
-  const [selectedArea, setSelectedArea] = useState<InfJalanItem | null>(null);
-  const [checksheetData, setChecksheetData] = useState<ChecksheetData | null>(null);
-  const [currentMonth, setCurrentMonth] = useState(new Date());
-  const [selectedDateInModal, setSelectedDateInModal] = useState<string>("");
-  const [availableDates, setAvailableDates] = useState<string[]>([]);
-
-  useEffect(() => {
-    if (!checksheetData) {
-      setAvailableDates([]);
-      setSelectedDateInModal("");
-      return;
-    }
-
-    const allDates = new Set<string>();
-    Object.values(checksheetData).forEach((entries: any) => {
-      if (Array.isArray(entries)) {
-        entries.forEach((entry: any) => {
-          if (entry?.date) allDates.add(entry.date);
-        });
-      }
-    });
-
-    const sortedDates = Array.from(allDates).sort((a, b) => new Date(b).getTime() - new Date(a).getTime());
-    setAvailableDates(sortedDates);
-    setSelectedDateInModal(sortedDates[0] || "");
-  }, [checksheetData]);
-
-  const openDetail = (area: InfJalanItem) => {
+  // ✅ Open detail dengan load data dari API
+  const openDetail = async (area: Area) => {
     setSelectedArea(area);
-    const key = `e-checksheet-inf-jalan-${area.namaArea}`;
-    const saved = typeof window !== "undefined" ? localStorage.getItem(key) : null;
-    if (saved) {
-      try {
-        const data = JSON.parse(saved);
-        setChecksheetData(data);
-      } catch (e) {
+    setShowModal(true);
+    setIsLoading(true);
+
+    try {
+      // Load available dates untuk area ini
+      const dates = await getAvailableDates(TYPE_SLUG, area.id);
+      setAvailableDates(dates);
+      
+      // Set tanggal terbaru sebagai default
+      if (dates.length > 0) {
+        const latestDate = dates.sort((a, b) => new Date(b).getTime() - new Date(a).getTime())[0];
+        setSelectedDate(latestDate);
+        
+        // Load data untuk tanggal terbaru
+        await loadDateData(area.id, latestDate);
+      } else {
         setChecksheetData(null);
       }
-    } else {
+    } catch (error) {
+      console.error("Error loading detail:", error);
       setChecksheetData(null);
+      setAvailableDates([]);
+    } finally {
+      setIsLoading(false);
     }
-    setShowModal(true);
+  };
+
+  // ✅ Load data untuk tanggal tertentu
+  const loadDateData = async (areaId: number, date: string) => {
+    setIsLoading(true);
+    try {
+      const data = await getChecklistByDate(TYPE_SLUG, areaId, date);
+      setChecksheetData(data);
+      console.log('Loaded data for date:', date, data);
+    } catch (error) {
+      console.error("Error loading date data:", error);
+      setChecksheetData(null);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // ✅ Handle perubahan tanggal
+  const handleDateChange = async (newDate: string) => {
+    setSelectedDate(newDate);
+    if (selectedArea && newDate) {
+      await loadDateData(selectedArea.id, newDate);
+    }
   };
 
   const closeDetail = () => {
     setSelectedArea(null);
     setChecksheetData(null);
+    setAvailableDates([]);
+    setSelectedDate("");
     setShowModal(false);
   };
 
@@ -141,92 +167,28 @@ export function GaInfJalanContent({ openArea }: { openArea: string }) {
     setCurrentImageUrl("");
   };
 
-  const getDaysInMonth = (date: Date) => {
-    const year = date.getFullYear();
-    const month = date.getMonth();
-    const days = new Date(year, month + 1, 0).getDate();
-    return Array.from({ length: days }, (_, i) => i + 1);
+  // ✅ Get area status dari API
+  const getAreaStatus = (area: Area) => {
+    // Status akan di-update secara real-time melalui useEffect
+    return { 
+      status: "loading", 
+      color: "#9e9e9e", 
+      label: "Loading...", 
+      completion: "-", 
+      lastCheck: "-" 
+    };
   };
 
-  const formatDateKey = (day: number) => {
-    const year = currentMonth.getFullYear();
-    const month = String(currentMonth.getMonth() + 1).padStart(2, "0");
-    const d = String(day).padStart(2, "0");
-    return `${year}-${month}-${d}`;
-  };
-
-  const getMonthYear = () => {
-    return currentMonth.toLocaleDateString("id-ID", { month: "long", year: "numeric" });
-  };
-
-  const changeMonth = (direction: number) => {
-    setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() + direction, 1));
-  };
-
-  const getAreaStatus = (area: InfJalanItem) => {
-    const key = `e-checksheet-inf-jalan-${area.namaArea}`;
-    const saved = typeof window !== "undefined" ? localStorage.getItem(key) : null;
-    if (!saved) return { status: "empty", color: "#9e9e9e", label: "Belum Ada Data", completion: "0/7", lastCheck: "-" };
-
-    try {
-      const data = JSON.parse(saved);
-      
-      const allDates = new Set<string>();
-      Object.values(data).forEach((entries: any) => {
-        if (Array.isArray(entries)) {
-          entries.forEach(entry => allDates.add(entry.date));
-        }
-      });
-
-      if (allDates.size === 0) return { status: "empty", color: "#9e9e9e", label: "Belum Ada Data", completion: "0/7", lastCheck: "-" };
-
-      const sortedDates = Array.from(allDates).sort((a, b) => new Date(b).getTime() - new Date(a).getTime());
-      const latestDate = sortedDates[0];
-      
-      let totalOk = 0;
-      let totalNg = 0;
-      let totalChecked = 0;
-
-      fieldKeys.forEach(key => {
-        const entries = data[key] || [];
-        const latestEntry = entries.find((e: any) => e.date === latestDate);
-        if (latestEntry && latestEntry.hasilPemeriksaan) {
-          totalChecked++;
-          if (latestEntry.hasilPemeriksaan === "OK") totalOk++;
-          if (latestEntry.hasilPemeriksaan === "NG") totalNg++;
-        }
-      });
-
-      const formattedDate = new Date(latestDate).toLocaleDateString("id-ID", { day: "numeric", month: "short", year: "numeric" });
-
-      if (totalChecked === 0) return { status: "empty", color: "#9e9e9e", label: "Belum Diperiksa", completion: "0/7", lastCheck: "-" };
-      if (totalNg === 0 && totalOk === 7) return { status: "good", color: "#4caf50", label: "Baik", completion: "7/7", lastCheck: formattedDate };
-      if (totalNg >= 3) return { status: "critical", color: "#f44336", label: "Critical", completion: `${totalOk}/7`, lastCheck: formattedDate };
-      return { status: "warning", color: "#ff9800", label: "Warning", completion: `${totalOk}/7`, lastCheck: formattedDate };
-    } catch (e) {
-      return { status: "empty", color: "#9e9e9e", label: "Error", completion: "0/7", lastCheck: "-" };
-    }
-  };
-
-  const inspectionItems = [
-    { key: "jalanRata", no: 1, item: "Jalan Rata, tidak bergelombang. Tidak rusak, tidak licin dan tidak berpotensi menyebabkan kecelakaan kerja lainnya" },
-    { key: "jalanTidakLicin", no: 2, item: "Jalan Tidak licin/ berlumut" },
-    { key: "pencahayaanMemadai", no: 3, item: "Pencahayaan memadai (cukup terang menyinari area jalan dan sekitarnya)" },
-    { key: "trotoarTidakRusak", no: 4, item: "Trotuar tidak rusak, dan bentuk masih utuh dan sesuai, warna masih bisa terlihat" },
-    { key: "boardessTrotuar", no: 5, item: "Boardess trotuar tidak berkarat, tidak keropos dan visualisasi jelas" },
-    { key: "tidakAdaTumpukan", no: 6, item: "Tidak ada tumpukan diatas boardess / Boardess cor" },
-    { key: "boardessCor", no: 7, item: "Boardess cor bentukan masih utuh, masih terlihat warnanya dan tidak licin" },
-  ];
-
-  const fieldKeys = [
-    "jalanRata", "jalanTidakLicin", "pencahayaanMemadai", "trotoarTidakRusak",
-    "boardessTrotuar", "tidakAdaTumpukan", "boardessCor"
-  ];
-
-  const filteredData = infraJalan.filter(item => {
-    const matchKategori = filterKategori === "all" || item.kategori === filterKategori;
-    const matchSearch = item.namaArea.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                        item.lokasi.toLowerCase().includes(searchTerm.toLowerCase());
+  // Filter data berdasarkan kategori dan search
+  const filteredData = areas.filter(item => {
+    const parts = item.name.split(' \u0007 ');
+    const namaArea = parts[0] || '';
+    const kategori = parts[1] || '';
+    const lokasi = parts[2] || '';
+    
+    const matchKategori = filterKategori === "all" || kategori === filterKategori;
+    const matchSearch = namaArea.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                        lokasi.toLowerCase().includes(searchTerm.toLowerCase());
     return matchKategori && matchSearch;
   });
 
@@ -247,17 +209,18 @@ export function GaInfJalanContent({ openArea }: { openArea: string }) {
   return (
     <div style={{ minHeight: "100vh", background: "#f8f9fa" }}>
       <Sidebar userName={user?.fullName} />
-      <div style={{ padding: "20px 16px", maxWidth: "1400px", margin: "0 auto" }}>
+      <div style={{ paddingLeft: "96px", paddingRight: "20px", paddingTop: "24px", paddingBottom: "24px", maxWidth: "1400px", margin: "0 auto" }}>
         {/* Header */}
-        <div style={{ marginBottom: "24px" }}>
-          <div style={{
-            background: "linear-gradient(135deg, #0d47a1 0%, #1e88e5 100%)",
-            borderRadius: "12px",
-            padding: "20px 24px",
-            boxShadow: "0 4px 12px rgba(13, 71, 161, 0.15)"
-          }}>
+        <div style={{ marginBottom: "24px" }} className="header">
+          <button
+            onClick={() => router.push("/status-ga")}
+            className="btn-back"
+          >
+            <ArrowLeft size={18} /> Kembali
+          </button>
+          <div className="text-header">
             <h1 style={{ margin: "0 0 8px 0", color: "white", fontSize: "clamp(20px, 5vw, 28px)", fontWeight: "700", letterSpacing: "-0.5px" }}>
-              GA Infrastruktur Jalan
+              🛣️ GA Infrastruktur Jalan
             </h1>
             <p style={{ margin: 0, color: "rgba(255, 255, 255, 0.9)", fontSize: "clamp(12px, 3vw, 14px)", fontWeight: "400" }}>
               Manajemen Data Inspeksi Infrastruktur Jalan & Boardess
@@ -403,9 +366,14 @@ export function GaInfJalanContent({ openArea }: { openArea: string }) {
               </thead>
               <tbody>
                 {filteredData.map((area) => {
+                  const parts = area.name.split(' \u0007 ');
+                  const namaArea = parts[0] || '';
+                  const kategori = parts[1] || '';
+                  const lokasi = parts[2] || '';
                   const status = getAreaStatus(area);
+                  
                   return (
-                    <tr key={area.no} style={{ transition: "background-color 0.2s ease" }}>
+                    <tr key={area.id} style={{ transition: "background-color 0.2s ease" }}>
                       <td style={{
                         padding: "12px 16px",
                         borderBottom: "1px solid #f0f0f0",
@@ -418,7 +386,7 @@ export function GaInfJalanContent({ openArea }: { openArea: string }) {
                         borderBottom: "1px solid #f0f0f0",
                         fontWeight: "500",
                         color: "#1e88e5"
-                      }}>{area.namaArea}</td>
+                      }}>{namaArea}</td>
                       <td style={{
                         padding: "12px 16px",
                         borderBottom: "1px solid #f0f0f0",
@@ -438,7 +406,7 @@ export function GaInfJalanContent({ openArea }: { openArea: string }) {
                           display: "inline-block",
                           maxWidth: "140px"
                         }}>
-                          {area.kategori}
+                          {kategori}
                         </span>
                       </td>
                       <td style={{
@@ -446,7 +414,7 @@ export function GaInfJalanContent({ openArea }: { openArea: string }) {
                         borderBottom: "1px solid #f0f0f0",
                         color: "#666",
                         fontSize: "13px"
-                      }}>{area.lokasi}</td>
+                      }}>{lokasi}</td>
                       <td style={{
                         padding: "12px 16px",
                         borderBottom: "1px solid #f0f0f0",
@@ -498,7 +466,7 @@ export function GaInfJalanContent({ openArea }: { openArea: string }) {
                             DETAIL
                           </button>
                           <a
-                            href={`/e-checksheet-inf-jalan?areaName=${encodeURIComponent(area.namaArea)}&kategori=${encodeURIComponent(area.kategori)}&lokasi=${encodeURIComponent(area.lokasi)}`}
+                            href={`/e-checksheet-inf-jalan?areaName=${encodeURIComponent(namaArea)}&kategori=${encodeURIComponent(kategori)}&lokasi=${encodeURIComponent(lokasi)}`}
                             style={{
                               padding: "6px 14px",
                               borderRadius: "6px",
@@ -572,13 +540,13 @@ export function GaInfJalanContent({ openArea }: { openArea: string }) {
               }}>
                 <div style={{ flex: 1, minWidth: "200px" }}>
                   <h2 style={{ margin: "0 0 4px 0", color: "#0d47a1", fontSize: "clamp(16px, 4vw, 20px)", fontWeight: "700" }}>
-                    Detail Area Jalan
+                    Detail Area Jalan - {selectedArea.no}
                   </h2>
                   <p style={{ margin: "4px 0", color: "#1e88e5", fontSize: "clamp(12px, 3vw, 14px)", fontWeight: "500" }}>
-                    {selectedArea.namaArea}
+                    {selectedArea.name.split(' \u0007 ')[0]}
                   </p>
                   <p style={{ margin: "0", color: "#777", fontSize: "clamp(11px, 2.5vw, 12px)" }}>
-                    {selectedArea.kategori} - {selectedArea.lokasi}
+                    {selectedArea.name.split(' \u0007 ')[1]} - {selectedArea.name.split(' \u0007 ')[2]}
                   </p>
                 </div>
                 <button
@@ -612,8 +580,8 @@ export function GaInfJalanContent({ openArea }: { openArea: string }) {
                   Pilih Tanggal:
                 </label>
                 <select
-                  value={selectedDateInModal || ""}
-                  onChange={(e) => setSelectedDateInModal(e.target.value)}
+                  value={selectedDate || ""}
+                  onChange={(e) => handleDateChange(e.target.value)}
                   style={{
                     color: "#0d47a1",
                     padding: "6px 10px",
@@ -638,11 +606,15 @@ export function GaInfJalanContent({ openArea }: { openArea: string }) {
               </div>
 
               <div style={{ padding: "16px 20px", overflowY: "auto", flex: 1 }}>
-                {!checksheetData || Object.keys(checksheetData).length === 0 ? (
+                {isLoading ? (
+                  <div style={{ textAlign: "center", padding: "40px 20px", color: "#999", fontSize: "14px" }}>
+                    <p>Memuat data...</p>
+                  </div>
+                ) : !checksheetData || Object.keys(checksheetData).length === 0 ? (
                   <div style={{ textAlign: "center", padding: "40px 20px", color: "#999", fontSize: "14px" }}>
                     <p>Belum ada data pengecekan</p>
                   </div>
-                ) : !selectedDateInModal ? (
+                ) : !selectedDate ? (
                   <div style={{ textAlign: "center", padding: "40px 20px", color: "#666", fontSize: "14px" }}>
                     <p>Pilih tanggal untuk melihat detail pemeriksaan</p>
                   </div>
@@ -712,7 +684,6 @@ export function GaInfJalanContent({ openArea }: { openArea: string }) {
                               fontSize: "10px",
                               minWidth: "180px"
                             }}>Tindakan<br/>Perbaikan</th>
-                            {/* ✅ Kolom Dokumentasi */}
                             <th style={{
                               padding: "12px 10px",
                               border: "1px solid #0d47a1",
@@ -762,12 +733,11 @@ export function GaInfJalanContent({ openArea }: { openArea: string }) {
                         </thead>
                         <tbody>
                           {inspectionItems.map((row) => {
-                            const entries = (checksheetData?.[row.key] as ChecksheetEntry[]) || [];
-                            const entryForDate = entries.find(e => e.date === selectedDateInModal);
+                            const entryForDate = checksheetData?.[row.item_key];
                             const images = entryForDate?.images || [];
 
                             return (
-                              <tr key={row.key}>
+                              <tr key={row.item_key}>
                                 <td style={{
                                   padding: "10px 8px",
                                   border: "1px solid #0d47a1",
@@ -787,7 +757,7 @@ export function GaInfJalanContent({ openArea }: { openArea: string }) {
                                   background: "white",
                                   verticalAlign: "top",
                                   lineHeight: "1.5"
-                                }}>{row.item}</td>
+                                }}>{row.item_check}</td>
                                 <td style={{
                                   padding: "8px 6px",
                                   border: "1px solid #0d47a1",
@@ -797,7 +767,7 @@ export function GaInfJalanContent({ openArea }: { openArea: string }) {
                                   color: "#01579b",
                                   background: "#f5f9ff"
                                 }}>
-                                  {new Date(selectedDateInModal).toLocaleDateString("id-ID", { day: "2-digit", month: "short", year: "numeric" })}
+                                  {new Date(selectedDate).toLocaleDateString("id-ID", { day: "2-digit", month: "short", year: "numeric" })}
                                 </td>
                                 <td style={{
                                   padding: "8px 6px",
@@ -830,7 +800,6 @@ export function GaInfJalanContent({ openArea }: { openArea: string }) {
                                 }}>
                                   {entryForDate?.tindakanPerbaikan || "-"}
                                 </td>
-                                {/* ✅ Kolom Dokumentasi */}
                                 <td style={{
                                   padding: "8px 6px",
                                   border: "1px solid #0d47a1",
@@ -840,7 +809,7 @@ export function GaInfJalanContent({ openArea }: { openArea: string }) {
                                 }}>
                                   {images.length > 0 ? (
                                     <div style={{ display: "flex", flexWrap: "wrap", gap: "4px", justifyContent: "center" }}>
-                                      {images.map((imgUrl, idx) => (
+                                      {images.map((imgUrl: string, idx: number) => (
                                         <div
                                           key={idx}
                                           onClick={() => openImageModal(imgUrl)}

@@ -4,226 +4,82 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
-import { NavbarStatic } from "@/components/navbar-static";
 import { Sidebar } from "@/components/Sidebar";
-
-interface ChecksheetEntry {
-  date: string;
-  areaName: string;
-  areaType: string;
-  data: {
-    proses: string;
-    standartAPD: string[];
-    r1: string;
-    r2: string;
-    r3: string;
-    r4: string;
-    r5: string;
-    r6: string;
-    persentaseOk: string;
-    problem: string;
-    tindakanPerbaikan: string;
-    pic: string;
-    verify: string;
-  }[];
-  inspector: string;
-}
-
-// Data dari cs-inspeksi-apd.xlsx
-const APD_AREAS = [
-  {
-    id: 1,
-    name: "PRE ASSY AREA GENBA C",
-    type: "Produksi",
-    proses: [
-      {
-        name: "BONDER",
-        standartAPD: ["- Masker kain"]
-      },
-      {
-        name: "RAYCHEM",
-        standartAPD: [
-          "- Sarung tangan nitrile",
-          "- Sarung tangan katun",
-          "- Masker 3M (Respiratory)",
-          "- Celemek",
-          "- Kacamata bening"
-        ]
-      },
-      {
-        name: "RAYCHEM (NON ALPHA)",
-        standartAPD: [
-          "- Masker FKA",
-          "- Sarung tangan nitrile"
-        ]
-      },
-      {
-        name: "HEAT SHRINK",
-        standartAPD: [
-          "- Masker kain",
-          "- Sarung tangan nitrile"
-        ]
-      },
-      {
-        name: "CASTING",
-        standartAPD: ["- Back support"]
-      },
-      {
-        name: "CUTTING",
-        standartAPD: ["- Back support"]
-      },
-      {
-        name: "CUTTING & RUBBER SEAL",
-        standartAPD: [
-          "- Back support",
-          "- Ear Plug"
-        ]
-      }
-    ]
-  },
-  {
-    id: 2,
-    name: "PRE ASSY GENBA A+B",
-    type: "Produksi",
-    proses: [
-      {
-        name: "RAYCHEM",
-        standartAPD: [
-          "- Sarung tangan nitrile",
-          "- Masker 3M (Respiratory)",
-          "- Celemek",
-          "- Kacamata bening"
-        ]
-      },
-      {
-        name: "RAYCHEM NON ALPHA",
-        standartAPD: [
-          "- Masker FKA",
-          "- Sarung tangan nitrile"
-        ]
-      },
-      {
-        name: "GUN SOLDER (AMERICAN BEAUTY)",
-        standartAPD: [
-          "- Kacamata bening",
-          "- Masker FKA",
-          "- Sarung tangan nitrile",
-          "- Celemek"
-        ]
-      },
-      {
-        name: "DIP SOLDER",
-        standartAPD: [
-          "- Sarung tangan kulit",
-          "- Sarung tangan katun",
-          "- Masker FKA",
-          "- Topeng Gerinda",
-          "- Celemek",
-          "- Sleave"
-        ]
-      },
-      {
-        name: "BONDER (200D)",
-        standartAPD: ["- Masker FKA"]
-      },
-      {
-        name: "BONDER (900B) + DFM",
-        standartAPD: ["- Masker FKA"]
-      },
-      {
-        name: "BONDER",
-        standartAPD: ["- Masker FKA"]
-      },
-      {
-        name: "BONDER MINIC MN20 (200D)",
-        standartAPD: ["- Masker FKA"]
-      },
-      {
-        name: "BONDER MINIC MN20 (900B)",
-        standartAPD: ["- Masker FKA"]
-      },
-      {
-        name: "ANTI KOROSI (EJ30 & EJ35)",
-        standartAPD: [
-          "- Sarung tangan Anti UV",
-          "- Masker FKA",
-          "- Kacamata/Face shield Anti UV",
-          "- Celemek"
-        ]
-      },
-      {
-        name: "HEAT SHRINK",
-        standartAPD: [
-          "- Masker FKA",
-          "- Sarung tangan nitrile"
-        ]
-      },
-      {
-        name: "CUTTING : Nissan (Genba A)",
-        standartAPD: ["- Back support"]
-      },
-      {
-        name: "CUTTING : Nissan (Genba B)",
-        standartAPD: ["- Back support"]
-      },
-      {
-        name: "CUTTING : Mazda",
-        standartAPD: ["- Back support"]
-      },
-      {
-        name: "CUTTING : 900B & 200D",
-        standartAPD: ["- Back support"]
-      },
-      {
-        name: "TRANSFORTER",
-        standartAPD: ["- Topi pelindung"]
-      },
-      {
-        name: "CASTING",
-        standartAPD: ["- Back support"]
-      }
-    ]
-  }
-];
+// ✅ Import API helper
+import {
+  getItemsByType,
+  getChecklistByDate,
+  saveChecklist,
+  getAvailableDates,
+  ChecklistItem
+} from "@/lib/api/checksheet";
 
 export function EChecksheetInsApdForm({ areaId: initialAreaId }: { areaId: number }) {
   const router = useRouter();
   const { user, loading } = useAuth();
+  
+  // ✅ Hardcode type slug untuk page ini
+  const TYPE_SLUG = 'inspeksi-apd';
 
   const [isMounted, setIsMounted] = useState(false);
   const [selectedDate, setSelectedDate] = useState<string>("");
   const [areaId, setAreaId] = useState<number>(initialAreaId);
-  const [savedData, setSavedData] = useState<ChecksheetEntry[]>([]);
+  const [areaData, setAreaData] = useState<any>(null);
+  const [inspectionItems, setInspectionItems] = useState<ChecklistItem[]>([]);
+  const [availableDates, setAvailableDates] = useState<string[]>([]);
   const [rows, setRows] = useState<any[]>([]);
+  const [isSaving, setIsSaving] = useState(false);
 
-  const area = APD_AREAS.find(a => a.id === areaId) || APD_AREAS[0];
-
+  // ✅ Load area data dan inspection items dari API
   useEffect(() => {
-    setIsMounted(true);
-  }, []);
+    const loadAreaAndItems = async () => {
+      try {
+        // Load area info
+        const areasRes = await fetch(`/api/ga/checksheet/${TYPE_SLUG}/areas`);
+        const areasData = await areasRes.json();
+        
+        if (areasData.success) {
+          const area = areasData.data.find((a: any) => a.id === initialAreaId);
+          if (area) {
+            setAreaData(area);
+          }
+        }
 
-  // Load saved data
-  useEffect(() => {
-    if (!isMounted) return;
-    try {
-      const key = `e-checksheet-apd-${areaId}`;
-      const saved = localStorage.getItem(key);
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        setSavedData(parsed);
+        // Load inspection items
+        const items = await getItemsByType(TYPE_SLUG);
+        console.log('Loaded inspection items:', items);
+        setInspectionItems(items);
+        
+        // Initialize rows from items
+        initializeRowsFromItems(items);
+        
+        // Load available dates
+        const dates = await getAvailableDates(TYPE_SLUG, initialAreaId);
+        setAvailableDates(dates);
+      } catch (error) {
+        console.error("Failed to load data:", error);
+        alert("Gagal memuat data. Silakan coba lagi.");
       }
-    } catch (err) {
-      console.warn("Failed to parse saved data");
+    };
+    
+    if (isMounted) {
+      loadAreaAndItems();
     }
-  }, [isMounted, areaId]);
+  }, [isMounted, initialAreaId]);
 
-  // Inisialisasi rows
-  useEffect(() => {
-    const newRows = [];
-    for (const p of area.proses) {
+  // ✅ Initialize rows dari inspection items
+  const initializeRowsFromItems = (items: ChecklistItem[]) => {
+    const newRows: any[] = [];
+    
+    // Group items by proses
+    const prosesList = items.filter(item => item.item_group === 'PROSES');
+    
+    prosesList.forEach(prosesItem => {
+      // Add proses row
       newRows.push({
         type: "proses",
-        proses: p.name,
+        item_key: prosesItem.item_key,
+        proses: prosesItem.item_check,
         r1: "",
         r2: "",
         r3: "",
@@ -236,10 +92,18 @@ export function EChecksheetInsApdForm({ areaId: initialAreaId }: { areaId: numbe
         pic: "",
         verify: ""
       });
-      for (const apd of p.standartAPD) {
+      
+      // Find APD items for this proses
+      const apdItems = items.filter(item => 
+        item.item_group === prosesItem.item_key // APD items memiliki item_group = proses item_key
+      );
+      
+      // Add APD rows
+      apdItems.forEach(apdItem => {
         newRows.push({
           type: "apd",
-          proses: apd,
+          item_key: apdItem.item_key,
+          proses: apdItem.item_check,
           r1: "",
           r2: "",
           r3: "",
@@ -252,10 +116,15 @@ export function EChecksheetInsApdForm({ areaId: initialAreaId }: { areaId: numbe
           pic: "",
           verify: ""
         });
-      }
-    }
+      });
+    });
+    
     setRows(newRows);
-  }, [areaId]);
+  };
+
+  useEffect(() => {
+    setIsMounted(true);
+  }, []);
 
   useEffect(() => {
     if (!isMounted || loading) return;
@@ -278,12 +147,75 @@ export function EChecksheetInsApdForm({ areaId: initialAreaId }: { areaId: numbe
     return null;
   }
 
-  const handleSave = () => {
+  // ✅ Load existing data dari API
+  const handleLoadExisting = async () => {
+    if (!selectedDate) {
+      alert("Please select a date first");
+      return;
+    }
+
+    try {
+      const data = await getChecklistByDate(TYPE_SLUG, areaId, selectedDate);
+      
+      if (data && Object.keys(data).length > 0) {
+        // Populate rows with existing data
+        const newRows = rows.map(row => {
+          const itemData = data[row.item_key];
+          if (itemData) {
+            // Parse notes untuk mendapatkan r1-r6 values
+            let parsedNotes: any = {};
+            try {
+              if (itemData.notes) {
+                parsedNotes = JSON.parse(itemData.notes);
+              }
+            } catch (e) {
+              console.error('Error parsing notes:', e);
+            }
+            
+            return {
+              ...row,
+              r1: parsedNotes.r1 || "",
+              r2: parsedNotes.r2 || "",
+              r3: parsedNotes.r3 || "",
+              r4: parsedNotes.r4 || "",
+              r5: parsedNotes.r5 || "",
+              r6: parsedNotes.r6 || "",
+              persentaseOk: itemData.hasilPemeriksaan || "",
+              problem: itemData.keteranganTemuan || "",
+              tindakanPerbaikan: itemData.tindakanPerbaikan || "",
+              pic: itemData.pic || "",
+              verify: itemData.verify || ""
+            };
+          }
+          return row;
+        });
+        
+        setRows(newRows);
+        alert("Data loaded successfully");
+      } else {
+        alert("No data found for this date");
+        initializeRowsFromItems(inspectionItems);
+      }
+    } catch (error) {
+      console.error("Error loading existing data:", error);
+      alert("Failed to load data");
+    }
+  };
+
+  // ✅ Save to API
+  const handleSave = async () => {
+    if (!user) {
+      alert("User belum login");
+      router.push("/login-page");
+      return;
+    }
+
     if (!selectedDate) {
       alert("Please select an inspection date");
       return;
     }
 
+    // Calculate percentage for APD items
     const updatedRows = rows.map(row => {
       if (row.type === "proses") {
         return { ...row, persentaseOk: "" };
@@ -295,60 +227,60 @@ export function EChecksheetInsApdForm({ areaId: initialAreaId }: { areaId: numbe
     });
 
     try {
-      const entry: ChecksheetEntry = {
-        date: selectedDate,
-        areaName: area.name,
-        areaType: area.type,
-        data: updatedRows,
-        inspector: user.fullName || ""
-      };
+      setIsSaving(true);
 
-      const newData = [...savedData];
-      const existingIndex = newData.findIndex(e => e.date === selectedDate);
+      // Format data untuk API
+      const checklistData: any = {};
+      
+      updatedRows.forEach((row) => {
+        // Store r1-r6 values in notes as JSON
+        const notesData = {
+          r1: row.r1 || "",
+          r2: row.r2 || "",
+          r3: row.r3 || "",
+          r4: row.r4 || "",
+          r5: row.r5 || "",
+          r6: row.r6 || ""
+        };
+        
+        checklistData[row.item_key] = {
+          date: selectedDate,
+          hasilPemeriksaan: row.persentaseOk || "",
+          keteranganTemuan: row.problem || "",
+          tindakanPerbaikan: row.tindakanPerbaikan || "",
+          pic: row.pic || "",
+          dueDate: "",
+          verify: row.verify || "",
+          inspector: user.fullName || "",
+          images: [],
+          notes: JSON.stringify(notesData)
+        };
+      });
 
-      if (existingIndex >= 0) {
-        newData[existingIndex] = entry;
-      } else {
-        newData.unshift(entry);
-      }
+      // Save ke API
+      await saveChecklist(
+        TYPE_SLUG,
+        areaId,
+        selectedDate,
+        checklistData,
+        user.id || "unknown",
+        user.fullName || "Unknown Inspector"
+      );
 
-      newData.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-
-      const key = `e-checksheet-apd-${areaId}`;
-      localStorage.setItem(key, JSON.stringify(newData));
       alert(`Inspection data saved for ${new Date(selectedDate).toLocaleDateString("en-US")}`);
-      router.push(`/status-ga/inspeksi-apd`);
-    } catch (err) {
-      console.error("Save failed:", err);
-      alert("Failed to save data");
+      
+      // Redirect ke status page setelah 500ms
+      setTimeout(() => {
+        router.push(`/status-ga/inspeksi-apd`);
+      }, 500);
+      
+    } catch (error) {
+      console.error("Error saving checklist data:", error);
+      alert("Failed to save data. Please try again.");
+    } finally {
+      setIsSaving(false);
     }
   };
-
-  const handleLoadExisting = () => {
-    if (!selectedDate) {
-      alert("Please select a date first");
-      return;
-    }
-
-    const entry = savedData.find(e => e.date === selectedDate);
-
-    if (entry) {
-      setRows(entry.data);
-      alert("Data loaded successfully");
-    } else {
-      alert("No data found for this date");
-      const newRows = [];
-      for (const p of area.proses) {
-        newRows.push({ type: "proses", proses: p.name, r1: "", r2: "", r3: "", r4: "", r5: "", r6: "", persentaseOk: "", problem: "", tindakanPerbaikan: "", pic: "", verify: "" });
-        for (const apd of p.standartAPD) {
-          newRows.push({ type: "apd", proses: apd, r1: "", r2: "", r3: "", r4: "", r5: "", r6: "", persentaseOk: "", problem: "", tindakanPerbaikan: "", pic: "", verify: "" });
-        }
-      }
-      setRows(newRows);
-    }
-  };
-
-  // ❌ HAPUS fungsi generateMonthlyDates() — tidak digunakan lagi
 
   const updateRowField = (index: number, field: string, value: string) => {
     setRows(prev => {
@@ -357,6 +289,10 @@ export function EChecksheetInsApdForm({ areaId: initialAreaId }: { areaId: numbe
       return newRows;
     });
   };
+
+  // Parse area name untuk display
+  const areaName = areaData?.name?.split(' \u0007 ')[0] || `Area ${areaId}`;
+  const areaType = areaData?.name?.split(' \u0007 ')[1] || "Produksi";
 
   return (
     <div style={{ minHeight: "100vh", background: "#f7f9fc" }}>
@@ -379,10 +315,11 @@ export function EChecksheetInsApdForm({ areaId: initialAreaId }: { areaId: numbe
               APD Inspection Form
             </h1>
             <p style={{ margin: 0, color: "#e3f2fd", fontSize: "14px" }}>
-              Monthly APD compliance checklist for {area.name} ({area.type})
+              Monthly APD compliance checklist for {areaName} ({areaType})
             </p>
           </div>
         </div>
+        
         <div style={{
           background: "white",
           border: "1px solid #e0e0e0",
@@ -398,11 +335,11 @@ export function EChecksheetInsApdForm({ areaId: initialAreaId }: { areaId: numbe
             </div>
             <div> 
               <span style={{ fontSize: "13px", color: "#757575", display: "block", marginBottom: "4px" }}>Area Name</span>
-              <span style={{ fontSize: "15px", fontWeight: "500", color: "#212121" }}>{area.name}</span>
+              <span style={{ fontSize: "15px", fontWeight: "500", color: "#212121" }}>{areaName}</span>
             </div>
             <div>
               <span style={{ fontSize: "13px", color: "#757575", display: "block", marginBottom: "4px" }}>Area Type</span>
-              <span style={{ fontSize: "15px", fontWeight: "500", color: "#212121" }}>{area.type}</span>
+              <span style={{ fontSize: "15px", fontWeight: "500", color: "#212121" }}>{areaType}</span>
             </div>
             <div>
               <span style={{ fontSize: "13px", color: "#757575", display: "block", marginBottom: "4px" }}>Inspector</span>
@@ -411,7 +348,7 @@ export function EChecksheetInsApdForm({ areaId: initialAreaId }: { areaId: numbe
           </div>
         </div>
 
-        {/* 🔁 Bagian Inspection Schedule yang Dimodifikasi */}
+        {/* Inspection Schedule */}
         <div style={{
           background: "white",
           border: "1px solid #e0e0e0",
@@ -422,7 +359,7 @@ export function EChecksheetInsApdForm({ areaId: initialAreaId }: { areaId: numbe
         }}>
           <div style={{ marginBottom: "16px" }}>
             <span style={{ fontWeight: "500", color: "#212121", fontSize: "15px" }}>Inspection Schedule</span>
-            <span style={{ fontSize: "13px", color: "#757575", marginLeft: "8px" }}>• Every month</span>
+            <span style={{ fontSize: "13px", color: "#757575", marginLeft: "8px" }}>\u0007 Every month</span>
           </div>
 
           {/* Input Tanggal Manual */}
@@ -446,7 +383,7 @@ export function EChecksheetInsApdForm({ areaId: initialAreaId }: { areaId: numbe
           </div>
 
           {/* Dropdown Riwayat Pengisian */}
-          {savedData.length > 0 && (
+          {availableDates.length > 0 && (
             <div style={{ display: "flex", alignItems: "center", gap: "12px", flexWrap: "wrap" }}>
               <label style={{ fontWeight: "500", color: "#424242", fontSize: "14px" }}>Riwayat Isian:</label>
               <select
@@ -468,11 +405,11 @@ export function EChecksheetInsApdForm({ areaId: initialAreaId }: { areaId: numbe
                 }}
               >
                 <option value="">— Pilih tanggal lama —</option>
-                {savedData
-                  .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
-                  .map((entry) => (
-                    <option key={entry.date} value={entry.date}>
-                      {new Date(entry.date).toLocaleDateString("en-US", {
+                {availableDates
+                  .sort((a, b) => new Date(b).getTime() - new Date(a).getTime())
+                  .map((date) => (
+                    <option key={date} value={date}>
+                      {new Date(date).toLocaleDateString("en-US", {
                         day: "2-digit",
                         month: "short",
                         year: "numeric"
@@ -515,7 +452,7 @@ export function EChecksheetInsApdForm({ areaId: initialAreaId }: { areaId: numbe
                 <tr style={{ background: "#fafafa", borderBottom: "2px solid #ccc" }}>
                   <th rowSpan={2} style={{ padding: "10px 8px", border: "1px solid #ddd", fontWeight: "600", textAlign: "center", width: "4%" }}>NO</th>
                   <th style={{ padding: "10px 8px", border: "1px solid #ddd", fontWeight: "600", textAlign: "center", width: "12%" }}>PROSES</th>
-                  <th rowSpan={2} colSpan={5} style={{ padding: "8px", border: "1px solid #ddd", fontWeight: "600", textAlign: "center", width: "30%" }}>NO. MESIN/NIK</th>
+                  <th rowSpan={2} colSpan={6} style={{ padding: "8px", border: "1px solid #ddd", fontWeight: "600", textAlign: "center", width: "30%" }}>NO. MESIN/NIK</th>
                   <th rowSpan={2} style={{ padding: "10px 8px", border: "1px solid #ddd", fontWeight: "600", textAlign: "center", width: "8%" }}>PROSENTASE OK</th>
                   <th rowSpan={2} colSpan={4} style={{ padding: "10px 8px", border: "1px solid #ddd", fontWeight: "600", textAlign: "center", width: "16%" }}>PROBLEM</th>
                   <th rowSpan={2} colSpan={4} style={{ padding: "10px 8px", border: "1px solid #ddd", fontWeight: "600", textAlign: "center", width: "16%" }}>TINDAKAN PERBAIKAN</th>
@@ -559,7 +496,7 @@ export function EChecksheetInsApdForm({ areaId: initialAreaId }: { areaId: numbe
                         }}
                       />
                     </td>
-                    {[...Array(5)].map((_, i) => {
+                    {[...Array(6)].map((_, i) => {
                       const field = `r${i + 1}` as keyof typeof row;
                       return (
                         <td key={i} style={{ 
@@ -719,20 +656,20 @@ export function EChecksheetInsApdForm({ areaId: initialAreaId }: { areaId: numbe
           </button>
           <button
             onClick={handleSave}
-            disabled={!selectedDate}
+            disabled={!selectedDate || isSaving}
             style={{
               padding: "11px 28px",
-              background: selectedDate ? "#1976d2" : "#e0e0e0",
-              color: selectedDate ? "white" : "#9e9e9e",
+              background: (selectedDate && !isSaving) ? "#1976d2" : "#e0e0e0",
+              color: (selectedDate && !isSaving) ? "white" : "#9e9e9e",
               border: "none",
               borderRadius: "6px",
               fontWeight: "500",
               fontSize: "15px",
-              opacity: selectedDate ? 1 : 0.6,
-              cursor: selectedDate ? "pointer" : "not-allowed"
+              opacity: (selectedDate && !isSaving) ? 1 : 0.6,
+              cursor: (selectedDate && !isSaving) ? "pointer" : "not-allowed"
             }}
           >
-            ✓ Simpan Data
+            {isSaving ? "Menyimpan..." : "✓ Simpan Data"}
           </button>
         </div>
       </div>

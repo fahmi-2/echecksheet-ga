@@ -2,7 +2,6 @@
 
 import type React from "react"
 import { Suspense } from "react"
-import { AuthProvider } from "@/lib/auth-context"
 
 export default function EChecksheetLayout({
   children,
@@ -10,8 +9,6 @@ export default function EChecksheetLayout({
   children: React.ReactNode
 }) {
   return (
-    <AuthProvider>
-      <Suspense fallback={<div>Loading...</div>}>{children}</Suspense>
-    </AuthProvider>
+    <Suspense fallback={<div>Loading...</div>}>{children}</Suspense>
   )
 }

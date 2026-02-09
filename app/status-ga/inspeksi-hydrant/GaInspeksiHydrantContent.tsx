@@ -1,113 +1,59 @@
-// app/status-ga/GaInspeksiHydrantContent.tsx
+// app/status-ga/inspeksi-hydrant/GaInspeksiHydrantContent.tsx
 "use client";
-
 import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
 import { Sidebar } from "@/components/Sidebar";
 import QrScanner from 'qr-scanner';
+import { ArrowLeft } from "lucide-react";
 
-interface HydrantItem {
+// ✅ Import API helper yang reusable
+import { getAreasByType, getAvailableDates, getChecklistByDate } from "@/lib/api/checksheet";
+
+interface Area {
+  id: number;
   no: number;
-  lokasi: string;
-  zona: string;
-  jenisHydrant: string;
-}
-
-const ITEM_LABELS: string[] = [
-  "1. kondisi tidak berkarat",
-  "2. posisi tidak terhalang benda apapun",
-  "3. kondisi bagus tidak berkarat",
-  "4. tidak keropos",
-  "5. ada nomor id & papan petunjuk",
-  "6. posisi tidak terhalang benda apapun",
-  "7. pada posisi Normally open",
-  "8. saat posisi tertutup aliran air tidak keluar",
-  "9. tidak ada kebocoran pada seal",
-  "10. Tersedia",
-  "11. Pengunci coupling berfungsi (ditekan)",
-  "12. Seal tidak rusak",
-  "13. Dapat diputar/dibuka dengan mudah",
-  "14. saat posisi tertutup aliran air tidak keluar",
-  "15. penutup tersedia & dapat diputar/dibuka dengan mudah",
-  "16. Ulir bagian dalam terlumasi",
-  "17. Tersedia",
-  "18. Layout Jelas",
-  "19. Tidak Bocor / pecah, Cat tidak pudar",
-  "20. Terpasang dengan rapi & Jelas",
-];
-
-const HYDRANT_LIST: HydrantItem[] = [
-  { no: 1, lokasi: "KANTIN", zona: "BARAT", jenisHydrant: "HYDRANT INDOOR" },
-  { no: 2, lokasi: "AUDITORIUM", zona: "BARAT", jenisHydrant: "HYDRANT INDOOR" },
-  { no: 3, lokasi: "MAIN OFFICE SISI SELATAN", zona: "BARAT", jenisHydrant: "HYDRANT INDOOR" },
-  { no: 4, lokasi: "BELAKANG RAK KARTON BOX EXIM", zona: "TIMUR", jenisHydrant: "HYDRANT INDOOR" },
-  { no: 5, lokasi: "PINTU 9 CV 2B / GENBA A", zona: "TIMUR", jenisHydrant: "HYDRANT INDOOR" },
-  { no: 6, lokasi: "CV AT6 GENBA A", zona: "TIMUR", jenisHydrant: "HYDRANT INDOOR" },
-  { no: 7, lokasi: "CV AT7 GENBA A", zona: "TIMUR", jenisHydrant: "HYDRANT INDOOR" },
-  { no: 8, lokasi: "CV AT 11 GENBA A", zona: "TIMUR", jenisHydrant: "HYDRANT INDOOR" },
-  { no: 9, lokasi: "PINTU 7 GENBA A", zona: "TIMUR", jenisHydrant: "HYDRANT INDOOR" },
-  { no: 10, lokasi: "SEBELAH UTARA PINTU 7", zona: "TIMUR", jenisHydrant: "HYDRANT INDOOR" },
-  { no: 11, lokasi: "NEW BUILDING WHS (RAK TOYOTA)", zona: "UTARA", jenisHydrant: "HYDRANT INDOOR" },
-  { no: 12, lokasi: "SAMPING LIFT BARANG WHS", zona: "UTARA", jenisHydrant: "HYDRANT INDOOR" },
-  { no: 13, lokasi: "OFFICE WHS", zona: "UTARA", jenisHydrant: "HYDRANT INDOOR" },
-  { no: 14, lokasi: "CV 12B / AREA BARAT", zona: "BARAT", jenisHydrant: "HYDRANT INDOOR" },
-  { no: 15, lokasi: "CV AB 10", zona: "BARAT", jenisHydrant: "HYDRANT INDOOR" },
-  { no: 16, lokasi: "CV AB 5", zona: "BARAT", jenisHydrant: "HYDRANT INDOOR" },
-  { no: 17, lokasi: "PINTU 1 GENBA A", zona: "BARAT", jenisHydrant: "HYDRANT INDOOR" },
-  { no: 18, lokasi: "CV 8A", zona: "TIMUR", jenisHydrant: "HYDRANT INDOOR" },
-  { no: 19, lokasi: "SUB ASSY B1", zona: "TIMUR", jenisHydrant: "HYDRANT INDOOR" },
-  { no: 20, lokasi: "SUB ASSY C7", zona: "BARAT", jenisHydrant: "HYDRANT INDOOR" },
-  { no: 21, lokasi: "SHILD WIRE C4  / AREA TIMUR", zona: "BARAT", jenisHydrant: "HYDRANT INDOOR" },
-  { no: 22, lokasi: "RAYCHAM NPR.07", zona: "BARAT", jenisHydrant: "HYDRANT INDOOR" },
-  { no: 23, lokasi: "CV 5A M/S / AREA BARAT", zona: "BARAT", jenisHydrant: "HYDRANT INDOOR" },
-  { no: 24, lokasi: "TRAINING ROOM", zona: "BARAT", jenisHydrant: "HYDRANT INDOOR" },
-  { no: 25, lokasi: "JIG PROTO / STOCK MATERIAL", zona: "BARAT", jenisHydrant: "HYDRANT INDOOR" },
-  { no: 26, lokasi: "MEZZANINE SISI BARAT", zona: "BARAT", jenisHydrant: "HYDRANT INDOOR" },
-  { no: 27, lokasi: "DEPAN MASJID", zona: "BARAT", jenisHydrant: "HYDRANT PILLAR" },
-  { no: 28, lokasi: "DEPAN GENBA C", zona: "BARAT", jenisHydrant: "HYDRANT PILLAR" },
-  { no: 29, lokasi: "SAMPING PUMP ROOM", zona: "BARAT", jenisHydrant: "HYDRANT PILLAR" },
-  { no: 30, lokasi: "SAMPING LOADING DOCK WH", zona: "TIMUR", jenisHydrant: "HYDRANT PILLAR" },
-  { no: 31, lokasi: "SEBELAH UTARA PINTU 8", zona: "TIMUR", jenisHydrant: "HYDRANT PILLAR" },
-  { no: 32, lokasi: "SAMPING LOADING DOCK EXIM", zona: "TIMUR", jenisHydrant: "HYDRANT PILLAR" },
-  { no: 33, lokasi: "DEPAN AREA PARKIR", zona: "TIMUR", jenisHydrant: "HYDRANT PILLAR" },
-  { no: 34, lokasi: "PARKIR BAWAH", zona: "SELATAN", jenisHydrant: "HYDRANT INDOOR" },
-  { no: 35, lokasi: "PARKIR ATAS", zona: "SELATAN", jenisHydrant: "HYDRANT INDOOR" },
-  { no: 36, lokasi: "DEPAN POWER HOUSE A", zona: "UTARA", jenisHydrant: "HYDRANT OUTDOOR" },
-];
-
-interface ChecksheetEntry {
-  date: string;
-  item1: string; item2: string; item3: string; item4: string; item5: string;
-  item6: string; item7: string; item8: string; item9: string; item10: string;
-  item11: string; item12: string; item13: string; item14: string; item15: string;
-  item16: string; item17: string; item18: string; item19: string; item20: string;
-  keteranganKondisi: string;
-  tindakanPerbaikan: string;
-  pic: string;
-  dueDate: string;
-  verify: string;
-  inspector: string;
-  imageUrls?: string[]; // ✅ TAMBAHKAN INI
+  name: string;
+  location: string;
 }
 
 export function GaInspeksiHydrantContent() {
   const router = useRouter();
   const { user, loading } = useAuth();
-
+  
+  // ✅ Hardcode type slug untuk page ini
+  const TYPE_SLUG = 'inspeksi-hydrant';
+  
   const [isMounted, setIsMounted] = useState(false);
   const [showModal, setShowModal] = useState(false);
-  const [selectedCategory, setSelectedCategory] = useState<string>("HYDRANT INDOOR");
+  const [selectedCategory, setSelectedCategory] = useState("HYDRANT INDOOR");
   const [searchTerm, setSearchTerm] = useState("");
-
-  const [selectedArea, setSelectedArea] = useState<HydrantItem | null>(null);
-  const [selectedDateInModal, setSelectedDateInModal] = useState<string>("");
+  const [areas, setAreas] = useState<Area[]>([]);
+  const [selectedArea, setSelectedArea] = useState<Area | null>(null);
+  const [checksheetData, setChecksheetData] = useState<any | null>(null);
+  const [selectedDateInModal, setSelectedDateInModal] = useState("");
   const [availableDates, setAvailableDates] = useState<string[]>([]);
-
+  const [isLoading, setIsLoading] = useState(false);
+  
   // QR Scanner state
   const [isScanning, setIsScanning] = useState(false);
+  const [showImageModal, setShowImageModal] = useState(false);
+  const [currentImageUrl, setCurrentImageUrl] = useState("");
   const videoRef = useRef<HTMLVideoElement>(null);
   const qrScannerRef = useRef<QrScanner | null>(null);
+
+  // ✅ Load areas dari API berdasarkan type
+  useEffect(() => {
+    const loadAreas = async () => {
+      try {
+        const data = await getAreasByType(TYPE_SLUG);
+        setAreas(data);
+      } catch (error) {
+        console.error("Failed to load areas:", error);
+      }
+    };
+    loadAreas();
+  }, []);
 
   useEffect(() => {
     setIsMounted(true);
@@ -120,50 +66,99 @@ export function GaInspeksiHydrantContent() {
     }
   }, [user, loading, router]);
 
-  const filteredData = HYDRANT_LIST.filter(item =>
-    item.jenisHydrant === selectedCategory &&
-    (item.lokasi.toLowerCase().includes(searchTerm.toLowerCase()) ||
-     item.zona.toLowerCase().includes(searchTerm.toLowerCase()))
-  );
-
-  const openDetail = (area: HydrantItem) => {
+  // ✅ Open detail dengan load data dari API
+  const openDetail = async (area: Area) => {
     setSelectedArea(area);
-
-    let savedData: ChecksheetEntry[] = [];
-    let dates: string[] = [];
-    let latestDate = "";
+    setShowModal(true);
+    setIsLoading(true);
 
     try {
-      const key = `e-checksheet-hydrant-${area.no}`;
-      const saved = typeof window !== "undefined" ? localStorage.getItem(key) : null;
-      if (saved) {
-        savedData = JSON.parse(saved);
-        if (Array.isArray(savedData)) {
-          const allDates = new Set<string>();
-          savedData.forEach((entry) => {
-            if (entry?.date) allDates.add(entry.date);
-          });
-          dates = Array.from(allDates).sort((a, b) => new Date(b).getTime() - new Date(a).getTime());
-          latestDate = dates[0] || "";
-        }
-      }
-    } catch (e) {
-      console.warn("Failed to parse hydrant data", e);
-      savedData = [];
-      dates = [];
-      latestDate = "";
-    }
+      // Load available dates
+      const dates = await getAvailableDates(TYPE_SLUG, area.id);
+      setAvailableDates(dates);
 
-    setAvailableDates(dates);
-    setSelectedDateInModal(latestDate);
-    setShowModal(true);
+      if (dates.length > 0) {
+        const latestDate = dates[0];
+        setSelectedDateInModal(latestDate);
+
+        // Load checklist data untuk tanggal terbaru
+        const data = await getChecklistByDate(TYPE_SLUG, area.id, latestDate);
+        setChecksheetData(data);
+      } else {
+        setChecksheetData(null);
+        setSelectedDateInModal("");
+      }
+    } catch (error) {
+      console.error("Error loading detail:", error);
+      setChecksheetData(null);
+      setAvailableDates([]);
+      setSelectedDateInModal("");
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const closeDetail = () => {
     setSelectedArea(null);
+    setChecksheetData(null);
     setSelectedDateInModal("");
     setAvailableDates([]);
     setShowModal(false);
+  };
+
+  // ✅ Load data ketika tanggal berubah
+  useEffect(() => {
+    if (!selectedArea || !selectedDateInModal || !showModal) return;
+
+    const loadData = async () => {
+      setIsLoading(true);
+      try {
+        const data = await getChecklistByDate(TYPE_SLUG, selectedArea.id, selectedDateInModal);
+        setChecksheetData(data);
+      } catch (error) {
+        console.error("Error loading checklist ", error);
+        setChecksheetData(null);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    loadData();
+  }, [selectedDateInModal, selectedArea, showModal]);
+
+  // Filter data berdasarkan kategori dan search
+  const filteredData = areas.filter(item => {
+    // Gunakan field 'location' sebagai zona
+    const zona = item.location || '';
+    
+    // Tentukan jenis hydrant berdasarkan nomor area
+    let jenisHydrant = 'HYDRANT INDOOR';
+    
+    // Area 27-33 = HYDRANT PILLAR
+    if (item.no >= 27 && item.no <= 33) {
+      jenisHydrant = 'HYDRANT PILLAR';
+    } 
+    // Area 36 = HYDRANT OUTDOOR
+    else if (item.no === 36) {
+      jenisHydrant = 'HYDRANT OUTDOOR';
+    }
+    
+    return (
+      jenisHydrant === selectedCategory &&
+      (item.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      zona.toLowerCase().includes(searchTerm.toLowerCase()))
+    );
+  });
+
+  // ✅ Fungsi buka modal gambar
+  const openImageModal = (url: string) => {
+    setCurrentImageUrl(url);
+    setShowImageModal(true);
+  };
+
+  const closeImageModal = () => {
+    setShowImageModal(false);
+    setCurrentImageUrl("");
   };
 
   // QR Scanner functions
@@ -181,7 +176,7 @@ export function GaInspeksiHydrantContent() {
 
   useEffect(() => {
     if (!isScanning || !videoRef.current) return;
-
+    
     const video = videoRef.current;
 
     const onScanSuccess = (result: string) => {
@@ -234,15 +229,13 @@ export function GaInspeksiHydrantContent() {
   }, [isScanning, router]);
 
   if (!isMounted) return null;
-
   if (loading) {
     return (
       <div style={{ display: "flex", justifyContent: "center", alignItems: "center", minHeight: "100vh", background: "#f5f5f5" }}>
-        <p>Loading...</p>
+        Loading...
       </div>
     );
   }
-
   if (!user || (user.role !== "inspector-ga")) {
     return null;
   }
@@ -250,20 +243,26 @@ export function GaInspeksiHydrantContent() {
   return (
     <div style={{ minHeight: "100vh", background: "#f7f9fc" }}>
       <Sidebar userName={user.fullName} />
-      <div style={{ padding: "24px 20px", maxWidth: "1400px", margin: "0 auto" }}>
+      <div style={{ paddingLeft: "96px", paddingRight: "20px", paddingTop: "24px", paddingBottom: "24px", maxWidth: "1400px", margin: "0 auto" }}>
+        {/* Header */}
         <div style={{ marginBottom: "28px" }}>
-          <div style={{
-            background: "#1976d2",
-            borderRadius: "8px",
-            padding: "24px 28px",
-            boxShadow: "0 2px 8px rgba(0,0,0,0.1)"
-          }}>
-            <h1 style={{ margin: "0 0 6px 0", color: "white", fontSize: "26px", fontWeight: "600", letterSpacing: "-0.5px" }}>
-              🚒 Hydrant Inspection Dashboard
-            </h1>
-            <p style={{ margin: 0, color: "#e3f2fd", fontSize: "14px", fontWeight: "400" }}>
-              Monthly inspection schedule and maintenance records
-            </p>
+          <div className="header">
+              <button
+                onClick={() => router.push("/status-ga")}
+                className="btn-back"
+                aria-label="Kembali ke halaman utama"
+              >
+                <ArrowLeft size={18} />
+                <span>Kembali</span>
+              </button>
+            <div className="text-header">
+              <h1 style={{ margin: "0 0 6px 0", color: "white", fontSize: "26px", fontWeight: "600", letterSpacing: "-0.5px" }}>
+                🚒 Hydrant Inspection Dashboard
+              </h1>
+              <p style={{ margin: 0, color: "#e3f2fd", fontSize: "14px", fontWeight: "400" }}>
+                Monthly inspection schedule and maintenance records
+              </p>
+            </div>
           </div>
         </div>
 
@@ -357,6 +356,7 @@ export function GaInspeksiHydrantContent() {
           </div>
         </div>
 
+        {/* Table */}
         <div style={{
           background: "white",
           borderRadius: "8px",
@@ -378,30 +378,45 @@ export function GaInspeksiHydrantContent() {
               </thead>
               <tbody>
                 {filteredData.map((area, idx) => {
-                  const key = `e-checksheet-hydrant-${area.no}`;
-                  const saved = typeof window !== "undefined" ? localStorage.getItem(key) : null;
+                  const parts = area.name.split(' • ');
+                  const zona = area.location || '';
+                  let jenisHydrant = 'HYDRANT INDOOR';
+
+                  if (area.no >= 27 && area.no <= 33) {
+                    jenisHydrant = 'HYDRANT PILLAR';
+                  } else if (area.no === 36) {
+                    jenisHydrant = 'HYDRANT OUTDOOR';
+                  }
+                  
                   let statusLabel = "No Data";
                   let statusColor = "#757575";
                   let lastCheck = "-";
 
-                  if (saved) {
+                  // ✅ Cek status dari API
+                  const checkStatus = async () => {
                     try {
-                      const data = JSON.parse(saved);
-                      if (Array.isArray(data) && data.length > 0) {
-                        const latest = data[0].date;
-                        lastCheck = new Date(latest).toLocaleDateString("en-US", { month: "short", day: "numeric" });
+                      const dates = await getAvailableDates(TYPE_SLUG, area.id);
+                      
+                      if (dates.length > 0) {
+                        const latest = dates.sort().pop();
+                        lastCheck = new Date(latest!).toLocaleDateString("en-US", { day: "numeric", month: "short" });
                         statusLabel = "Checked";
                         statusColor = "#43a047";
                       }
-                    } catch {}
-                  }
+                    } catch (error) {
+                      console.error("Error checking status:", error);
+                    }
+                  };
+
+                  // Panggil checkStatus
+                  checkStatus();
 
                   return (
-                    <tr key={area.no} style={{ borderBottom: idx === filteredData.length - 1 ? "none" : "1px solid #f0f0f0" }}>
+                    <tr key={area.id} style={{ borderBottom: idx === filteredData.length - 1 ? "none" : "1px solid #f0f0f0" }}>
                       <td style={{ padding: "14px 16px", textAlign: "center", fontWeight: "600", color: "#1976d2" }}>{area.no}</td>
-                      <td style={{ padding: "14px 16px", fontWeight: "500", color: "#424242" }}>{area.lokasi}</td>
-                      <td style={{ padding: "14px 16px", textAlign: "center", fontWeight: "600", color: "#616161" }}>{area.zona}</td>
-                      <td style={{ padding: "14px 16px", textAlign: "center", fontWeight: "600", color: "#616161" }}>{area.jenisHydrant}</td>
+                      <td style={{ padding: "14px 16px", fontWeight: "500", color: "#424242" }}>{parts[0]}</td>
+                      <td style={{ padding: "14px 16px", textAlign: "center", fontWeight: "600", color: "#616161" }}>{zona}</td>
+                      <td style={{ padding: "14px 16px", textAlign: "center", fontWeight: "600", color: "#616161" }}>{jenisHydrant}</td>
                       <td style={{ padding: "14px 16px", textAlign: "center" }}>
                         <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "4px" }}>
                           <span style={{
@@ -436,7 +451,7 @@ export function GaInspeksiHydrantContent() {
                             View
                           </button>
                           <a
-                            href={`/e-checksheet-hydrant?no=${area.no}&lokasi=${encodeURIComponent(area.lokasi)}&zona=${encodeURIComponent(area.zona)}&jenisHydrant=${encodeURIComponent(area.jenisHydrant)}`}
+                            href={`/e-checksheet-hydrant?no=${area.no}&lokasi=${encodeURIComponent(parts[0])}&zona=${encodeURIComponent(zona)}&jenisHydrant=${encodeURIComponent(jenisHydrant)}`}
                             style={{
                               padding: "7px 14px",
                               borderRadius: "5px",
@@ -505,7 +520,7 @@ export function GaInspeksiHydrantContent() {
                     Inspection History - Unit #{selectedArea.no}
                   </h2>
                   <p style={{ margin: "0", color: "#616161", fontSize: "14px" }}>
-                    {selectedArea.lokasi} • {selectedArea.zona} • {selectedArea.jenisHydrant}
+                    {selectedArea.name}
                   </p>
                 </div>
                 <button 
@@ -564,23 +579,7 @@ export function GaInspeksiHydrantContent() {
                 ) : (
                   <div style={{ overflowX: "auto" }}>
                     {(() => {
-                      if (!selectedArea) return null;
-
-                      let entry: ChecksheetEntry | null = null;
-                      try {
-                        const key = `e-checksheet-hydrant-${selectedArea.no}`;
-                        const saved = localStorage.getItem(key);
-                        if (saved) {
-                          const data: ChecksheetEntry[] = JSON.parse(saved);
-                          if (Array.isArray(data)) {
-                            entry = data.find((e) => e.date === selectedDateInModal) || null;
-                          }
-                        }
-                      } catch (e) {
-                        console.warn("Failed to load inspection data for modal", e);
-                      }
-
-                      if (!entry) {
+                      if (!checksheetData) {
                         return <div style={{ textAlign: "center", padding: "40px", color: "#9e9e9e" }}>No data found for this date</div>;
                       }
 
@@ -589,8 +588,8 @@ export function GaInspeksiHydrantContent() {
                           <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "12px", minWidth: "1600px", border: "1px solid #e0e0e0", background: "white" }}>
                             <thead>
                               <tr style={{ background: "#f5f5f5" }}>
-                                {ITEM_LABELS.map((label: string, i: number) => (
-                                  <th key={i} style={{
+                                {Array.from({ length: 20 }, (_, i) => i + 1).map((num) => (
+                                  <th key={num} style={{
                                     padding: "8px",
                                     border: "1px solid #e0e0e0",
                                     fontWeight: "600",
@@ -601,7 +600,7 @@ export function GaInspeksiHydrantContent() {
                                     wordWrap: "break-word",
                                     lineHeight: "1.2"
                                   }}>
-                                    {label}
+                                    {num}
                                   </th>
                                 ))}
                                 <th style={{ padding: "8px", border: "1px solid #e0e0e0", fontWeight: "600", color: "#424242", textAlign: "center", fontSize: "11px" }}>Findings</th>
@@ -613,9 +612,10 @@ export function GaInspeksiHydrantContent() {
                             </thead>
                             <tbody>
                               <tr>
-                                {[...Array(20)].map((_, i) => {
-                                  const key = `item${i + 1}` as keyof ChecksheetEntry;
-                                  const value = entry![key] || "-";
+                                {Array.from({ length: 20 }, (_, i) => {
+                                  const itemKey = `item${i + 1}`;
+                                  const entry = checksheetData[itemKey];
+                                  const value = entry?.hasilPemeriksaan || "-";
                                   return (
                                     <td key={i} style={{
                                       padding: "8px",
@@ -630,25 +630,33 @@ export function GaInspeksiHydrantContent() {
                                     </td>
                                   );
                                 })}
-                                <td style={{ padding: "8px", border: "1px solid #e0e0e0", lineHeight: "1.4", fontSize: "11px" }}>{entry.keteranganKondisi || "-"}</td>
-                                <td style={{ padding: "8px", border: "1px solid #e0e0e0", lineHeight: "1.4", fontSize: "11px" }}>{entry.tindakanPerbaikan || "-"}</td>
-                                <td style={{ padding: "8px", border: "1px solid #e0e0e0", textAlign: "center", fontSize: "11px" }}>{entry.pic || "-"}</td>
-                                <td style={{ padding: "8px", border: "1px solid #e0e0e0", textAlign: "center", fontSize: "11px" }}>
-                                  {entry.dueDate ? new Date(entry.dueDate).toLocaleDateString("en-US", { day: "2-digit", month: "short" }) : "-"}
+                                <td style={{ padding: "8px", border: "1px solid #e0e0e0", lineHeight: "1.4", fontSize: "11px" }}>
+                                  {checksheetData.item1?.keteranganTemuan || "-"}
                                 </td>
-                                <td style={{ padding: "8px", border: "1px solid #e0e0e0", textAlign: "center", fontSize: "11px" }}>{entry.verify || "-"}</td>
+                                <td style={{ padding: "8px", border: "1px solid #e0e0e0", lineHeight: "1.4", fontSize: "11px" }}>
+                                  {checksheetData.item1?.tindakanPerbaikan || "-"}
+                                </td>
+                                <td style={{ padding: "8px", border: "1px solid #e0e0e0", textAlign: "center", fontSize: "11px" }}>
+                                  {checksheetData.item1?.pic || "-"}
+                                </td>
+                                <td style={{ padding: "8px", border: "1px solid #e0e0e0", textAlign: "center", fontSize: "11px" }}>
+                                  {checksheetData.item1?.dueDate ? new Date(checksheetData.item1.dueDate).toLocaleDateString("en-US", { day: "2-digit", month: "short" }) : "-"}
+                                </td>
+                                <td style={{ padding: "8px", border: "1px solid #e0e0e0", textAlign: "center", fontSize: "11px" }}>
+                                  {checksheetData.item1?.verify || "-"}
+                                </td>
                               </tr>
                             </tbody>
                           </table>
                           
                           {/* ✅ TAMPILKAN FOTO DOKUMENTASI DI SINI */}
-                          {entry.imageUrls && entry.imageUrls.length > 0 && (
+                          {checksheetData.item1?.images && checksheetData.item1.images.length > 0 && (
                             <div style={{ marginTop: "24px" }}>
                               <h3 style={{ margin: "0 0 12px 0", fontSize: "14px", fontWeight: "600", color: "#212121" }}>
-                                📸 Documentation Photos ({entry.imageUrls.length})
+                                📸 Documentation Photos ({checksheetData.item1.images.length})
                               </h3>
                               <div style={{ display: "flex", flexWrap: "wrap", gap: "12px", justifyContent: "flex-start" }}>
-                                {entry.imageUrls.map((imgUrl, idx) => (
+                                {checksheetData.item1.images.map((imgUrl: string, idx: number) => (
                                   <div key={idx} style={{ width: "120px", height: "120px", overflow: "hidden", borderRadius: "6px", border: "1px solid #ddd" }}>
                                     <img
                                       src={imgUrl}
@@ -669,7 +677,9 @@ export function GaInspeksiHydrantContent() {
 
                           <div style={{ marginTop: "20px", padding: "12px", background: "#f9f9f9", borderRadius: "6px", border: "1px solid #e0e0e0" }}>
                             <p style={{ margin: "0 0 4px 0", fontSize: "11px", color: "#757575" }}>Inspector</p>
-                            <p style={{ margin: "0", fontSize: "13px", fontWeight: "500", color: "#424242" }}>{entry.inspector || "N/A"}</p>
+                            <p style={{ margin: "0", fontSize: "13px", fontWeight: "500", color: "#424242" }}>
+                              {checksheetData.item1?.inspector || "N/A"}
+                            </p>
                           </div>
                         </div>
                       );
@@ -766,6 +776,43 @@ export function GaInspeksiHydrantContent() {
               >
                 Cancel
               </button>
+            </div>
+          </div>
+        )}
+
+        {/* Modal Popup Gambar Dokumentasi */}
+        {showImageModal && (
+          <div
+            onClick={closeImageModal}
+            style={{
+              position: "fixed",
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              background: "rgba(0,0,0,0.8)",
+              display: "flex",
+              justifyContent: "center",
+              alignItems: "center",
+              zIndex: 2000,
+              padding: "20px"
+            }}
+          >
+            <div onClick={(e) => e.stopPropagation()} style={{ textAlign: "center" }}>
+              <img
+                src={currentImageUrl}
+                alt="Dokumentasi"
+                style={{
+                  maxHeight: "90vh",
+                  maxWidth: "90vw",
+                  objectFit: "contain",
+                  borderRadius: "8px",
+                  border: "3px solid white"
+                }}
+              />
+              <div style={{ marginTop: "16px", color: "white", fontSize: "14px" }}>
+                Click outside to close
+              </div>
             </div>
           </div>
         )}

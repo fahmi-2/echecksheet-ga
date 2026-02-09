@@ -1,11 +1,11 @@
-// app/status-ga/selang-hydrant/GaSelangHydrantContent.tsx
+// app/status-ga/inspeksi-hydrant/GaInspeksiHydrantContent.tsx
 "use client";
 import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
 import { Sidebar } from "@/components/Sidebar";
 import QrScanner from 'qr-scanner';
-import { ArrowLeft } from "lucide-react";
+// ✅ Import API helper yang reusable
 import { getAreasByType, getAvailableDates, getChecklistByDate } from "@/lib/api/checksheet";
 
 interface Area {
@@ -15,18 +15,17 @@ interface Area {
   location: string;
 }
 
-export function GaSelangHydrantContent({ openArea }: { openArea: string }) {
+export function GaInspeksiHydrantContent() {
   const router = useRouter();
   const { user, loading } = useAuth();
   
   // ✅ Hardcode type slug untuk page ini
-  const TYPE_SLUG = 'selang-hydrant';
+  const TYPE_SLUG = 'inspeksi-hydrant';
   
   const [isMounted, setIsMounted] = useState(false);
   const [showModal, setShowModal] = useState(false);
+  const [selectedCategory, setSelectedCategory] = useState("HYDRANT INDOOR");
   const [searchTerm, setSearchTerm] = useState("");
-  const [showImageModal, setShowImageModal] = useState(false);
-  const [currentImageUrl, setCurrentImageUrl] = useState("");
   const [areas, setAreas] = useState<Area[]>([]);
   const [selectedArea, setSelectedArea] = useState<Area | null>(null);
   const [checksheetData, setChecksheetData] = useState<any | null>(null);
@@ -36,6 +35,8 @@ export function GaSelangHydrantContent({ openArea }: { openArea: string }) {
   
   // QR Scanner state
   const [isScanning, setIsScanning] = useState(false);
+  const [showImageModal, setShowImageModal] = useState(false);
+  const [currentImageUrl, setCurrentImageUrl] = useState("");
   const videoRef = useRef<HTMLVideoElement>(null);
   const qrScannerRef = useRef<QrScanner | null>(null);
 
@@ -62,20 +63,6 @@ export function GaSelangHydrantContent({ openArea }: { openArea: string }) {
       router.push("/login-page");
     }
   }, [user, loading, router]);
-
-  useEffect(() => {
-    if (!isMounted || loading) return;
-    if (!openArea) return;
-    
-    const found = areas.find((item) => {
-      const parts = item.name.split(' • ');
-      return parts[0] === openArea;
-    });
-    
-    if (found) {
-      setTimeout(() => openDetail(found), 50);
-    }
-  }, [isMounted, loading, openArea, areas]);
 
   // ✅ Open detail dengan load data dari API
   const openDetail = async (area: Area) => {
@@ -127,7 +114,7 @@ export function GaSelangHydrantContent({ openArea }: { openArea: string }) {
         const data = await getChecklistByDate(TYPE_SLUG, selectedArea.id, selectedDateInModal);
         setChecksheetData(data);
       } catch (error) {
-        console.error("Error loading checklist ", error);
+        console.error("Error loading checklist data:", error);
         setChecksheetData(null);
       } finally {
         setIsLoading(false);
@@ -137,19 +124,17 @@ export function GaSelangHydrantContent({ openArea }: { openArea: string }) {
     loadData();
   }, [selectedDateInModal, selectedArea, showModal]);
 
-  // Filter data berdasarkan search
+  // Filter data berdasarkan kategori dan search
   const filteredData = areas.filter(item => {
+    // Cari zona dan jenis hydrant dari nama area (format: "LOKASI • ZONA • JENIS")
     const parts = item.name.split(' • ');
-    const lokasi = parts[0] || '';
     const zona = parts[1] || '';
     const jenisHydrant = parts[2] || '';
-    const pic = parts[3] || '';
     
     return (
-      lokasi.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      zona.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      jenisHydrant.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      pic.toLowerCase().includes(searchTerm.toLowerCase())
+      jenisHydrant === selectedCategory &&
+      (item.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+       zona.toLowerCase().includes(searchTerm.toLowerCase()))
     );
   });
 
@@ -195,18 +180,18 @@ export function GaSelangHydrantContent({ openArea }: { openArea: string }) {
 
         if (urlStr.startsWith('http')) {
           const url = new URL(urlStr);
-          if (url.pathname === '/e-checksheet-slg-hydrant') {
+          if (url.pathname === '/e-checksheet-hydrant') {
             router.push(urlStr);
             return;
           }
         }
 
-        if (urlStr.startsWith('/e-checksheet-slg-hydrant?')) {
+        if (urlStr.startsWith('/e-checksheet-hydrant?')) {
           router.push(urlStr);
           return;
         }
 
-        alert("Invalid QR code. Please scan a valid selang hydrant inspection QR.");
+        alert("Invalid QR code. Please scan a valid hydrant inspection QR.");
       } catch (err) {
         alert("Invalid QR format.");
       }
@@ -244,35 +229,27 @@ export function GaSelangHydrantContent({ openArea }: { openArea: string }) {
   }
 
   return (
-    <div style={{ minHeight: "100vh", background: "#f8f9fa" }}>
+    <div style={{ minHeight: "100vh", background: "#f7f9fc" }}>
       <Sidebar userName={user.fullName} />
-      <div style={{
-        paddingLeft: "96px",
-        paddingRight: "20px",
-        paddingTop: "24px",
-        paddingBottom: "24px",
-        maxWidth: "1400px",
-        margin: "0 auto"
-      }}>
+      <div style={{ paddingLeft: "96px", paddingRight: "20px", paddingTop: "24px", paddingBottom: "24px", maxWidth: "1400px", margin: "0 auto" }}>
         {/* Header */}
-        <div style={{ marginBottom: "28px" }} className="header">
-          <button 
-            onClick={() => router.push("/status-ga")}
-            className="btn-back"
-          >
-            <ArrowLeft size={18}/> Kembali
-          </button>
-          <div className="text-header">
+        <div style={{ marginBottom: "28px" }}>
+          <div style={{
+            background: "#1976d2",
+            borderRadius: "8px",
+            padding: "24px 28px",
+            boxShadow: "0 2px 8px rgba(0,0,0,0.1)"
+          }}>
             <h1 style={{ margin: "0 0 6px 0", color: "white", fontSize: "26px", fontWeight: "600", letterSpacing: "-0.5px" }}>
-              🚒 Selang Hydrant Inspection Dashboard
+              🚒 Hydrant Inspection Dashboard
             </h1>
             <p style={{ margin: 0, color: "#e3f2fd", fontSize: "14px", fontWeight: "400" }}>
-              Bi-monthly inspection schedule and maintenance records
+              Monthly inspection schedule and maintenance records
             </p>
           </div>
         </div>
 
-        {/* Search + QR Scan */}
+        {/* Dropdown + Search */}
         <div style={{
           background: "white",
           borderRadius: "8px",
@@ -280,51 +257,85 @@ export function GaSelangHydrantContent({ openArea }: { openArea: string }) {
           marginBottom: "24px",
           boxShadow: "0 1px 3px rgba(0,0,0,0.08)",
           border: "1px solid #e0e0e0",
-          position: "relative"
+          display: "flex",
+          gap: "16px",
+          flexWrap: "wrap",
+          alignItems: "flex-end"
         }}>
-          <div style={{ position: "relative" }}>
-            <input
-              type="text"
-              placeholder="Cari zona, jenis, lokasi, atau PIC..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
+          <div style={{ flex: 1, minWidth: "200px" }}>
+            <label htmlFor="category-select" style={{ display: "block", marginBottom: "6px", fontSize: "14px", fontWeight: "500", color: "#424242" }}>
+              Hydrant Type:
+            </label>
+            <select
+              id="category-select"
+              value={selectedCategory}
+              onChange={(e) => setSelectedCategory(e.target.value)}
               style={{
-                padding: "10px 40px 10px 16px",
-                border: "1px solid #1976d2",
+                width: "100%",
+                padding: "10px 16px",
+                border: "1px solid #d0d0d0",
                 borderRadius: "6px",
                 fontSize: "14px",
                 color: "#333",
-                width: "100%",
-                outline: "none"
+                outline: "none",
+                fontFamily: "inherit"
               }}
-            />
-            {/* QR Scan Button inside input */}
-            <button
-              type="button"
-              onClick={openQrScanner}
-              style={{
-                position: "absolute",
-                right: "10px",
-                top: "50%",
-                transform: "translateY(-50%)",
-                background: "transparent",
-                border: "none",
-                cursor: "pointer",
-                padding: "4px",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center"
-              }}
-              title="Scan QR Code"
             >
-              <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#1976d2" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
-                <path d="M7 7h.01"></path>
-                <path d="M17 7h.01"></path>
-                <path d="M17 17h.01"></path>
-                <path d="M7 17h.01"></path>
-              </svg>
-            </button>
+              <option value="HYDRANT INDOOR">HYDRANT INDOOR</option>
+              <option value="HYDRANT PILLAR">HYDRANT PILLAR</option>
+              <option value="HYDRANT OUTDOOR">HYDRANT OUTDOOR</option>
+            </select>
+          </div>
+
+          <div style={{ flex: 1, minWidth: "200px", position: "relative" }}>
+            <label htmlFor="search-input" style={{ display: "block", marginBottom: "6px", fontSize: "14px", fontWeight: "500", color: "#424242" }}>
+              Search Location or Zone:
+            </label>
+            <div style={{ position: "relative" }}>
+              <input
+                id="search-input"
+                type="text"
+                placeholder="e.g. KANTIN, BARAT..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                style={{
+                  width: "100%",
+                  padding: "10px 40px 10px 16px",
+                  border: "1px solid #d0d0d0",
+                  borderRadius: "6px",
+                  fontSize: "14px",
+                  color: "#333",
+                  outline: "none",
+                  fontFamily: "inherit"
+                }}
+              />
+              <button
+                type="button"
+                onClick={openQrScanner}
+                style={{
+                  position: "absolute",
+                  right: "8px",
+                  top: "50%",
+                  transform: "translateY(-50%)",
+                  background: "transparent",
+                  border: "none",
+                  cursor: "pointer",
+                  padding: "4px",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center"
+                }}
+                title="Scan QR Code"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#1976d2" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+                  <path d="M7 7h.01"></path>
+                  <path d="M17 7h.01"></path>
+                  <path d="M17 17h.01"></path>
+                  <path d="M7 17h.01"></path>
+                </svg>
+              </button>
+            </div>
           </div>
         </div>
 
@@ -337,26 +348,23 @@ export function GaSelangHydrantContent({ openArea }: { openArea: string }) {
           border: "1px solid #e0e0e0"
         }}>
           <div style={{ overflowX: "auto" }}>
-            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "14px", minWidth: "900px" }}>
+            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "14px", minWidth: "700px" }}>
               <thead>
                 <tr style={{ borderBottom: "2px solid #e0e0e0" }}>
                   <th style={{ padding: "14px 16px", textAlign: "center", background: "#fafafa", fontWeight: "600", color: "#424242", fontSize: "13px" }}>No</th>
-                  <th style={{ padding: "14px 16px", textAlign: "left", background: "#fafafa", fontWeight: "600", color: "#424242", fontSize: "13px" }}>Zona</th>
-                  <th style={{ padding: "14px 16px", textAlign: "left", background: "#fafafa", fontWeight: "600", color: "#424242", fontSize: "13px" }}>Jenis Hydrant</th>
-                  <th style={{ padding: "14px 16px", textAlign: "left", background: "#fafafa", fontWeight: "600", color: "#424242", fontSize: "13px" }}>Lokasi</th>
-                  <th style={{ padding: "14px 16px", textAlign: "center", background: "#fafafa", fontWeight: "600", color: "#424242", fontSize: "13px" }}>PIC</th>
+                  <th style={{ padding: "14px 16px", textAlign: "left", background: "#fafafa", fontWeight: "600", color: "#424242", fontSize: "13px" }}>Location</th>
+                  <th style={{ padding: "14px 16px", textAlign: "center", background: "#fafafa", fontWeight: "600", color: "#424242", fontSize: "13px" }}>Zone</th>
+                  <th style={{ padding: "14px 16px", textAlign: "center", background: "#fafafa", fontWeight: "600", color: "#424242", fontSize: "13px" }}>Type</th>
                   <th style={{ padding: "14px 16px", textAlign: "center", background: "#fafafa", fontWeight: "600", color: "#424242", fontSize: "13px" }}>Status</th>
                   <th style={{ padding: "14px 16px", textAlign: "center", background: "#fafafa", fontWeight: "600", color: "#424242", fontSize: "13px" }}>Actions</th>
                 </tr>
               </thead>
               <tbody>
                 {filteredData.map((area, idx) => {
-                  // Extract data from name field
-                  const parts = area.name.split(' \u0007 ');
-                  const lokasi = parts[0] || '';
+                  // Extract zona and jenis from area name
+                  const parts = area.name.split(' • ');
                   const zona = parts[1] || '';
                   const jenisHydrant = parts[2] || '';
-                  const pic = parts[3] || '';
                   
                   let statusLabel = "No Data";
                   let statusColor = "#757575";
@@ -384,21 +392,9 @@ export function GaSelangHydrantContent({ openArea }: { openArea: string }) {
                   return (
                     <tr key={area.id} style={{ borderBottom: idx === filteredData.length - 1 ? "none" : "1px solid #f0f0f0" }}>
                       <td style={{ padding: "14px 16px", textAlign: "center", fontWeight: "600", color: "#1976d2" }}>{area.no}</td>
-                      <td style={{ padding: "14px 16px", fontWeight: "500", color: "#424242" }}>{zona}</td>
-                      <td style={{ padding: "14px 16px", color: "#666", fontSize: "13px" }}>
-                        <span style={{
-                          padding: "4px 8px",
-                          background: "#e3f2fd",
-                          color: "#0d47a1",
-                          borderRadius: "4px",
-                          fontSize: "11px",
-                          fontWeight: "600"
-                        }}>
-                          {jenisHydrant}
-                        </span>
-                      </td>
-                      <td style={{ padding: "14px 16px", color: "#666" }}>{lokasi}</td>
-                      <td style={{ padding: "14px 16px", textAlign: "center", fontWeight: "600", color: "#333" }}>{pic}</td>
+                      <td style={{ padding: "14px 16px", fontWeight: "500", color: "#424242" }}>{parts[0]}</td>
+                      <td style={{ padding: "14px 16px", textAlign: "center", fontWeight: "600", color: "#616161" }}>{zona}</td>
+                      <td style={{ padding: "14px 16px", textAlign: "center", fontWeight: "600", color: "#616161" }}>{jenisHydrant}</td>
                       <td style={{ padding: "14px 16px", textAlign: "center" }}>
                         <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "4px" }}>
                           <span style={{
@@ -433,7 +429,7 @@ export function GaSelangHydrantContent({ openArea }: { openArea: string }) {
                             View
                           </button>
                           <a
-                            href={`/e-checksheet-slg-hydrant?lokasi=${encodeURIComponent(lokasi)}&zona=${encodeURIComponent(zona)}&jenisHydrant=${encodeURIComponent(jenisHydrant)}&pic=${encodeURIComponent(pic)}`}
+                            href={`/e-checksheet-hydrant?no=${area.no}&lokasi=${encodeURIComponent(parts[0])}&zona=${encodeURIComponent(zona)}&jenisHydrant=${encodeURIComponent(jenisHydrant)}`}
                             style={{
                               padding: "7px 14px",
                               borderRadius: "5px",
@@ -565,81 +561,80 @@ export function GaSelangHydrantContent({ openArea }: { openArea: string }) {
                         return <div style={{ textAlign: "center", padding: "40px", color: "#9e9e9e" }}>No data found for this date</div>;
                       }
 
-                      // Static inspection items untuk display
-                      const inspectionItems = [
-                        { key: "pressureTank", label: "PRESSURE TANK (STD : 7 kg/cm2)" },
-                        { key: "hasilTekananDgPitot", label: "HASIL TEKANAN DG PITOT (STD : titik terjauh min. 4.5 kg/cm2)" },
-                        { key: "tekananEnginePump", label: "TEKANAN ENGINE PUMP" },
-                        { key: "fireHose", label: "FIRE HOSE / SELANG" },
-                        { key: "valve", label: "VALVE (TIDAK SERET)" },
-                        { key: "couplingNozzle", label: "COUPLING NOZZLE" },
-                        { key: "couplingHydrant", label: "COUPLING HYDRANT" },
-                        { key: "seal", label: "SEAL" },
-                      ];
-
                       return (
                         <div>
-                          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "12px", minWidth: "1200px", border: "1px solid #e0e0e0", background: "white" }}>
+                          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "12px", minWidth: "1600px", border: "1px solid #e0e0e0", background: "white" }}>
                             <thead>
                               <tr style={{ background: "#f5f5f5" }}>
-                                <th style={{ padding: "10px", border: "1px solid #e0e0e0", fontWeight: "600", color: "#424242", textAlign: "center", width: "50px" }}>No</th>
-                                <th style={{ padding: "10px", border: "1px solid #e0e0e0", fontWeight: "600", color: "#424242", textAlign: "left", minWidth: "250px" }}>ITEM</th>
-                                <th style={{ padding: "10px", border: "1px solid #e0e0e0", fontWeight: "600", color: "#424242", textAlign: "center", width: "100px" }}>HASIL</th>
-                                <th style={{ padding: "10px", border: "1px solid #e0e0e0", fontWeight: "600", color: "#424242", textAlign: "center", minWidth: "180px" }}>KETERANGAN N-OK</th>
-                                <th style={{ padding: "10px", border: "1px solid #e0e0e0", fontWeight: "600", color: "#424242", textAlign: "center", minWidth: "180px" }}>TINDAKAN PERBAIKAN</th>
-                                <th style={{ padding: "10px", border: "1px solid #e0e0e0", fontWeight: "600", color: "#424242", textAlign: "center", width: "80px" }}>PIC</th>
-                                <th style={{ padding: "10px", border: "1px solid #e0e0e0", fontWeight: "600", color: "#424242", textAlign: "center", width: "100px" }}>DUE DATE</th>
-                                <th style={{ padding: "10px", border: "1px solid #e0e0e0", fontWeight: "600", color: "#424242", textAlign: "center", width: "80px" }}>VERIFY</th>
+                                {Array.from({ length: 20 }, (_, i) => i + 1).map((num) => (
+                                  <th key={num} style={{
+                                    padding: "8px",
+                                    border: "1px solid #e0e0e0",
+                                    fontWeight: "600",
+                                    color: "#424242",
+                                    textAlign: "center",
+                                    fontSize: "11px",
+                                    minWidth: "100px",
+                                    wordWrap: "break-word",
+                                    lineHeight: "1.2"
+                                  }}>
+                                    {num}
+                                  </th>
+                                ))}
+                                <th style={{ padding: "8px", border: "1px solid #e0e0e0", fontWeight: "600", color: "#424242", textAlign: "center", fontSize: "11px" }}>Findings</th>
+                                <th style={{ padding: "8px", border: "1px solid #e0e0e0", fontWeight: "600", color: "#424242", textAlign: "center", fontSize: "11px" }}>Corrective Action</th>
+                                <th style={{ padding: "8px", border: "1px solid #e0e0e0", fontWeight: "600", color: "#424242", textAlign: "center", fontSize: "11px" }}>PIC</th>
+                                <th style={{ padding: "8px", border: "1px solid #e0e0e0", fontWeight: "600", color: "#424242", textAlign: "center", fontSize: "11px" }}>Due Date</th>
+                                <th style={{ padding: "8px", border: "1px solid #e0e0e0", fontWeight: "600", color: "#424242", textAlign: "center", fontSize: "11px" }}>Verify</th>
                               </tr>
                             </thead>
                             <tbody>
-                              {inspectionItems.map((item, index) => {
-                                const entry = checksheetData[item.key];
-                                const value = entry?.hasilPemeriksaan || "-";
-                                return (
-                                  <tr key={item.key}>
-                                    <td style={{ padding: "8px", border: "1px solid #e0e0e0", textAlign: "center", fontWeight: "600" }}>{index + 1}</td>
-                                    <td style={{ padding: "8px", border: "1px solid #e0e0e0", lineHeight: "1.4" }}>{item.label}</td>
-                                    <td style={{
+                              <tr>
+                                {Array.from({ length: 20 }, (_, i) => {
+                                  const itemKey = `item${i + 1}`;
+                                  const entry = checksheetData[itemKey];
+                                  const value = entry?.hasilPemeriksaan || "-";
+                                  return (
+                                    <td key={i} style={{
                                       padding: "8px",
                                       border: "1px solid #e0e0e0",
                                       textAlign: "center",
-                                      fontWeight: "700",
+                                      fontWeight: "600",
                                       background: value === "OK" ? "#e8f5e9" : value === "NG" ? "#ffebee" : "#fff",
                                       color: value === "OK" ? "#2e7d32" : value === "NG" ? "#c62828" : "#757575",
                                       fontSize: "11px"
                                     }}>
-                                      {value === "OK" ? "✓ OK" : value === "NG" ? "✗ NG" : "-"}
+                                      {value}
                                     </td>
-                                    <td style={{ padding: "8px", border: "1px solid #e0e0e0", lineHeight: "1.4", fontSize: "11px" }}>
-                                      {entry?.keteranganTemuan || "-"}
-                                    </td>
-                                    <td style={{ padding: "8px", border: "1px solid #e0e0e0", lineHeight: "1.4", fontSize: "11px" }}>
-                                      {entry?.tindakanPerbaikan || "-"}
-                                    </td>
-                                    <td style={{ padding: "8px", border: "1px solid #e0e0e0", textAlign: "center", fontSize: "11px" }}>
-                                      {entry?.pic || "-"}
-                                    </td>
-                                    <td style={{ padding: "8px", border: "1px solid #e0e0e0", textAlign: "center", fontSize: "11px" }}>
-                                      {entry?.dueDate ? new Date(entry.dueDate).toLocaleDateString("en-US", { day: "2-digit", month: "short" }) : "-"}
-                                    </td>
-                                    <td style={{ padding: "8px", border: "1px solid #e0e0e0", textAlign: "center", fontSize: "11px" }}>
-                                      {entry?.verify || "-"}
-                                    </td>
-                                  </tr>
-                                );
-                              })}
+                                  );
+                                })}
+                                <td style={{ padding: "8px", border: "1px solid #e0e0e0", lineHeight: "1.4", fontSize: "11px" }}>
+                                  {checksheetData.item1?.keteranganTemuan || "-"}
+                                </td>
+                                <td style={{ padding: "8px", border: "1px solid #e0e0e0", lineHeight: "1.4", fontSize: "11px" }}>
+                                  {checksheetData.item1?.tindakanPerbaikan || "-"}
+                                </td>
+                                <td style={{ padding: "8px", border: "1px solid #e0e0e0", textAlign: "center", fontSize: "11px" }}>
+                                  {checksheetData.item1?.pic || "-"}
+                                </td>
+                                <td style={{ padding: "8px", border: "1px solid #e0e0e0", textAlign: "center", fontSize: "11px" }}>
+                                  {checksheetData.item1?.dueDate ? new Date(checksheetData.item1.dueDate).toLocaleDateString("en-US", { day: "2-digit", month: "short" }) : "-"}
+                                </td>
+                                <td style={{ padding: "8px", border: "1px solid #e0e0e0", textAlign: "center", fontSize: "11px" }}>
+                                  {checksheetData.item1?.verify || "-"}
+                                </td>
+                              </tr>
                             </tbody>
                           </table>
                           
                           {/* ✅ TAMPILKAN FOTO DOKUMENTASI DI SINI */}
-                          {checksheetData.pressureTank?.images && checksheetData.pressureTank.images.length > 0 && (
+                          {checksheetData.item1?.images && checksheetData.item1.images.length > 0 && (
                             <div style={{ marginTop: "24px" }}>
                               <h3 style={{ margin: "0 0 12px 0", fontSize: "14px", fontWeight: "600", color: "#212121" }}>
-                                📸 Documentation Photos ({checksheetData.pressureTank.images.length})
+                                📸 Documentation Photos ({checksheetData.item1.images.length})
                               </h3>
                               <div style={{ display: "flex", flexWrap: "wrap", gap: "12px", justifyContent: "flex-start" }}>
-                                {checksheetData.pressureTank.images.map((imgUrl: string, idx: number) => (
+                                {checksheetData.item1.images.map((imgUrl: string, idx: number) => (
                                   <div key={idx} style={{ width: "120px", height: "120px", overflow: "hidden", borderRadius: "6px", border: "1px solid #ddd" }}>
                                     <img
                                       src={imgUrl}
@@ -661,7 +656,7 @@ export function GaSelangHydrantContent({ openArea }: { openArea: string }) {
                           <div style={{ marginTop: "20px", padding: "12px", background: "#f9f9f9", borderRadius: "6px", border: "1px solid #e0e0e0" }}>
                             <p style={{ margin: "0 0 4px 0", fontSize: "11px", color: "#757575" }}>Inspector</p>
                             <p style={{ margin: "0", fontSize: "13px", fontWeight: "500", color: "#424242" }}>
-                              {checksheetData.pressureTank?.inspector || "N/A"}
+                              {checksheetData.item1?.inspector || "N/A"}
                             </p>
                           </div>
                         </div>
@@ -726,7 +721,7 @@ export function GaSelangHydrantContent({ openArea }: { openArea: string }) {
                 width: "100%",
               }}
             >
-              <h3 style={{ margin: "0 0 12px 0", color: "#212121" }}>Scan Selang Hydrant QR Code</h3>
+              <h3 style={{ margin: "0 0 12px 0", color: "#212121" }}>Scan Hydrant QR Code</h3>
               <video
                 ref={videoRef}
                 style={{
@@ -737,7 +732,7 @@ export function GaSelangHydrantContent({ openArea }: { openArea: string }) {
                 }}
               />
               <p style={{ fontSize: "13px", color: "#666", marginTop: "12px" }}>
-                Point your camera at the QR code on the selang hydrant
+                Point your camera at the QR code on the hydrant
               </p>
               <button
                 onClick={() => {

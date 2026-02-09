@@ -3,7 +3,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import type { LucideIcon } from "lucide-react"; // ✅ Tipe spesifik
+import type { LucideIcon } from "lucide-react";
 import {
   BarChart2,
   FileText,
@@ -18,7 +18,7 @@ import { useAuth } from "@/lib/auth-context";
 
 interface CardData {
   id: string;
-  icon: LucideIcon; // ✅ Ganti 'any' dengan tipe yang benar
+  icon: LucideIcon;
   title: string;
   description: string;
   gradient: string;
@@ -33,42 +33,35 @@ interface ActivityItem {
 }
 
 export default function ModernHomePage() {
-  const { user, loading } = useAuth(); // ✅ Ambil status loading
+  // ✅ SEMUA HOOKS DIPANGGIL PERTAMA KALI, TANPA KONDISI
+  const { user, loading } = useAuth();
   const [activities, setActivities] = useState<ActivityItem[]>([]);
+  const [isMounted, setIsMounted] = useState(false);
 
-  // Handle loading & auth
-  if (loading) {
-    return (
-      <div className="modern-home-page">
-        <Sidebar userName="Loading..." />
-        <main className="main-content">
-          <div style={{ padding: "40px", textAlign: "center", color: "#64748b" }}>
-            Memuat data...
-          </div>
-        </main>
-      </div>
-    );
-  }
-
-  if (!user) {
-    return null; // atau redirect ke login
-  }
-
-  const userName = user.fullName || "User";
-  const currentRole = user.role; // ✅ Sudah pasti string karena lolos loading
-
-  // 🔁 Muat aktivitas hari ini
+  // ✅ Mount state untuk hindari hydration mismatch
   useEffect(() => {
+    setIsMounted(true);
+    return () => {
+      setIsMounted(false);
+    };
+  }, []);
+
+  // 🔁 Muat aktivitas hari ini - DIPINDAH KE ATAS SEBELUM CONDITIONAL LOGIC
+  useEffect(() => {
+    if (!isMounted) return; // Jangan jalan sebelum mount
+
+    let shouldUpdate = true; // Safety flag untuk hindari state update setelah unmount
+
     try {
       const historyStr = localStorage.getItem("checksheet_history");
       if (!historyStr) {
-        setActivities([]);
+        if (shouldUpdate) setActivities([]);
         return;
       }
 
       const history = JSON.parse(historyStr);
       if (!Array.isArray(history)) {
-        setActivities([]);
+        if (shouldUpdate) setActivities([]);
         return;
       }
 
@@ -95,30 +88,56 @@ export default function ModernHomePage() {
         status: (item.status === "NG" ? "NG" : "OK") as "OK" | "NG",
       }));
 
-      setActivities(recent);
+      if (shouldUpdate) {
+        setActivities(recent);
+      }
     } catch (e) {
       console.error("[Home] Gagal memuat riwayat checklist:", e);
-      setActivities([]);
+      if (shouldUpdate) {
+        setActivities([]);
+      }
     }
-  }, []);
 
-  // 🗺️ Mapping role ke dashboard
-  const getDashboardLink = () => {
+    return () => {
+      shouldUpdate = false; // Cleanup: tandai komponen sudah unmount
+    };
+  }, [isMounted]); // Jalankan saat isMounted berubah
+
+  // ✅ Jangan render apa pun sebelum mount di client
+  if (!isMounted) {
+    return null;
+  }
+
+  // ✅ CONDITIONAL LOGIC DILAKUKAN SETELAH SEMUA HOOKS
+  if (loading) {
+    return (
+      <div className="modern-home-page">
+        <Sidebar userName="Loading..." />
+        <main className="main-content">
+          <div style={{ padding: "40px", textAlign: "center", color: "#64748b" }}>
+            Memuat data...
+          </div>
+        </main>
+      </div>
+    );
+  }
+
+  if (!user) {
+    return null; // Redirect ke login sebaiknya ditangani di layout/route level
+  }
+
+  // ✅ LOGIC BISNIS SETELAH VALIDASI AUTH
+  const userName = user.fullName || "User";
+  const currentRole = user.role;
+  const dashboardLink = (() => {
     switch (currentRole) {
-      case "inspector-ga":
-        return "/ga-dashboard";
-      case "inspector-qa":
-        return "/qa-dashboard";
-      case "group-leader-qa":
-        return "/gl-dashboard";
-      default:
-        return "/dashboard";
+      case "inspector-ga": return "/ga-dashboard";
+      case "inspector-qa": return "/qa-dashboard";
+      case "group-leader-qa": return "/gl-dashboard";
+      default: return "/dashboard";
     }
-  };
+  })();
 
-  const dashboardLink = getDashboardLink();
-
-  // 🎯 Kartu berdasarkan role (sesuai auth context terbaru)
   const roleCards: Record<string, CardData[]> = {
     "group-leader-qa": [
       {
@@ -275,6 +294,7 @@ export default function ModernHomePage() {
       </main>
 
       <style jsx>{`
+        /* ... (style tetap sama, tidak diubah) ... */
         .modern-home-page {
           display: flex;
           min-height: 100vh;

@@ -1,43 +1,72 @@
-// app/ga-inspeksi-apd/GaInspeksiApdContent.tsx
+// app/status-ga/inspeksi-apd/GaInspeksiApdContent.tsx
 "use client";
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
-import { NavbarStatic } from "@/components/navbar-static";
 import { Sidebar } from "@/components/Sidebar";
+import { ArrowLeft } from "lucide-react";
+// ✅ Import API helper
+import {
+  getAreasByType,
+  getAvailableDates,
+  getChecklistByDate,
+  getItemsByType,
+  ChecklistItem
+} from "@/lib/api/checksheet";
 
-interface ApdArea {
+interface Area {
   id: number;
+  no: number;
   name: string;
-  type: string; // "Produksi" / "QA" / "Warehouse" / dll
+  location: string;
 }
-
-const APD_AREAS: ApdArea[] = [
-  { id: 1, name: "PRE ASSY AREA GENBA C", type: "Produksi" },
-  { id: 2, name: "PRE ASSY GENBA A+B", type: "Produksi" },
-  { id: 3, name: "AREA FINAL ASSY", type: "Produksi" },
-  { id: 4, name: "AREA CUTTING TUBE", type: "Produksi" },
-  { id: 5, name: "aINSPEKSI PRE ASSY AREA GENBA C", type: "QA" },
-  { id: 6, name: "INSPEKSI PRE ASSY GENBA A+B", type: "QA" },
-  { id: 7, name: "AREA INSPEKSI FINAL ASSY", type: "QA" },
-  { id: 8, name: "AREA WAREHOUSE", type: "Gudang" },
-  { id: 9, name: "AREA EXIM", type: "Logistik" },
-  { id: 10, name: "AREA PREV. APPLICATOR", type: "Produksi" },
-  { id: 11, name: "AREA WORK SHOP", type: "Maintenance" },
-  { id: 12, name: "AREA UTILITY", type: "Utilitas" },
-  { id: 13, name: "AREA RECEIVING INSPECTION MATERIAL", type: "QA" },
-  { id: 14, name: "AREA VOLTAGE TEST", type: "QA" },
-];
 
 export function GaInspeksiApdContent() {
   const router = useRouter();
   const { user, loading } = useAuth();
+  
+  // ✅ Hardcode type slug untuk page ini
+  const TYPE_SLUG = 'inspeksi-apd';
 
   const [isMounted, setIsMounted] = useState(false);
   const [showModal, setShowModal] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState<string>("Produksi");
   const [searchTerm, setSearchTerm] = useState("");
+  const [areas, setAreas] = useState<Area[]>([]);
+  const [selectedArea, setSelectedArea] = useState<Area | null>(null);
+  const [availableDates, setAvailableDates] = useState<string[]>([]);
+  const [selectedDate, setSelectedDate] = useState<string>("");
+  const [checksheetData, setChecksheetData] = useState<any>(null);
+  const [inspectionItems, setInspectionItems] = useState<ChecklistItem[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
+
+  // ✅ Load inspection items dari API
+  useEffect(() => {
+    const loadItems = async () => {
+      try {
+        const items = await getItemsByType(TYPE_SLUG);
+        console.log('Loaded inspection items:', items);
+        setInspectionItems(items);
+      } catch (error) {
+        console.error("Failed to load checklist items:", error);
+      }
+    };
+    loadItems();
+  }, []);
+
+  // ✅ Load areas dari API berdasarkan type
+  useEffect(() => {
+    const loadAreas = async () => {
+      try {
+        const data = await getAreasByType(TYPE_SLUG);
+        setAreas(data);
+      } catch (error) {
+        console.error("Failed to load areas:", error);
+      }
+    };
+    loadAreas();
+  }, []);
 
   useEffect(() => {
     setIsMounted(true);
@@ -50,52 +79,155 @@ export function GaInspeksiApdContent() {
     }
   }, [user, loading, router]);
 
-  const filteredData = APD_AREAS.filter(item =>
-    item.type === selectedCategory &&
-    (item.name.toLowerCase().includes(searchTerm.toLowerCase()))
-  );
+  // Filter areas berdasarkan kategori dan search
+  const filteredData = areas.filter(item => {
+    const parts = item.name.split(' \u0007 ');
+    const areaName = parts[0] || '';
+    const areaType = parts[1] || '';
+    
+    const matchCategory = areaType === selectedCategory;
+    const matchSearch = areaName.toLowerCase().includes(searchTerm.toLowerCase());
+    return matchCategory && matchSearch;
+  });
 
-  const [selectedArea, setSelectedArea] = useState<ApdArea | null>(null);
-  const [checksheetData, setChecksheetData] = useState<any[]>([]);
-  const [selectedDateInModal, setSelectedDateInModal] = useState<string>("");
-  const [availableDates, setAvailableDates] = useState<string[]>([]);
-
-  const openDetail = (area: ApdArea) => {
+  // ✅ Open detail dengan load data dari API
+  const openDetail = async (area: Area) => {
     setSelectedArea(area);
-    const key = `e-checksheet-apd-${area.id}`;
-    const saved = typeof window !== "undefined" ? localStorage.getItem(key) : null;
-    if (saved) {
-      try {
-        const data = JSON.parse(saved);
-        setChecksheetData(data);
-
-        const allDates = new Set<string>();
-        if (Array.isArray(data)) {
-          data.forEach((entry: any) => {
-            if (entry?.date) allDates.add(entry.date);
-          });
-        }
-        const sortedDates = Array.from(allDates).sort((a, b) => new Date(b).getTime() - new Date(a).getTime());
-        setAvailableDates(sortedDates);
-        setSelectedDateInModal(sortedDates[0] || "");
-      } catch (e) {
-        setChecksheetData([]);
-        setAvailableDates([]);
-        setSelectedDateInModal("");
-      }
-    } else {
-      setChecksheetData([]);
-      setAvailableDates([]);
-      setSelectedDateInModal("");
-    }
     setShowModal(true);
+    setIsLoading(true);
+
+    try {
+      // Load available dates untuk area ini
+      const dates = await getAvailableDates(TYPE_SLUG, area.id);
+      setAvailableDates(dates);
+      
+      // Set tanggal terbaru sebagai default
+      if (dates.length > 0) {
+        const latestDate = dates.sort((a, b) => new Date(b).getTime() - new Date(a).getTime())[0];
+        setSelectedDate(latestDate);
+        
+        // Load data untuk tanggal terbaru
+        await loadDateData(area.id, latestDate);
+      } else {
+        setChecksheetData(null);
+      }
+    } catch (error) {
+      console.error("Error loading detail:", error);
+      setChecksheetData(null);
+      setAvailableDates([]);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // ✅ Load data untuk tanggal tertentu
+  const loadDateData = async (areaId: number, date: string) => {
+    setIsLoading(true);
+    try {
+      const data = await getChecklistByDate(TYPE_SLUG, areaId, date);
+      
+      if (data) {
+        // Transform data untuk display
+        const rows: any[] = [];
+        
+        // Get proses items
+        const prosesItems = inspectionItems.filter(item => item.item_group === 'PROSES');
+        
+        prosesItems.forEach(prosesItem => {
+          const prosesData = data[prosesItem.item_key];
+          let parsedNotes: any = {};
+          try {
+            if (prosesData?.notes) {
+              parsedNotes = JSON.parse(prosesData.notes);
+            }
+          } catch (e) {
+            console.error('Error parsing notes:', e);
+          }
+          
+          // Add proses row
+          rows.push({
+            type: "proses",
+            proses: prosesItem.item_check,
+            r1: parsedNotes.r1 || "",
+            r2: parsedNotes.r2 || "",
+            r3: parsedNotes.r3 || "",
+            r4: parsedNotes.r4 || "",
+            r5: parsedNotes.r5 || "",
+            r6: parsedNotes.r6 || "",
+            persentaseOk: "",
+            problem: prosesData?.keteranganTemuan || "",
+            tindakanPerbaikan: prosesData?.tindakanPerbaikan || "",
+            pic: prosesData?.pic || "",
+            verify: prosesData?.verify || ""
+          });
+          
+          // Find and add APD rows for this proses
+          const apdItems = inspectionItems.filter(item => item.item_group === prosesItem.item_key);
+          
+          apdItems.forEach(apdItem => {
+            const apdData = data[apdItem.item_key];
+            let apdNotes: any = {};
+            try {
+              if (apdData?.notes) {
+                apdNotes = JSON.parse(apdData.notes);
+              }
+            } catch (e) {
+              console.error('Error parsing APD notes:', e);
+            }
+            
+            rows.push({
+              type: "apd",
+              proses: apdItem.item_check,
+              r1: apdNotes.r1 || "",
+              r2: apdNotes.r2 || "",
+              r3: apdNotes.r3 || "",
+              r4: apdNotes.r4 || "",
+              r5: apdNotes.r5 || "",
+              r6: apdNotes.r6 || "",
+              persentaseOk: apdData?.hasilPemeriksaan || "",
+              problem: apdData?.keteranganTemuan || "",
+              tindakanPerbaikan: apdData?.tindakanPerbaikan || "",
+              pic: apdData?.pic || "",
+              verify: apdData?.verify || ""
+            });
+          });
+        });
+        
+        // Get inspector from first item
+        const firstItemKey = Object.keys(data)[0];
+        const inspector = data[firstItemKey]?.inspector || "";
+        
+        setChecksheetData({
+          date: date,
+          data: rows,
+          inspector: inspector
+        });
+      } else {
+        setChecksheetData(null);
+      }
+      
+      console.log('Loaded data for date:', date, data);
+    } catch (error) {
+      console.error("Error loading date data:", error);
+      setChecksheetData(null);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // ✅ Handle perubahan tanggal
+  const handleDateChange = async (newDate: string) => {
+    setSelectedDate(newDate);
+    if (selectedArea && newDate) {
+      await loadDateData(selectedArea.id, newDate);
+    }
   };
 
   const closeDetail = () => {
     setSelectedArea(null);
-    setChecksheetData([]);
-    setSelectedDateInModal("");
+    setChecksheetData(null);
     setAvailableDates([]);
+    setSelectedDate("");
     setShowModal(false);
   };
 
@@ -123,14 +255,14 @@ export function GaInspeksiApdContent() {
         paddingTop : "32px",
         maxWidth: "1400px", 
         margin: "0 auto" }}>
-        
-        <div style={{ marginBottom: "28px" }}>
-          <div style={{
-            background: "#1976d2",
-            borderRadius: "8px",
-            padding: "24px 28px",
-            boxShadow: "0 2px 8px rgba(0,0,0,0.1)"
-          }}>
+        <div style={{ marginBottom: "28px" }} className="header">
+          <button
+          onClick={() => router.push("/status-ga")}
+          className="btn-back"
+          >
+            <ArrowLeft size={18} /> Kembali
+          </button>
+          <div className="text-header">
             <h1 style={{ margin: "0 0 6px 0", color: "white", fontSize: "26px", fontWeight: "600", letterSpacing: "-0.5px" }}>
               🛡️ APD Inspection Dashboard
             </h1>
@@ -225,29 +357,19 @@ export function GaInspeksiApdContent() {
               </thead>
               <tbody>
                 {filteredData.map((area, idx) => {
-                  const key = `e-checksheet-apd-${area.id}`;
-                  const saved = typeof window !== "undefined" ? localStorage.getItem(key) : null;
+                  const parts = area.name.split(' \u0007 ');
+                  const areaName = parts[0] || '';
+                  const areaType = parts[1] || '';
+                  
                   let statusLabel = "No Data";
                   let statusColor = "#757575";
                   let lastCheck = "-";
 
-                  if (saved) {
-                    try {
-                      const data = JSON.parse(saved);
-                      if (Array.isArray(data) && data.length > 0) {
-                        const latest = data[0].date;
-                        lastCheck = new Date(latest).toLocaleDateString("en-US", { month: "short", day: "numeric" });
-                        statusLabel = "Checked";
-                        statusColor = "#43a047";
-                      }
-                    } catch {}
-                  }
-
                   return (
                     <tr key={area.id} style={{ borderBottom: idx === filteredData.length - 1 ? "none" : "1px solid #f0f0f0" }}>
-                      <td style={{ padding: "14px 16px", textAlign: "center", fontWeight: "600", color: "#1976d2" }}>{idx + 1}</td>
-                      <td style={{ padding: "14px 16px", fontWeight: "500", color: "#424242" }}>{area.name}</td>
-                      <td style={{ padding: "14px 16px", textAlign: "center", fontWeight: "600", color: "#616161" }}>{area.type}</td>
+                      <td style={{ padding: "14px 16px", textAlign: "center", fontWeight: "600", color: "#1976d2" }}>{area.no}</td>
+                      <td style={{ padding: "14px 16px", fontWeight: "500", color: "#424242" }}>{areaName}</td>
+                      <td style={{ padding: "14px 16px", textAlign: "center", fontWeight: "600", color: "#616161" }}>{areaType}</td>
                       <td style={{ padding: "14px 16px", textAlign: "center" }}>
                         <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "4px" }}>
                           <span style={{
@@ -282,7 +404,7 @@ export function GaInspeksiApdContent() {
                             View
                           </button>
                           <a
-                            href={`/e-checksheet-ins-apd?areaId=${area.id}&areaName=${encodeURIComponent(area.name)}&areaType=${encodeURIComponent(area.type)}`}
+                            href={`/e-checksheet-ins-apd?areaId=${area.id}&areaName=${encodeURIComponent(areaName)}&areaType=${encodeURIComponent(areaType)}`}
                             style={{
                               padding: "7px 14px",
                               borderRadius: "5px",
@@ -348,10 +470,10 @@ export function GaInspeksiApdContent() {
               }}>
                 <div>
                   <h2 style={{ margin: "0 0 4px 0", color: "#212121", fontSize: "20px", fontWeight: "600" }}>
-                    Inspection History - {selectedArea.name}
+                    Inspection History - {selectedArea.name.split(' \u0007 ')[0]}
                   </h2>
                   <p style={{ margin: "0", color: "#616161", fontSize: "14px" }}>
-                    {selectedArea.type}
+                    {selectedArea.name.split(' \u0007 ')[1]}
                   </p>
                 </div>
                 <button 
@@ -379,8 +501,8 @@ export function GaInspeksiApdContent() {
                   Inspection Date:
                 </label>
                 <select
-                  value={selectedDateInModal}
-                  onChange={(e) => setSelectedDateInModal(e.target.value)}
+                  value={selectedDate}
+                  onChange={(e) => handleDateChange(e.target.value)}
                   style={{
                     color: "#212121",
                     padding: "7px 12px",
@@ -402,132 +524,121 @@ export function GaInspeksiApdContent() {
               </div>
 
               <div style={{ padding: "24px", overflowY: "auto", flex: 1, background: "#fafafa" }}>
-                {!checksheetData || !Array.isArray(checksheetData) || checksheetData.length === 0 ? (
+                {isLoading ? (
+                  <div style={{ textAlign: "center", padding: "60px 20px", color: "#9e9e9e" }}>
+                    <p style={{ fontSize: "15px", fontWeight: "500", margin: 0 }}>Loading data...</p>
+                  </div>
+                ) : !checksheetData ? (
                   <div style={{ textAlign: "center", padding: "60px 20px", color: "#9e9e9e" }}>
                     <div style={{ fontSize: "48px", marginBottom: "12px", opacity: 0.5 }}>📋</div>
                     <p style={{ fontSize: "15px", fontWeight: "500", margin: 0 }}>No inspection records found</p>
                   </div>
-                ) : !selectedDateInModal ? (
+                ) : !selectedDate ? (
                   <div style={{ textAlign: "center", padding: "60px 20px", color: "#757575" }}>
                     <div style={{ fontSize: "48px", marginBottom: "12px", opacity: 0.5 }}>📅</div>
                     <p style={{ fontSize: "15px", fontWeight: "500", margin: 0 }}>Please select an inspection date</p>
                   </div>
                 ) : (
                   <div style={{ overflowX: "auto" }}>
-                    {(() => {
-                      const entry = checksheetData.find((e: any) => e.date === selectedDateInModal);
-                      if (!entry) {
-                        return <div style={{ textAlign: "center", padding: "40px", color: "#9e9e9e" }}>No data found for this date</div>;
-                      }
-
-                      if (!Array.isArray(entry.data) || entry.data.length === 0) {
-                        return <div style={{ textAlign: "center", padding: "40px", color: "#9e9e9e" }}>No inspection items recorded</div>;
-                      }
-
-                      return (
-                        <div>
-                          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "12px", minWidth: "1600px", border: "1px solid #e0e0e0", background: "white" }}>
-                            <thead>
-                              <tr style={{ background: "#fafafa", borderBottom: "2px solid #ccc" }}>
-                                <th rowSpan={2} style={{ padding: "10px 8px", border: "1px solid #ddd", fontWeight: "600", textAlign: "center", width: "4%" }}>NO</th>
-                                <th style={{ padding: "10px 8px", border: "1px solid #ddd", fontWeight: "600", textAlign: "center", width: "12%" }}>PROSES</th>
-                                <th rowSpan={2} colSpan={6} style={{ padding: "8px", border: "1px solid #ddd", fontWeight: "600", textAlign: "center", width: "30%" }}>NO. MESIN/NIK</th>
-                                <th rowSpan={2} style={{ padding: "10px 8px", border: "1px solid #ddd", fontWeight: "600", textAlign: "center", width: "8%" }}>PROSENTASE OK</th>
-                                <th rowSpan={2} colSpan={4} style={{ padding: "10px 8px", border: "1px solid #ddd", fontWeight: "600", textAlign: "center", width: "16%" }}>PROBLEM</th>
-                                <th rowSpan={2} colSpan={4} style={{ padding: "10px 8px", border: "1px solid #ddd", fontWeight: "600", textAlign: "center", width: "16%" }}>TINDAKAN PERBAIKAN</th>
-                                <th rowSpan={2} style={{ padding: "10px 8px", border: "1px solid #ddd", fontWeight: "600", textAlign: "center", width: "8%" }}>PIC</th>
-                                <th rowSpan={2} style={{ padding: "10px 8px", border: "1px solid #ddd", fontWeight: "600", textAlign: "center", width: "8%" }}>VERIFY</th>
-                              </tr>
-                              <tr style={{ background: "#fafafa", borderBottom: "2px solid #ccc" }}>
-                                <th style={{ padding: "10px 8px", border: "1px solid #ddd", fontWeight: "600", textAlign: "center", width: "18%" }}>STANDART APD</th>
-                              </tr>
-                            </thead>
-                            <tbody>
-                              {entry.data.map((row: any, idx: number) => (
-                                <tr key={idx}>
-                                  <td style={{ 
-                                    padding: "8px", 
-                                    border: "1px solid #ddd", 
-                                    textAlign: "center", 
-                                    fontWeight: "600",
-                                    background: row.type === "proses" ? "#f5f5f5" : "white"
-                                  }}>
-                                    {idx + 1}
-                                  </td>
-                                  <td style={{ 
-                                    padding: "8px", 
-                                    border: "1px solid #ddd", 
-                                    textAlign: "left", 
-                                    fontWeight: row.type === "proses" ? "600" : "normal",
-                                    background: row.type === "proses" ? "#f5f5f5" : "white"
-                                  }}>
-                                    {row.proses || "-"}
-                                  </td>
-                                  {[...Array(6)].map((_, i) => {
-                                    const val = row[`r${i + 1}`] || "";
-                                    return (
-                                      <td key={i} style={{ 
-                                        padding: "6px", 
-                                        border: "1px solid #ddd", 
-                                        textAlign: "center",
-                                        background: "white"
-                                      }}>
-                                        {val}
-                                      </td>
-                                    );
-                                  })}
-                                  <td style={{ 
-                                    padding: "8px", 
-                                    border: "1px solid #ddd", 
-                                    textAlign: "center",
-                                    background: "white"
-                                  }}>
-                                    {row.persentaseOk || ""}
-                                  </td>
-                                  <td colSpan={4} style={{ 
-                                    padding: "6px", 
-                                    border: "1px solid #ddd",
-                                    background: "white"
-                                  }}>
-                                    {row.problem || "-"}
-                                  </td>
-                                  <td colSpan={4} style={{ 
-                                    padding: "6px", 
-                                    border: "1px solid #ddd",
-                                    background: "white"
-                                  }}>
-                                    {row.tindakanPerbaikan || "-"}
-                                  </td>
-                                  <td style={{ 
-                                    padding: "6px", 
-                                    border: "1px solid #ddd",
-                                    background: "white"
-                                  }}>
-                                    {row.pic || "-"}
-                                  </td>
-                                  <td style={{ 
-                                    padding: "6px", 
-                                    border: "1px solid #ddd",
-                                    background: "white"
-                                  }}>
-                                    {row.verify || "-"}
-                                  </td>
-                                </tr>
-                              ))}
-                            </tbody>
-                          </table>
-                          
-                          <div style={{ marginTop: "20px", padding: "16px", background: "#f9f9f9", borderRadius: "6px", border: "1px solid #e0e0e0" }}>
-                            <p style={{ margin: "0 0 4px 0", fontSize: "12px", color: "#757575" }}>Inspector</p>
-                            <p style={{ margin: "0", fontSize: "14px", fontWeight: "500", color: "#424242" }}>{entry.inspector || "N/A"}</p>
-                            <p style={{ margin: "4px 0 0 0", fontSize: "12px", color: "#757575" }}>Inspection Date</p>
-                            <p style={{ margin: "0", fontSize: "14px", fontWeight: "500", color: "#424242" }}>
-                              {new Date(entry.date).toLocaleDateString("id-ID", { weekday: "long", day: "numeric", month: "long", year: "numeric" })}
-                            </p>
-                          </div>
-                        </div>
-                      );
-                    })()}
+                    <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "12px", minWidth: "1600px", border: "1px solid #e0e0e0", background: "white" }}>
+                      <thead>
+                        <tr style={{ background: "#fafafa", borderBottom: "2px solid #ccc" }}>
+                          <th rowSpan={2} style={{ padding: "10px 8px", border: "1px solid #ddd", fontWeight: "600", textAlign: "center", width: "4%" }}>NO</th>
+                          <th style={{ padding: "10px 8px", border: "1px solid #ddd", fontWeight: "600", textAlign: "center", width: "12%" }}>PROSES</th>
+                          <th rowSpan={2} colSpan={6} style={{ padding: "8px", border: "1px solid #ddd", fontWeight: "600", textAlign: "center", width: "30%" }}>NO. MESIN/NIK</th>
+                          <th rowSpan={2} style={{ padding: "10px 8px", border: "1px solid #ddd", fontWeight: "600", textAlign: "center", width: "8%" }}>PROSENTASE OK</th>
+                          <th rowSpan={2} colSpan={4} style={{ padding: "10px 8px", border: "1px solid #ddd", fontWeight: "600", textAlign: "center", width: "16%" }}>PROBLEM</th>
+                          <th rowSpan={2} colSpan={4} style={{ padding: "10px 8px", border: "1px solid #ddd", fontWeight: "600", textAlign: "center", width: "16%" }}>TINDAKAN PERBAIKAN</th>
+                          <th rowSpan={2} style={{ padding: "10px 8px", border: "1px solid #ddd", fontWeight: "600", textAlign: "center", width: "8%" }}>PIC</th>
+                          <th rowSpan={2} style={{ padding: "10px 8px", border: "1px solid #ddd", fontWeight: "600", textAlign: "center", width: "8%" }}>VERIFY</th>
+                        </tr>
+                        <tr style={{ background: "#fafafa", borderBottom: "2px solid #ccc" }}>
+                          <th style={{ padding: "10px 8px", border: "1px solid #ddd", fontWeight: "600", textAlign: "center", width: "18%" }}>STANDART APD</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {checksheetData.data.map((row: any, idx: number) => (
+                          <tr key={idx}>
+                            <td style={{ 
+                              padding: "8px", 
+                              border: "1px solid #ddd", 
+                              textAlign: "center", 
+                              fontWeight: "600",
+                              background: row.type === "proses" ? "#f5f5f5" : "white"
+                            }}>
+                              {idx + 1}
+                            </td>
+                            <td style={{ 
+                              padding: "8px", 
+                              border: "1px solid #ddd", 
+                              textAlign: "left", 
+                              fontWeight: row.type === "proses" ? "600" : "normal",
+                              background: row.type === "proses" ? "#f5f5f5" : "white"
+                            }}>
+                              {row.proses || "-"}
+                            </td>
+                            {[...Array(6)].map((_, i) => {
+                              const val = row[`r${i + 1}`] || "";
+                              return (
+                                <td key={i} style={{ 
+                                  padding: "6px", 
+                                  border: "1px solid #ddd", 
+                                  textAlign: "center",
+                                  background: "white"
+                                }}>
+                                  {val}
+                                </td>
+                              );
+                            })}
+                            <td style={{ 
+                              padding: "8px", 
+                              border: "1px solid #ddd", 
+                              textAlign: "center",
+                              background: "white"
+                            }}>
+                              {row.persentaseOk || ""}
+                            </td>
+                            <td colSpan={4} style={{ 
+                              padding: "6px", 
+                              border: "1px solid #ddd",
+                              background: "white"
+                            }}>
+                              {row.problem || "-"}
+                            </td>
+                            <td colSpan={4} style={{ 
+                              padding: "6px", 
+                              border: "1px solid #ddd",
+                              background: "white"
+                            }}>
+                              {row.tindakanPerbaikan || "-"}
+                            </td>
+                            <td style={{ 
+                              padding: "6px", 
+                              border: "1px solid #ddd",
+                              background: "white"
+                            }}>
+                              {row.pic || "-"}
+                            </td>
+                            <td style={{ 
+                              padding: "6px", 
+                              border: "1px solid #ddd",
+                              background: "white"
+                            }}>
+                              {row.verify || "-"}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                    
+                    <div style={{ marginTop: "20px", padding: "16px", background: "#f9f9f9", borderRadius: "6px", border: "1px solid #e0e0e0" }}>
+                      <p style={{ margin: "0 0 4px 0", fontSize: "12px", color: "#757575" }}>Inspector</p>
+                      <p style={{ margin: "0", fontSize: "14px", fontWeight: "500", color: "#424242" }}>{checksheetData.inspector || "N/A"}</p>
+                      <p style={{ margin: "4px 0 0 0", fontSize: "12px", color: "#757575" }}>Inspection Date</p>
+                      <p style={{ margin: "0", fontSize: "14px", fontWeight: "500", color: "#424242" }}>
+                        {new Date(checksheetData.date).toLocaleDateString("id-ID", { weekday: "long", day: "numeric", month: "long", year: "numeric" })}
+                      </p>
+                    </div>
                   </div>
                 )}
               </div>

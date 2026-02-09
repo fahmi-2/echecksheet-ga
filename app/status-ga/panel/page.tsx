@@ -1,10 +1,10 @@
-// app/status-ga/page.tsx
+// app/status-ga/panel/page.tsx
 'use client';
 
 import { Suspense, use } from 'react';
 import { GaPanelContent } from './GaPanelContent';
 
-export default function GaPanelPage({
+export default function GAPanelPage({
   searchParams,
 }: {
   searchParams: Promise<{
