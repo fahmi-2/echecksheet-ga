@@ -1,131 +1,196 @@
-// app/inspeksi-emergency/riwayat/[area]/page.tsx
-"use client"
+// app/status-ga/inspeksi-emergency/riwayat/[area]/page.tsx
+"use client";
 
-import { useState, useEffect } from "react"
-import { useRouter, useSearchParams } from "next/navigation"
-import { useAuth } from "@/lib/auth-context"
+import { useState, useEffect } from "react";
+import { useRouter, useParams } from "next/navigation";
+import { useAuth } from "@/lib/auth-context";
 import { Sidebar } from "@/components/Sidebar";
-import Link from "next/link"
+import Link from "next/link";
+import { ArrowLeft } from "lucide-react";
 
 interface EmergencyItem {
-  no: number
-  lokasi: string
-  id: string
-  kondisiLampu: string
-  indicatorLamp: string
-  batteryCharger: string
-  idNumber: string
-  kebersihan: string
-  kondisiKabel: string
-  keterangan: string
-  tindakanPerbaikan: string
-  pic: string
-  dueDate: string
-  verifikasi: string
-  ttdPic: string
+  no: number;
+  lokasi: string;
+  id: string;
+  kondisiLampu: string;
+  indicatorLamp: string;
+  batteryCharger: string;
+  idNumber: string;
+  kebersihan: string;
+  kondisiKabel: string;
+  keterangan: string;
+  tindakanPerbaikan: string;
+  pic: string;
+  foto: string | null;
 }
 
 interface EmergencyRecord {
-  id: string
-  date: string
-  area: string
-  items: EmergencyItem[]
-  checker: string
-  submittedAt: string
+  id: string;
+  date: string;
+  area: string;
+  items: EmergencyItem[];
+  checker: string;
+  checkerNik?: string;
+  submittedAt: string;
 }
 
-export default function RiwayatEmergency() {
-  const router = useRouter()
-  const searchParams = useSearchParams()
-  const { user } = useAuth()
+const areaTitles: Record<string, string> = {
+  "genba-a": "GENBA A",
+  "genba-b": "GENBA B",
+  "genba-c": "GENBA C",
+  "jig-proto": "JIG PROTO",
+  "gel-sheet": "GEL SHEET",
+  "warehouse": "WAREHOUSE",
+  "mezzanine": "MEZZANINE",
+  "parkir": "PARKIR",
+  "main-office": "MAIN OFFICE",
+};
 
-  const area = searchParams.get("area") || "genba-a"
-  const [records, setRecords] = useState<EmergencyRecord[]>([])
-  const [filteredRecords, setFilteredRecords] = useState<EmergencyRecord[]>([])
-  const [loading, setLoading] = useState(true)
-  const [filterDate, setFilterDate] = useState("")
-  const [filterLocation, setFilterLocation] = useState("")
+export default function RiwayatEmergency() {
+  const router = useRouter();
+  const params = useParams();
+  const { user } = useAuth();
+
+  const area = params.area as string;
+  const [records, setRecords] = useState<EmergencyRecord[]>([]);
+  const [filteredRecords, setFilteredRecords] = useState<EmergencyRecord[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [filterDateFrom, setFilterDateFrom] = useState("");
+  const [filterDateTo, setFilterDateTo] = useState("");
+  const [filterLocation, setFilterLocation] = useState("");
+  const [previewImage, setPreviewImage] = useState<string | null>(null);
 
   // Validasi akses
   useEffect(() => {
     if (!user || user.role !== "inspector-ga") {
-      router.push("/home")
+      router.push("/home");
     }
-  }, [user, router])
+  }, [user, router]);
 
-  // Load data
-  useEffect(() => {
-    const loadRecords = () => {
-      try {
-        const historyKey = `ga_emergency_history_${area}`
-        const saved = localStorage.getItem(historyKey)
-        if (saved) {
-          const parsed = JSON.parse(saved)
-          // Hanya ambil data yang punya struktur lengkap
-          const validRecords = parsed.filter((r: any) => 
-            r.items && Array.isArray(r.items)
-          )
-          setRecords(validRecords)
-          setFilteredRecords(validRecords)
+  // 🔥 LOAD DATA DARI API
+  const loadData = async () => {
+    try {
+      setLoading(true);
+
+      // Build query params
+      const queryParams = new URLSearchParams();
+      queryParams.append('area', area);
+      if (filterDateFrom) queryParams.append('date_from', filterDateFrom);
+      if (filterDateTo) queryParams.append('date_to', filterDateTo);
+      if (filterLocation) queryParams.append('lokasi', filterLocation);
+      queryParams.append('limit', '100');
+      queryParams.append('offset', '0');
+
+      const response = await fetch(`/api/emergency-lamp/history?${queryParams.toString()}`);
+
+      if (response.ok) {
+        const data = await response.json();
+        if (data.success) {
+          setRecords(data.data || []);
+          setFilteredRecords(data.data || []);
+        } else {
+          alert('Gagal memuat riwayat: ' + data.message);
         }
-      } catch (e) {
-        console.error(`Gagal memuat riwayat ${area}:`, e)
-      } finally {
-        setLoading(false)
+      } else {
+        alert('Gagal mengambil data dari server');
       }
+    } catch (error) {
+      console.error('Error loading history:', error);
+      alert('Gagal memuat riwayat: ' + (error as any).message);
+    } finally {
+      setLoading(false);
     }
+  };
 
-    loadRecords()
-  }, [area])
-
-  // Terapkan filter
   useEffect(() => {
-    let filtered = records.filter(r => r.items && Array.isArray(r.items))
-
-    if (filterDate) {
-      filtered = filtered.filter(r => r.date === filterDate)
+    if (area) {
+      loadData();
     }
-
-    if (filterLocation) {
-      filtered = filtered.filter(r => 
-        r.items.some(item => item.lokasi === filterLocation)
-      )
-    }
-
-    setFilteredRecords(filtered)
-  }, [filterDate, filterLocation, records])
+  }, [area, filterDateFrom, filterDateTo, filterLocation]);
 
   // Ambil daftar lokasi unik
   const locations = Array.from(
     new Set(
       records
-        .filter(r => r.items && Array.isArray(r.items))
-        .flatMap(r => r.items.map(i => i.lokasi))
+        .flatMap((r) => r.items || [])
+        .map((i) => i.lokasi)
+        .filter(Boolean)
     )
-  ).sort()
+  ).sort();
 
-  if (!user) return null
+  const openImagePreview = (src: string) => {
+    if (src) {
+      const imageUrl = src.startsWith('') 
+        ? src 
+        : `${process.env.NEXT_PUBLIC_BASE_URL || ''}${src}`;
+      setPreviewImage(imageUrl);
+    }
+  };
+
+  const closeImagePreview = () => {
+    setPreviewImage(null);
+  };
+
+  const handleDelete = async (recordId: string) => {
+    if (!confirm("Yakin ingin menghapus data ini?")) return;
+
+    try {
+      const response = await fetch(`/api/emergency-lamp/delete?id=${recordId}`, {
+        method: 'DELETE',
+      });
+
+      if (response.ok) {
+        // Reload data
+        await loadData();
+        alert('Data berhasil dihapus!');
+      } else {
+        const error = await response.json();
+        alert('Gagal menghapus  ' + error.message);
+      }
+    } catch (error) {
+      console.error('Delete error:', error);
+      alert('Terjadi kesalahan saat menghapus data');
+    }
+  };
+
+  if (!user) return null;
+
+  const areaTitle = areaTitles[area] || area.toUpperCase();
 
   return (
     <div className="app-page">
       <Sidebar userName={user.fullName} />
 
       <div className="page-content">
-        <div className="header">
-          <h1>📍 Riwayat Inspeksi Emergency Lamp - {area.toUpperCase()}</h1>
-          <div className="user-info">
-            <span>Selamat datang, {user.fullName}</span>
-          </div>
+        <div className="header-banner">
+          <button
+            onClick={() => router.push("/status-ga/inspeksi-emergency")}
+            className="btn-back"
+            aria-label="Kembali"
+          >
+            <ArrowLeft size={18} />
+            <span>Kembali</span>
+          </button>
+          <h1 className="page-title">📍 Riwayat Inspeksi Emergency Lamp - {areaTitle}</h1>
         </div>
 
         {/* Filter */}
         <div className="date-filter">
           <div className="filter-group">
-            <label>Tanggal:</label>
+            <label>Dari Tanggal:</label>
             <input
               type="date"
-              value={filterDate}
-              onChange={(e) => setFilterDate(e.target.value)}
+              value={filterDateFrom}
+              onChange={(e) => setFilterDateFrom(e.target.value)}
+              className="date-input"
+            />
+          </div>
+          <div className="filter-group">
+            <label>Sampai Tanggal:</label>
+            <input
+              type="date"
+              value={filterDateTo}
+              onChange={(e) => setFilterDateTo(e.target.value)}
               className="date-input"
             />
           </div>
@@ -137,116 +202,198 @@ export default function RiwayatEmergency() {
               className="location-select"
             >
               <option value="">Semua Lokasi</option>
-              {locations.map(loc => (
-                <option key={loc} value={loc}>{loc}</option>
+              {locations.map((loc) => (
+                <option key={loc} value={loc}>
+                  {loc}
+                </option>
               ))}
             </select>
           </div>
           <button
             onClick={() => {
-              setFilterDate("")
-              setFilterLocation("")
+              setFilterDateFrom("");
+              setFilterDateTo("");
+              setFilterLocation("");
             }}
             className="clear-filter"
           >
             Reset Filter
           </button>
-          <Link href={`/inspeksi-emergency/${area}`} className="btn-add">
+          <Link href={`/status-ga/inspeksi-emergency/${area}`} className="btn-add">
             ➕ Tambah Data
           </Link>
         </div>
 
-        {/* Daftar Riwayat */}
-        <div className="riwayat-container">
-          {filteredRecords.length === 0 ? (
-            <div className="empty-state">
-              Belum ada data Inspeksi Emergency Lamp.
-            </div>
-          ) : (
-            <div className="data-tables">
-              {filteredRecords.map((record) => (
-                <div key={record.id} className="data-section">
-                  <div className="section-header">
-                    <span>Tanggal: {record.date}</span>
-                    <span>Petugas: {record.checker}</span>
+        {/* Loading State */}
+        {loading ? (
+          <div className="loading-container">
+            <div className="spinner"></div>
+            <p>Memuat data...</p>
+          </div>
+        ) : (
+          <div className="riwayat-container">
+            {filteredRecords.length === 0 ? (
+              <div className="empty-state">Belum ada data Inspeksi Emergency Lamp.</div>
+            ) : (
+              <div className="data-tables">
+                {filteredRecords.map((record) => (
+                  <div key={record.id} className="data-section">
+                    <div className="section-header">
+                      <span>Tanggal: {record.date}</span>
+                      <span>Petugas: {record.checker}</span>
+                      <div className="section-actions">
+                        <button
+                          onClick={() => handleDelete(record.id)}
+                          className="delete-btn"
+                          title="Hapus data"
+                        >
+                          🗑️
+                        </button>
+                      </div>
+                    </div>
+                    <div className="table-wrapper">
+                      <table className="apd-table">
+                        <thead>
+                          <tr>
+                            <th>No</th>
+                            <th>Lokasi</th>
+                            <th>ID</th>
+                            <th>Kondisi Lampu</th>
+                            <th>Indicator</th>
+                            <th>Battery</th>
+                            <th>ID Num</th>
+                            <th>Kebersihan</th>
+                            <th>Kabel</th>
+                            <th>Keterangan</th>
+                            <th>Foto</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {record.items.map((item) => (
+                            <tr key={`${record.id}-${item.no}`}>
+                              <td>{item.no}</td>
+                              <td>{item.lokasi}</td>
+                              <td>{item.id}</td>
+                              <td className={item.kondisiLampu === "NG" ? "status-ng" : ""}>
+                                {item.kondisiLampu || "-"}
+                              </td>
+                              <td className={item.indicatorLamp === "NG" ? "status-ng" : ""}>
+                                {item.indicatorLamp || "-"}
+                              </td>
+                              <td className={item.batteryCharger === "NG" ? "status-ng" : ""}>
+                                {item.batteryCharger || "-"}
+                              </td>
+                              <td className={item.idNumber === "NG" ? "status-ng" : ""}>
+                                {item.idNumber || "-"}
+                              </td>
+                              <td className={item.kebersihan === "NG" ? "status-ng" : ""}>
+                                {item.kebersihan || "-"}
+                              </td>
+                              <td className={item.kondisiKabel === "NG" ? "status-ng" : ""}>
+                                {item.kondisiKabel || "-"}
+                              </td>
+                              <td>{item.keterangan || "-"}</td>
+                              <td>
+                                {item.foto ? (
+                                  <img
+                                    src={item.foto.startsWith('') 
+                                      ? item.foto 
+                                      : `${process.env.NEXT_PUBLIC_BASE_URL || ''}${item.foto}`}
+                                    alt="Foto"
+                                    className="history-image clickable"
+                                    onClick={() => openImagePreview(item.foto!)}
+                                  />
+                                ) : (
+                                  "-"
+                                )}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
                   </div>
-                  <table className="apd-table">
-                    <thead>
-                      <tr>
-                        <th>No</th>
-                        <th>Lokasi</th>
-                        <th>ID</th>
-                        <th>Kondisi Lampu</th>
-                        <th>Indicator Lamp</th>
-                        <th>Battery Charger</th>
-                        <th>ID Number</th>
-                        <th>Kebersihan</th>
-                        <th>Kondisi Kabel</th>
-                        <th>Keterangan</th>
-                        <th>Tindakan Perbaikan</th>
-                        <th>PIC</th>
-                        <th>Due Date</th>
-                        <th>Verifikasi</th>
-                        <th>Ttd PIC</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {record.items.map((item) => (
-                        <tr key={`${record.id}-${item.no}`}>
-                          <td>{item.no}</td>
-                          <td>{item.lokasi}</td>
-                          <td>{item.id}</td>
-                          <td>{item.kondisiLampu}</td>
-                          <td>{item.indicatorLamp}</td>
-                          <td>{item.batteryCharger}</td>
-                          <td>{item.idNumber}</td>
-                          <td>{item.kebersihan}</td>
-                          <td>{item.kondisiKabel}</td>
-                          <td>{item.keterangan || "-"}</td>
-                          <td>{item.tindakanPerbaikan || "-"}</td>
-                          <td>{item.pic || "-"}</td>
-                          <td>{item.dueDate || "-"}</td>
-                          <td>{item.verifikasi || "-"}</td>
-                          <td>{item.ttdPic || "-"}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              ))}
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Image Preview Modal */}
+        {previewImage && (
+          <div className="image-modal" onClick={closeImagePreview}>
+            <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+              <button className="close-btn" onClick={closeImagePreview}>✕</button>
+              <img src={previewImage} alt="Zoom" className="modal-image" />
             </div>
-          )}
-        </div>
+          </div>
+        )}
       </div>
 
       <style jsx>{`
+        .app-page {
+          display: flex;
+          min-height: 100vh;
+          background-color: #f7f9fc;
+        }
+
         .page-content {
+          flex: 1;
+          padding: 24px;
           max-width: 1400px;
           margin: 0 auto;
-          padding: 24px;
+          color: #1e293b;
         }
 
-        .header h1 {
-          margin: 0;
-          color: #ffffff;
-          font-size: 2rem;
-        }
-
-        .user-info {
+        /* Header Banner Biru Gradasi */
+        .header-banner {
+          background: linear-gradient(135deg, #1976d2 0%, #0d47a1 100%);
+          color: white;
+          padding: 20px 24px;
+          border-radius: 16px;
+          margin-bottom: 24px;
+          box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
           display: flex;
           align-items: center;
           gap: 16px;
-          font-size: 0.95rem;
-          color: #666;
         }
 
+        .btn-back {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          padding: 6px 12px;
+          background: rgba(255, 255, 255, 0.2);
+          color: white;
+          border: none;
+          border-radius: 8px;
+          cursor: pointer;
+          font-weight: 600;
+          font-size: 0.9rem;
+          transition: background 0.2s;
+        }
+
+        .btn-back:hover {
+          background: rgba(255, 255, 255, 0.3);
+        }
+
+        .page-title {
+          margin: 0;
+          font-size: 1.6rem;
+          font-weight: 700;
+          flex: 1;
+          text-align: center;
+        }
+
+        /* Filter */
         .date-filter {
           display: flex;
           gap: 16px;
           margin-bottom: 24px;
           padding: 16px;
-          background: #f5f9ff;
-          border-radius: 8px;
+          background: white;
+          border-radius: 12px;
+          box-shadow: 0 2px 6px rgba(0, 0, 0, 0.05);
           flex-wrap: wrap;
           align-items: center;
         }
@@ -266,20 +413,25 @@ export default function RiwayatEmergency() {
         .date-input,
         .location-select {
           padding: 8px 12px;
-          border: 1px solid #ccc;
-          border-radius: 6px;
+          border: 1px solid #cbd5e1;
+          border-radius: 8px;
           font-size: 0.95rem;
-          min-width: 180px;
+          min-width: 160px;
         }
 
         .clear-filter {
           padding: 8px 16px;
-          background: #f44336;
+          background: #dc2626;
           color: white;
           border: none;
-          border-radius: 6px;
+          border-radius: 8px;
           cursor: pointer;
           font-size: 0.9rem;
+          font-weight: 600;
+        }
+
+        .clear-filter:hover {
+          background: #b91c1c;
         }
 
         .btn-add {
@@ -287,23 +439,54 @@ export default function RiwayatEmergency() {
           background: #1e88e5;
           color: white;
           text-decoration: none;
-          border-radius: 6px;
+          border-radius: 8px;
           font-weight: 600;
           margin-left: auto;
+          white-space: nowrap;
         }
 
+        .btn-add:hover {
+          background: #1565c0;
+        }
+
+        /* Riwayat Container */
         .riwayat-container {
           background: white;
           border-radius: 12px;
-          box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+          box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
           padding: 24px;
         }
 
         .empty-state {
           text-align: center;
           padding: 40px 20px;
-          color: #666;
+          color: #64748b;
           font-size: 1.1rem;
+        }
+
+        .loading-container {
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          justify-content: center;
+          padding: 60px 20px;
+          background: white;
+          border-radius: 12px;
+          border: 1px solid #e2e8f0;
+        }
+
+        .spinner {
+          width: 40px;
+          height: 40px;
+          border: 4px solid #e2e8f0;
+          border-top-color: #1976d2;
+          border-radius: 50%;
+          animation: spin 0.8s linear infinite;
+          margin-bottom: 16px;
+        }
+
+        @keyframes spin {
+          to { transform: rotate(360deg); }
         }
 
         .data-tables {
@@ -313,54 +496,176 @@ export default function RiwayatEmergency() {
         }
 
         .data-section {
-          border: 1px solid #eee;
-          border-radius: 8px;
+          border: 1px solid #e2e8f0;
+          border-radius: 10px;
           overflow: hidden;
         }
 
         .section-header {
-          background: #f5f9ff;
+          background: #f1f5f9;
           padding: 12px 16px;
           display: flex;
           justify-content: space-between;
+          align-items: center;
           font-size: 0.9rem;
-          color: #666;
+          color: #475569;
+          font-weight: 600;
+        }
+
+        .section-actions {
+          display: flex;
+          gap: 8px;
+        }
+
+        .delete-btn {
+          background: none;
+          border: none;
+          font-size: 1.2rem;
+          cursor: pointer;
+          color: #f44336;
+          transition: transform 0.2s;
+        }
+
+        .delete-btn:hover {
+          transform: scale(1.1);
+        }
+
+        .table-wrapper {
+          overflow-x: auto;
         }
 
         .apd-table {
           width: 100%;
           border-collapse: collapse;
-          font-size: 0.8rem;
+          font-size: 0.85rem;
         }
 
         .apd-table th,
         .apd-table td {
-          padding: 8px;
+          padding: 10px;
           text-align: left;
-          border-bottom: 1px solid #eee;
+          border-bottom: 1px solid #e2e8f0;
         }
 
         .apd-table th {
-          background: #f9f9f9;
-          font-weight: 600;
+          background: #f8fafc;
+          font-weight: 700;
+          color: #1e293b;
+          position: sticky;
+          top: 0;
         }
 
-        @media (max-width: 1024px) {
+        .status-ng {
+          background: #fee2e2;
+          color: #dc2626;
+          font-weight: 600;
+          border-radius: 4px;
+          padding: 2px 6px;
+        }
+
+        .history-image {
+          width: 50px;
+          height: 50px;
+          object-fit: cover;
+          border-radius: 4px;
+          border: 1px solid #ddd;
+          cursor: pointer;
+          transition: transform 0.2s;
+        }
+
+        .history-image:hover {
+          transform: scale(1.1);
+        }
+
+        /* Image Modal */
+        .image-modal {
+          position: fixed;
+          top: 0;
+          left: 0;
+          width: 100vw;
+          height: 100vh;
+          background: rgba(0, 0, 0, 0.9);
+          display: flex;
+          justify-content: center;
+          align-items: center;
+          z-index: 1000;
+          cursor: pointer;
+        }
+
+        .modal-content {
+          position: relative;
+          max-width: 90vw;
+          max-height: 90vh;
+          cursor: default;
+        }
+
+        .close-btn {
+          position: absolute;
+          top: -40px;
+          right: 0;
+          background: #fff;
+          color: #000;
+          border: none;
+          width: 32px;
+          height: 32px;
+          border-radius: 50%;
+          font-weight: bold;
+          cursor: pointer;
+          font-size: 18px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+        }
+
+        .close-btn:hover {
+          background: #e0e0e0;
+          transform: scale(1.1);
+        }
+
+        .modal-image {
+          max-width: 100%;
+          max-height: 80vh;
+          object-fit: contain;
+          border: 2px solid white;
+          border-radius: 8px;
+        }
+
+        @media (max-width: 768px) {
+          .header-banner {
+            flex-direction: column;
+            text-align: center;
+            gap: 12px;
+          }
+
+          .page-title {
+            font-size: 1.4rem;
+          }
+
           .date-filter {
             flex-direction: column;
-            align-items: flex-start;
+            align-items: stretch;
+          }
+
+          .btn-add {
+            margin-left: 0;
+            align-self: flex-start;
           }
 
           .apd-table {
-            font-size: 0.7rem;
+            font-size: 0.75rem;
           }
 
           .apd-table th,
           .apd-table td {
-            padding: 4px;
+            padding: 6px;
+          }
+
+          .history-image {
+            width: 40px;
+            height: 40px;
           }
         }
       `}</style>
     </div>
-  )
+  );
 }

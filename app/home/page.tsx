@@ -207,54 +207,52 @@ export default function ModernHomePage() {
           <div className="welcome-content">
             <h1 className="welcome-title">👋 Halo, {userName}!</h1>
             <p className="welcome-text">
-              Selamat datang di E-CheckSheet. Kelola checklist dan laporan Anda dengan mudah.
+              Selamat datang di E-CheckSheet GA. Kelola checklist dan laporan General Affairs Anda dengan mudah.
             </p>
           </div>
           <div className="welcome-illustration" aria-hidden="true">
             <svg width="160" height="120" viewBox="0 0 200 150" fill="none">
-              <circle cx="100" cy="75" r="60" fill="#EDE9FE" opacity="0.5" />
-              <circle cx="100" cy="75" r="40" fill="#A78BFA" opacity="0.3" />
+              <circle cx="100" cy="75" r="60" fill="#fcfcfc" opacity="0.5" />
+              <circle cx="100" cy="75" r="40" fill="#006afe" opacity="0.3" />
               <path
                 d="M80 75L95 90L120 60"
-                stroke="#8B5CF6"
+                stroke="#ffffff"
                 strokeWidth="4"
-                strokeLinecap="round"
+                strokeLinecap="round"   
                 strokeLinejoin="round"
               />
             </svg>
           </div>
         </div>
 
-        {/* Role-based Cards */}
-        {currentRoleCards.length > 0 && (
-          <section className="section">
-            <div className="section-header">
-              <div>
-                <h2 className="section-title">📋 Menu Utama</h2>
-                <p className="section-desc">Akses area checklist sesuai role Anda</p>
-              </div>
+        {/* GA Cards */}
+        <section className="section">
+          <div className="section-header">
+            <div>
+              <h2 className="section-title">📋 Menu Utama GA</h2>
+              <p className="section-desc">Akses semua area checklist General Affairs</p>
             </div>
-            <div className="cards-grid">
-              {currentRoleCards.map((card) => {
-                const Icon = card.icon;
-                return (
-                  <Link key={card.id} href={card.href} className="feature-card-link">
-                    <div className="feature-card" style={{ background: card.gradient }}>
-                      <div className="card-header">
-                        <div className="card-icon">
-                          <Icon size={24} color="white" aria-hidden="true" />
-                        </div>
-                        <ChevronRight size={18} color="white" aria-hidden="true" />
+          </div>
+          <div className="cards-grid">
+            {gaCards.map((card) => {
+              const Icon = card.icon;
+              return (
+                <Link key={card.id} href={card.href} className="feature-card-link">
+                  <div className="feature-card" style={{ background: card.gradient }}>
+                    <div className="card-header">
+                      <div className="card-icon">
+                        <Icon size={24} color="white" aria-hidden="true" />
                       </div>
-                      <h3 className="card-title">{card.title}</h3>
-                      <p className="card-desc">{card.description}</p>
+                      <ChevronRight size={18} color="white" aria-hidden="true" />
                     </div>
-                  </Link>
-                );
-              })}
-            </div>
-          </section>
-        )}
+                    <h3 className="card-title">{card.title}</h3>
+                    <p className="card-desc">{card.description}</p>
+                  </div>
+                </Link>
+              );
+            })}
+          </div>
+        </section>
 
         {/* Recent Activity */}
         <section className="section">
@@ -322,14 +320,14 @@ export default function ModernHomePage() {
         }
 
         .welcome-banner {
-          background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+          background: linear-gradient(135deg, #2f00b0 0%, #0987ee 100%);
           border-radius: 16px;
           padding: 24px;
           display: flex;
           justify-content: space-between;
           align-items: center;
           margin-bottom: 28px;
-          box-shadow: 0 4px 12px rgba(102, 126, 234, 0.2);
+          box-shadow: 0 4px 12px rgba(79, 172, 254, 0.2);
           gap: 24px;
         }
 
@@ -378,7 +376,7 @@ export default function ModernHomePage() {
         }
 
         .view-all-btn {
-          color: #8b5cf6;
+          color: #4facfe;
           text-decoration: none;
           font-size: 14px;
           font-weight: 600;

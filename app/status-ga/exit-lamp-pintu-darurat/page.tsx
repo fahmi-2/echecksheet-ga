@@ -1,380 +1,404 @@
 // app/exit-lamp-pintu-darurat/page.tsx
-"use client"
+"use client";
 
-import { useState, useEffect } from "react"
-import { useRouter } from "next/navigation"
-import { useAuth } from "@/lib/auth-context"
+import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
+import { useAuth } from "@/lib/auth-context";
 import { Sidebar } from "@/components/Sidebar";
-import Link from "next/link"
-
-interface ChecklistItem {
-  id: string
-  date: string
-  category: "exit-lamp" | "pintu-darurat" | "titik-kumpul"
-  items: Array<{
-    no: number
-    lokasi: string
-    kondisiLampu?: string
-    indikatorLampu?: string
-    kebersihan?: string
-    kondisiPintu?: string
-    areaSekitar?: string
-    paluAlatBantu?: string
-    identitasPintu?: string
-    idPeringatan?: string
-    doorCloser?: string
-    jalurEvakuasiAman?: string
-    penandaJalur?: string
-    pencahayaan?: string
-    notes?: string
-  }>
-  checker: string
-  submittedAt: string
-}
+import { AlertTriangle, FileText, BarChart2, ArrowLeft } from "lucide-react";
 
 export default function ExitLampPintuDaruratPage() {
-  const router = useRouter()
-  const { user } = useAuth()
-  const today = new Date().toISOString().split('T')[0]
+  const router = useRouter();
+  const { user } = useAuth();
+  const today = new Date().toISOString().split("T")[0];
+  const [searchTerm, setSearchTerm] = useState("");
+  const [redirected, setRedirected] = useState(false);
 
   // Validasi akses
   useEffect(() => {
+    if (redirected) return;
     if (!user || user.role !== "inspector-ga") {
-      router.push("/home")
+      setRedirected(true);
+      router.push("/home");
     }
-  }, [user, router])
+  }, [user, router, redirected]);
 
   // Cek apakah sudah diisi hari ini
   const checkIfFilled = (category: string) => {
-    if (typeof window === "undefined") return false
-    const key = `ga_exit_${category}_${today}`
-    return localStorage.getItem(key) !== null
-  }
+    if (typeof window === "undefined") return false;
+    const key = `ga_exit_${category}_${today}`;
+    return localStorage.getItem(key) !== null;
+  };
 
   const categories = [
     {
       id: "exit-lamp",
       title: "Exit Lamp & Emergency Lamp",
       desc: "Pemeriksaan kondisi lampu darurat dan exit lamp",
-      filled: checkIfFilled("exit-lamp"),
       link: "/status-ga/exit-lamp-pintu-darurat/exit-lamp",
       historyLink: "/status-ga/exit-lamp-pintu-darurat/riwayat/exit-lamp",
-      color: "#ff9800",
-      icon: "💡"
     },
     {
       id: "pintu-darurat",
       title: "Pintu Darurat",
       desc: "Pemeriksaan kondisi pintu darurat dan akses evakuasi",
-      filled: checkIfFilled("pintu-darurat"),
       link: "/status-ga/exit-lamp-pintu-darurat/pintu-darurat",
       historyLink: "/status-ga/exit-lamp-pintu-darurat/riwayat/pintu-darurat",
-      color: "#f44336",
-      icon: "🚪"
     },
     {
       id: "titik-kumpul",
       title: "Titik Kumpul & Jalur Evakuasi",
       desc: "Pemeriksaan area evakuasi dan jalur darurat",
-      filled: checkIfFilled("titik-kumpul"),
       link: "/status-ga/exit-lamp-pintu-darurat/titik-kumpul",
       historyLink: "/status-ga/exit-lamp-pintu-darurat/riwayat/titik-kumpul",
-      color: "#2196f3",
-      icon: "📍"
-    }
-  ]
+    },
+  ];
 
-  if (!user) return null
+  const filteredCategories = categories.filter(cat =>
+    cat.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    cat.desc.toLowerCase().includes(searchTerm.toLowerCase())
+  );
+
+  if (!user) return null;
 
   return (
     <div className="app-page">
       <Sidebar userName={user.fullName} />
 
       <div className="page-content">
-        <div className="header">
-          <div className="header-icon">🚨</div>
-          <h1>Checklist Exit Lamp & Evakuasi</h1>
-          <p className="subtitle">Daily check sistem keselamatan darurat</p>
+        {/* Header Banner */}
+        <div className="header-banner">
+          <button
+            onClick={() => router.push("/status-ga")}
+            className="btn-back"
+            aria-label="Kembali ke halaman utama"
+          >
+            <ArrowLeft size={18} />
+            <span>Kembali</span>
+          </button>
+
+          <div className="header-title">
+            <AlertTriangle size={28} color="#ffffff" />
+            Checklist Exit Lamp & Evakuasi
+          </div>
+
+          <div className="header-subtitle">Daily check sistem keselamatan darurat</div>
         </div>
 
-        {/* Satu Grid Card - Gabungan Isi & Riwayat */}
-        <div className="categories-grid">
-          {categories.map((cat) => (
-            <div key={cat.id} className="category-card">
-              <div className={`card-header ${cat.filled ? 'filled' : ''}`} style={{
-                background: cat.filled 
-                  ? 'linear-gradient(135deg, #66bb6a 0%, #81c784 100%)'
-                  : `linear-gradient(135deg, ${cat.color}15 0%, ${cat.color}30 100%)`
-              }}>
-                <div className="icon" style={{ color: cat.color }}>
-                  {cat.icon}
-                </div>
-                <div className="header-text">
-                  <h2>{cat.title}</h2>
-                  {cat.filled && <span className="badge-filled">✓ Sudah Diisi Hari Ini</span>}
-                </div>
-              </div>
-              
-              <div className="card-body">
-                <p className="card-desc">{cat.desc}</p>
-                
-                <div className="card-actions">
-                  <Link 
-                    href={`${cat.link}?date=${today}`} 
-                    className={`btn btn-checklist ${cat.filled ? 'disabled' : ''}`}
-                    style={{
-                      background: cat.filled ? '#e0e0e0' : cat.color,
-                      borderColor: cat.color
-                    }}
-                  >
-                    <span className="btn-icon">{cat.filled ? "✓" : "📝"}</span>
-                    <span className="btn-text">
-                      {cat.filled ? "Sudah Diisi" : "Isi Checklist"}
-                    </span>
-                  </Link>
-                  
-                  <Link 
-                    href={cat.historyLink} 
-                    className="btn btn-history"
-                    style={{ background: cat.color }}
-                  >
-                    <span className="btn-icon">📊</span>
-                    <span className="btn-text">Lihat Riwayat</span>
-                  </Link>
-                </div>
-              </div>
-            </div>
-          ))}
+        {/* 🔍 Search Bar */}
+        <div className="search-container">
+          <div className="search-box">
+            <input
+              type="text"
+              placeholder="Cari jenis inspeksi..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="search-input"
+            />
+          </div>
         </div>
+
+        {/* Grid Kategori */}
+        {filteredCategories.length === 0 ? (
+          <div className="no-results">
+            Tidak ada kategori ditemukan untuk "{searchTerm}"
+          </div>
+        ) : (
+          <div className="categories-grid">
+            {filteredCategories.map((cat) => {
+              const filled = checkIfFilled(cat.id);
+              return (
+                <div key={cat.id} className="category-card">
+                  <div className={`card-header ${filled ? "filled" : ""}`}>
+                    <h2>{cat.title}</h2>
+                  </div>
+                  <p className="card-desc">{cat.desc}</p>
+                  <div className="card-actions">
+                    <button
+                      onClick={() => router.push(`${cat.link}?date=${today}`)}
+                      className={`btn-checklist ${filled ? "btn-filled" : ""}`}
+                    >
+                      <FileText size={16} />
+                      {filled ? "Sudah Diisi" : "Isi Checklist"}
+                    </button>
+                    <button
+                      onClick={() => router.push(cat.historyLink)}
+                      className="btn-riwayat"
+                    >
+                      <BarChart2 size={16} />
+                      Riwayat
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
       </div>
 
       <style jsx>{`
+        .app-page {
+          display: flex;
+          min-height: 100vh;
+          background-color: #f7f9fc;
+        }
+
         .page-content {
-          max-width: 1200px;
-          margin: 0 auto;
+          flex: 1;
           padding: 24px;
+          max-width: 1400px;
+          margin: 0 auto;
         }
 
-        .header {
-          text-align: center;
-          margin-bottom: 40px;
+        /* Header Banner */
+        .header-banner {
+          background: linear-gradient(135deg, #1976d2 0%, #0d47a1 100%);
+          color: white;
+          padding: 16px 24px;
+          border-radius: 16px;
+          margin-bottom: 24px;
+          box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+          display: flex;
+          align-items: center;
+          gap: 16px;
         }
 
-        .header-icon {
-          font-size: 4rem;
-          margin-bottom: 12px;
-          animation: pulse 2s infinite;
+        .btn-back {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          padding: 6px 12px;
+          background: rgba(255, 255, 255, 0.2);
+          color: white;
+          border: none;
+          border-radius: 8px;
+          cursor: pointer;
+          font-weight: 600;
+          transition: all 0.3s ease;
+          font-size: 0.9rem;
+          outline: none;
         }
 
-        @keyframes pulse {
-          0%, 100% { transform: scale(1); }
-          50% { transform: scale(1.05); }
+        .btn-back:hover {
+          background: rgba(255, 255, 255, 0.3);
+          transform: translateY(-1px);
         }
 
-        .header h1 {
-          margin: 0;
-          color: #fefefe;
-          font-size: 2.2rem;
+        .header-title {
+          font-size: 1.8rem;
           font-weight: 700;
+          margin: 0;
+          display: flex;
+          align-items: center;
+          gap: 12px;
+          flex: 1;
         }
 
-        .subtitle {
-          color: #e0e0e0;
-          margin-top: 8px;
-          font-size: 1.1rem;
+        .header-subtitle {
+          font-size: 0.9rem;
+          opacity: 0.9;
+          margin: 0;
           font-weight: 400;
+          text-align: right;
+          flex-shrink: 0;
         }
 
+        /* Search Bar */
+        .search-container {
+          margin-bottom: 24px;
+        }
+
+        .search-box {
+          position: relative;
+          display: flex;
+          align-items: center;
+          border: 2px solid #cbd5e1;
+          border-radius: 12px;
+          overflow: hidden;
+          background: white;
+        }
+
+        .search-input {
+          flex: 1;
+          padding: 14px 20px;
+          font-size: 1rem;
+          border: none;
+          outline: none;
+        }
+
+        /* No Results */
+        .no-results {
+          text-align: center;
+          padding: 40px;
+          color: #64748b;
+          font-size: 1.1rem;
+          background: white;
+          border-radius: 12px;
+          border: 1px solid #e2e8f0;
+        }
+
+        /* Grid Zona */
         .categories-grid {
           display: grid;
           grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
-          gap: 28px;
+          gap: 24px;
         }
 
         .category-card {
           background: white;
           border-radius: 16px;
-          box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+          box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
           overflow: hidden;
           transition: all 0.3s ease;
-          border: 1px solid rgba(0,0,0,0.05);
+          border: 2px solid #e2e8f0;
         }
 
         .category-card:hover {
           transform: translateY(-6px);
-          box-shadow: 0 8px 30px rgba(0,0,0,0.15);
+          box-shadow: 0 8px 20px rgba(0, 0, 0, 0.15);
+          border-color: #3b82f6;
         }
 
         .card-header {
-          padding: 24px;
-          display: flex;
-          align-items: center;
-          gap: 16px;
-          border-bottom: 1px solid rgba(0,0,0,0.05);
-        }
-
-        .card-header.filled {
-          background: linear-gradient(135deg, #66bb6a 0%, #81c784 100%) !important;
-        }
-
-        .icon {
-          font-size: 2.5rem;
+          padding: 20px;
+          background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%);
           display: flex;
           align-items: center;
           justify-content: center;
-          width: 60px;
-          height: 60px;
-          background: white;
-          border-radius: 12px;
-          box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+          border-bottom: 2px solid #bbdefb;
         }
 
-        .header-text {
-          flex: 1;
+        .card-header.filled {
+          background: linear-gradient(135deg, #e8f5e9 0%, #c8e6c9 100%);
+          border-color: #c8e6c9;
         }
 
         .card-header h2 {
-          margin: 0 0 4px 0;
-          font-size: 1.35rem;
-          color: #1a1a1a;
+          margin: 0;
+          font-size: 1.3rem;
+          color: #0d47a1;
           font-weight: 700;
         }
 
-        .badge-filled {
-          display: inline-block;
-          background: rgba(255,255,255,0.9);
-          color: #2e7d32;
-          padding: 4px 12px;
-          border-radius: 12px;
-          font-size: 0.85rem;
-          font-weight: 600;
-        }
-
-        .card-body {
-          padding: 24px;
-        }
-
         .card-desc {
-          color: #666;
-          line-height: 1.6;
-          margin: 0 0 24px 0;
-          font-size: 0.95rem;
+          padding: 16px 20px;
+          color: #475569;
+          line-height: 1.5;
+          margin: 0;
+          text-align: center;
         }
 
         .card-actions {
+          padding: 16px 20px;
           display: flex;
           gap: 12px;
+          border-top: 1px solid #e2e8f0;
         }
 
-        .btn {
-          padding: 14px 20px;
-          border-radius: 10px;
-          font-weight: 600;
-          text-align: center;
-          text-decoration: none;
-          cursor: pointer;
-          transition: all 0.3s ease;
+        .btn-checklist,
+        .btn-riwayat {
+          flex: 1;
           display: flex;
           align-items: center;
           justify-content: center;
           gap: 8px;
-          border: 2px solid transparent;
-          font-size: 0.95rem;
-          position: relative;
-          overflow: hidden;
-        }
-
-        .btn::before {
-          content: '';
-          position: absolute;
-          top: 0;
-          left: -100%;
-          width: 100%;
-          height: 100%;
-          background: rgba(255,255,255,0.2);
-          transition: left 0.3s ease;
-        }
-
-        .btn:hover::before {
-          left: 100%;
-        }
-
-        .btn-icon {
-          font-size: 1.2rem;
-        }
-
-        .btn-text {
-          position: relative;
-          z-index: 1;
+          padding: 10px 12px;
+          border-radius: 8px;
+          font-weight: 600;
+          font-size: 0.9rem;
+          text-decoration: none;
+          transition: all 0.25s ease;
+          text-align: center;
+          min-height: 42px;
+          cursor: pointer;
+          border: none;
+          outline: none;
         }
 
         .btn-checklist {
+          background: #dc2626;
           color: white;
-          flex: 1;
-          box-shadow: 0 4px 12px rgba(0,0,0,0.15);
         }
 
-        .btn-checklist:not(.disabled):hover {
-          transform: translateY(-2px);
-          box-shadow: 0 6px 20px rgba(0,0,0,0.2);
+        .btn-checklist:hover {
+          background: #b91c1c;
+          transform: scale(1.03);
+          box-shadow: 0 4px 8px rgba(185, 28, 28, 0.3);
         }
 
-        .btn-checklist.disabled {
-          color: #757575;
+        .btn-checklist.btn-filled {
+          background: #16a34a;
           cursor: not-allowed;
+        }
+
+        .btn-checklist.btn-filled:hover {
+          background: #16a34a;
+          transform: none;
           box-shadow: none;
         }
 
-        .btn-checklist.disabled:hover {
-          transform: none;
+        .btn-riwayat {
+          background: #f1f5f9;
+          color: #334155;
+          border: 1px solid #cbd5e1;
         }
 
-        .btn-history {
-          color: white;
-          flex: 1;
-          background: linear-gradient(135deg, #1e88e5 0%, #1565c0 100%);
-          box-shadow: 0 4px 12px rgba(30,136,229,0.3);
+        .btn-riwayat:hover {
+          background: #e2e8f0;
+          border-color: #94a8c9;
+          color: #1e293b;
+          transform: scale(1.03);
+          box-shadow: 0 4px 8px rgba(0, 0, 0, 0.08);
         }
 
-        .btn-history:hover {
-          background: linear-gradient(135deg, #1976d2 0%, #0d47a1 100%);
-          transform: translateY(-2px);
-          box-shadow: 0 6px 20px rgba(30,136,229,0.4);
-        }
-
+        /* Responsif Mobile */
         @media (max-width: 768px) {
           .page-content {
+            padding: 16px 12px;
+          }
+
+          .header-banner {
+            flex-direction: column;
+            text-align: center;
+            gap: 12px;
             padding: 16px;
           }
 
-          .header-icon {
-            font-size: 3rem;
+          .btn-back {
+            align-self: flex-start;
+            padding: 6px 12px;
+            gap: 6px;
+            font-size: 0.85rem;
           }
 
-          .header h1 {
-            font-size: 1.8rem;
+          .header-title {
+            font-size: 1.6rem;
+            justify-content: center;
+          }
+
+          .header-subtitle {
+            text-align: center;
+            align-self: flex-end;
+          }
+
+          .search-container {
+            margin-top: 16px;
           }
 
           .categories-grid {
             grid-template-columns: 1fr;
-            gap: 20px;
           }
 
           .card-actions {
             flex-direction: column;
           }
 
-          .icon {
-            width: 50px;
-            height: 50px;
-            font-size: 2rem;
-          }
-
-          .card-header h2 {
-            font-size: 1.2rem;
+          .btn-checklist,
+          .btn-riwayat {
+            width: 100%;
           }
         }
       `}</style>
     </div>
-  )
+  );
 }

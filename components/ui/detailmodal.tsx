@@ -28,6 +28,7 @@ interface ModalData {
     shift: string
     waktuCheck?: string
     standard?: string
+    method?: string
   }
   result: CheckResult
 }

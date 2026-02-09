@@ -1,5 +1,3 @@
-// app/e-checksheet-panel/layout.tsx
-
 import type React from "react"
 import { Suspense } from "react"
 

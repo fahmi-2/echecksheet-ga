@@ -1,12 +1,12 @@
-// app/inspeksi-emergency/[area]/page.tsx
-"use client"
+// app/status-ga/inspeksi-emergency/[area]/page.tsx
+"use client";
 
-import { useState, useEffect, use } from "react" // 🔹 Tambahkan 'use'
-import { useRouter } from "next/navigation"
-import { useAuth } from "@/lib/auth-context"
+import { useState, useEffect, use } from "react";
+import { useRouter } from "next/navigation";
+import { useAuth } from "@/lib/auth-context";
 import { Sidebar } from "@/components/Sidebar";
+import { ArrowLeft } from "lucide-react";
 
-// Data lokasi per area dari Excel
 const locations = {
   "genba-a": [
     { no: 1, lokasi: "CV AB1", id: "A01" },
@@ -95,31 +95,32 @@ const locations = {
     { no: 89, lokasi: "PPIC OFFICE", id: "MAIN OFFICE 02" },
     { no: 90, lokasi: "PP OFFICE SELATAN", id: "MAIN OFFICE 03" },
     { no: 91, lokasi: "PP OFFICE UTARA", id: "MAIN OFFICE 04" },
-  ]
-}
+  ],
+};
 
 export default function EmergencyLampChecklist({ params }: { params: Promise<{ area: string }> }) {
-  const router = useRouter()
-  const { user } = useAuth()
+  const router = useRouter();
+  const { user } = useAuth();
+  const { area } = use(params);
+  const date = new Date().toISOString().split("T")[0];
 
-  // 🔹 Ambil nilai 'area' dari Promise
-  const { area } = use(params)
-  const date = new Date().toISOString().split('T')[0]
-
-  const [items, setItems] = useState<any[]>([])
-  const [showPreview, setShowPreview] = useState(false)
-  const [hasNg, setHasNg] = useState(false)
+  const [items, setItems] = useState<any[]>([]);
+  const [showPreview, setShowPreview] = useState(false);
+  const [hasNg, setHasNg] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [tempPhotoPreviews, setTempPhotoPreviews] = useState<Record<number, string>>({});
 
   // Validasi akses
   useEffect(() => {
     if (!user || user.role !== "inspector-ga") {
-      router.push("/home")
+      router.push("/home");
     }
-  }, [user, router])
+  }, [user, router]);
 
+  // Inisialisasi data
   useEffect(() => {
-    const locs = locations[area as keyof typeof locations] || []
-    const initialItems = locs.map(loc => ({
+    const locs = locations[area as keyof typeof locations] || [];
+    const initialItems = locs.map((loc) => ({
       no: loc.no,
       lokasi: loc.lokasi,
       id: loc.id,
@@ -131,82 +132,226 @@ export default function EmergencyLampChecklist({ params }: { params: Promise<{ a
       kondisiKabel: "",
       keterangan: "",
       tindakanPerbaikan: "",
-      pic: "",
-      dueDate: "",
-      verifikasi: "",
-      ttdPic: ""
-    }))
-    setItems(initialItems)
-  }, [area])
+      pic: user?.fullName || "",
+      foto: "",
+    }));
+    setItems(initialItems);
+  }, [area, user]);
 
   const handleInputChange = (index: number, field: string, value: string) => {
-    const newItems = [...items]
-    newItems[index] = { ...newItems[index], [field]: value }
-    setItems(newItems)
-  }
+    const newItems = [...items];
+    newItems[index] = { ...newItems[index], [field]: value };
+    setItems(newItems);
+  };
+
+  // 🔥 UPLOAD FOTO KE API
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>, index: number) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    // Validasi file
+    if (!['image/jpeg', 'image/jpg', 'image/png', 'image/webp'].includes(file.type)) {
+      alert('Format file tidak didukung. Gunakan JPEG, PNG, atau WEBP');
+      return;
+    }
+
+    if (file.size > 5 * 1024 * 1024) { // 5MB
+      alert('Ukuran file terlalu besar. Maksimal 5MB');
+      return;
+    }
+
+    try {
+      setLoading(true);
+      
+      // ✅ Tampilkan preview langsung dari file
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setTempPhotoPreviews(prev => ({ ...prev, [index]: reader.result as string }));
+      };
+      reader.readAsDataURL(file);
+
+      // Upload ke API
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('area', area);
+      formData.append('lokasi', items[index].lokasi);
+
+      const response = await fetch('/api/emergency-lamp/upload', {
+        method: 'POST',
+        body: formData,
+      });
+
+      const result = await response.json();
+
+      if (response.ok && result.success) {
+        // ✅ Update item dengan path file dari server
+        handleInputChange(index, "foto", result.data.path);
+        
+        // ✅ Hapus temporary preview
+        setTempPhotoPreviews(prev => {
+          const newPreviews = { ...prev };
+          delete newPreviews[index];
+          return newPreviews;
+        });
+        
+        alert('✅ Foto berhasil diupload!');
+      } else {
+        // ❌ Jika gagal upload, hapus temporary preview
+        setTempPhotoPreviews(prev => {
+          const newPreviews = { ...prev };
+          delete newPreviews[index];
+          return newPreviews;
+        });
+        alert('❌ Gagal upload foto: ' + (result.message || 'Error tidak diketahui'));
+      }
+    } catch (error) {
+      console.error('Upload error:', error);
+      // Hapus temporary preview jika error
+      setTempPhotoPreviews(prev => {
+        const newPreviews = { ...prev };
+        delete newPreviews[index];
+        return newPreviews;
+      });
+      alert('❌ Terjadi kesalahan saat upload foto');
+    } finally {
+      setLoading(false);
+      // Reset input file
+      e.target.value = '';
+    }
+  };
+
+  const handleRemoveImage = (index: number) => {
+    // Hapus foto dari database jika sudah tersimpan
+    const fotoPath = items[index].foto;
+    if (fotoPath && !fotoPath.startsWith('data:')) {
+      console.log('Foto akan dihapus saat submit:', fotoPath);
+    }
+    
+    // Hapus foto path
+    handleInputChange(index, "foto", "");
+    
+    // Hapus temporary preview jika ada
+    setTempPhotoPreviews(prev => {
+      const newPreviews = { ...prev };
+      delete newPreviews[index];
+      return newPreviews;
+    });
+  };
 
   const handleShowPreview = () => {
-    // Validasi wajib diisi
     for (const item of items) {
-      if (!item.kondisiLampu || !item.indicatorLamp || !item.batteryCharger || 
-          !item.idNumber || !item.kebersihan || !item.kondisiKabel) {
-        alert("⚠️ Semua kolom status harus diisi!")
-        return
+      if (
+        !item.kondisiLampu ||
+        !item.indicatorLamp ||
+        !item.batteryCharger ||
+        !item.idNumber ||
+        !item.kebersihan ||
+        !item.kondisiKabel
+      ) {
+        alert("⚠️ Semua kolom status harus diisi!");
+        return;
       }
     }
 
     const ngExists = items.some(
-      item => item.kondisiLampu === "NG" || 
-              item.indicatorLamp === "NG" || 
-              item.batteryCharger === "NG" ||
-              item.idNumber === "NG" ||
-              item.kebersihan === "NG" ||
-              item.kondisiKabel === "NG"
-    )
-    setHasNg(ngExists)
-    setShowPreview(true)
-  }
+      (item) =>
+        item.kondisiLampu === "NG" ||
+        item.indicatorLamp === "NG" ||
+        item.batteryCharger === "NG" ||
+        item.idNumber === "NG" ||
+        item.kebersihan === "NG" ||
+        item.kondisiKabel === "NG"
+    );
 
-  const handleCancelPreview = () => {
-    setShowPreview(false)
-  }
-
-  const handleSave = () => {
-    const storageKey = `ga_emergency_${area}_${date}`
-    const result = {
-      id: `emergency-${area}-${Date.now()}`,
-      date,
-      area,
-      items,
-      checker: user?.fullName || "",
-      submittedAt: new Date().toISOString(),
+    if (ngExists) {
+      const missingKeterangan = items.some(
+        (item) =>
+          (item.kondisiLampu === "NG" ||
+            item.indicatorLamp === "NG" ||
+            item.batteryCharger === "NG" ||
+            item.idNumber === "NG" ||
+            item.kebersihan === "NG" ||
+            item.kondisiKabel === "NG") &&
+          (!item.keterangan || item.keterangan.trim() === "")
+      );
+      if (missingKeterangan) {
+        alert("⚠️ Harap isi kolom 'Keterangan' untuk semua item yang berstatus NG!");
+        return;
+      }
     }
 
-    localStorage.setItem(storageKey, JSON.stringify(result))
+    setHasNg(ngExists);
+    setShowPreview(true);
+  };
 
-    // Simpan ke history
-    const historyKey = `ga_emergency_history_${area}`
-    const existing = localStorage.getItem(historyKey) || "[]"
-    const history = JSON.parse(existing)
-    history.push({ ...result, id: storageKey })
-    localStorage.setItem(historyKey, JSON.stringify(history))
+  const handleCancelPreview = () => setShowPreview(false);
 
-    alert("✅ Data berhasil disimpan!")
-    router.push("/inspeksi-emergency") // 🔹 Redirect ke halaman utama
-  }
+  // 🔥 SIMPAN KE API
+  const handleSave = async () => {
+    try {
+      setLoading(true);
+
+      // Siapkan data untuk submit
+      const submitData = {
+        date,
+        area,
+        checker: user?.fullName || "",
+        checkerNik: user?.nik || "",
+        items: items.map(item => ({
+          no: item.no,
+          lokasi: item.lokasi,
+          id: item.id,
+          kondisiLampu: item.kondisiLampu,
+          indicatorLamp: item.indicatorLamp,
+          batteryCharger: item.batteryCharger,
+          idNumber: item.idNumber,
+          kebersihan: item.kebersihan,
+          kondisiKabel: item.kondisiKabel,
+          keterangan: item.keterangan || "",
+          tindakanPerbaikan: item.tindakanPerbaikan || "",
+          pic: item.pic,
+          foto: item.foto || null // Path file atau null
+        }))
+      };
+
+      const response = await fetch('/api/emergency-lamp/submit', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(submitData),
+      });
+
+      const result = await response.json();
+
+      if (response.ok && result.success) {
+        alert("✅ Data berhasil disimpan!");
+        router.push(`/status-ga/inspeksi-emergency/riwayat/${area}`);
+      } else {
+        alert("❌ Gagal menyimpan data: " + (result.message || 'Error tidak diketahui'));
+      }
+    } catch (error) {
+      console.error('Submit error:', error);
+      alert("❌ Terjadi kesalahan saat menyimpan data: " + (error as any).message);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleReportNg = () => {
-    const ngItems = items.filter(item =>
-      item.kondisiLampu === "NG" || 
-      item.indicatorLamp === "NG" || 
-      item.batteryCharger === "NG" ||
-      item.idNumber === "NG" ||
-      item.kebersihan === "NG" ||
-      item.kondisiKabel === "NG"
-    ).map(item => ({
-      name: `${item.lokasi} (${item.id})`,
-      notes: item.keterangan || "Tidak ada keterangan"
-    }))
+    const ngItems = items
+      .filter(
+        (item) =>
+          item.kondisiLampu === "NG" ||
+          item.indicatorLamp === "NG" ||
+          item.batteryCharger === "NG" ||
+          item.idNumber === "NG" ||
+          item.kebersihan === "NG" ||
+          item.kondisiKabel === "NG"
+      )
+      .map((item) => ({
+        name: `${item.lokasi} (${item.id})`,
+        notes: item.keterangan || "Tidak ada keterangan",
+        foto: item.foto || undefined,
+      }));
 
     const pelaporanData = {
       tanggal: date,
@@ -219,12 +364,12 @@ export default function EmergencyLampChecklist({ params }: { params: Promise<{ a
       reporter: user?.fullName || "",
       reportedAt: new Date().toISOString(),
       status: "open" as const,
-      ngItemsDetail: ngItems
-    }
+      ngItemsDetail: ngItems,
+    };
 
-    localStorage.setItem("temp_ng_report", JSON.stringify(pelaporanData))
-    router.push("/pelaporan") // 🔹 Arahkan ke halaman pelaporan global
-  }
+    localStorage.setItem("temp_ng_report", JSON.stringify(pelaporanData));
+    router.push("/status-ga/pelaporan");
+  };
 
   const getAreaTitle = () => {
     const titles: Record<string, string> = {
@@ -236,28 +381,50 @@ export default function EmergencyLampChecklist({ params }: { params: Promise<{ a
       "warehouse": "WAREHOUSE",
       "mezzanine": "MEZZANINE",
       "parkir": "PARKIR",
-      "main-office": "MAIN OFFICE"
-    }
-    return titles[area] || area.toUpperCase()
-  }
+      "main-office": "MAIN OFFICE",
+    };
+    return titles[area] || area.toUpperCase();
+  };
 
-  if (!user) return null
+  if (!user) return null;
 
   return (
     <div className="app-page">
       <Sidebar userName={user.fullName} />
 
       <div className="page-content">
-        <div className="header">
-          <div className="header-top">
-            <button onClick={() => router.back()} className="btn-back">← Kembali</button>
-            <h1>💡 Inspeksi Emergency Lamp - {getAreaTitle()}</h1>
-          </div>
-          <p className="subtitle">Tanggal: {date}</p>
+        {/* Header Banner */}
+        <div className="header-banner">
+          <button
+            onClick={() => router.push("/status-ga/inspeksi-emergency")}
+            className="btn-back"
+          >
+            <ArrowLeft size={18} />
+            <span>Kembali</span>
+          </button>
+          <h1 className="page-title">💡 Inspeksi Emergency Lamp - {getAreaTitle()}</h1>
         </div>
+        <p className="subtitle">
+          📅{" "}
+          <span className="date-text">
+            {new Date(date).toLocaleDateString("id-ID", {
+              weekday: "long",
+              year: "numeric",
+              month: "long",
+              day: "numeric",
+            })}
+          </span>
+        </p>
+
+        {loading && (
+          <div className="loading-overlay">
+            <div className="spinner"></div>
+            <p>Memproses...</p>
+          </div>
+        )}
 
         {!showPreview ? (
-          <div className="form-container">
+          <div className="card-container">
             <table className="checklist-table">
               <thead>
                 <tr>
@@ -273,80 +440,153 @@ export default function EmergencyLampChecklist({ params }: { params: Promise<{ a
                   <th>Keterangan</th>
                   <th>Tindakan Perbaikan</th>
                   <th>PIC</th>
-                  <th>Due Date</th>
-                  <th>Verifikasi</th>
-                  <th>Ttd PIC</th>
+                  <th>Foto</th>
                 </tr>
               </thead>
               <tbody>
                 {items.map((item, index) => (
                   <tr key={index}>
-                    <td>{item.no}</td>
-                    <td>{item.lokasi}</td>
-                    <td>{item.id}</td>
+                    <td className="info-cell">{item.no}</td>
+                    <td className="info-cell">{item.lokasi}</td>
+                    <td className="info-cell">{item.id}</td>
                     <td>
-                      <select value={item.kondisiLampu} onChange={(e) => handleInputChange(index, "kondisiLampu", e.target.value)} className="status-select">
+                      <select
+                        value={item.kondisiLampu}
+                        onChange={(e) => handleInputChange(index, "kondisiLampu", e.target.value)}
+                        className="status-select"
+                        disabled={loading}
+                      >
                         <option value="">Pilih</option>
                         <option value="OK">OK</option>
                         <option value="NG">NG</option>
                       </select>
                     </td>
                     <td>
-                      <select value={item.indicatorLamp} onChange={(e) => handleInputChange(index, "indicatorLamp", e.target.value)} className="status-select">
+                      <select
+                        value={item.indicatorLamp}
+                        onChange={(e) => handleInputChange(index, "indicatorLamp", e.target.value)}
+                        className="status-select"
+                        disabled={loading}
+                      >
                         <option value="">Pilih</option>
                         <option value="OK">OK</option>
                         <option value="NG">NG</option>
                       </select>
                     </td>
                     <td>
-                      <select value={item.batteryCharger} onChange={(e) => handleInputChange(index, "batteryCharger", e.target.value)} className="status-select">
+                      <select
+                        value={item.batteryCharger}
+                        onChange={(e) => handleInputChange(index, "batteryCharger", e.target.value)}
+                        className="status-select"
+                        disabled={loading}
+                      >
                         <option value="">Pilih</option>
                         <option value="OK">OK</option>
                         <option value="NG">NG</option>
                       </select>
                     </td>
                     <td>
-                      <select value={item.idNumber} onChange={(e) => handleInputChange(index, "idNumber", e.target.value)} className="status-select">
+                      <select
+                        value={item.idNumber}
+                        onChange={(e) => handleInputChange(index, "idNumber", e.target.value)}
+                        className="status-select"
+                        disabled={loading}
+                      >
                         <option value="">Pilih</option>
                         <option value="OK">OK</option>
                         <option value="NG">NG</option>
                       </select>
                     </td>
                     <td>
-                      <select value={item.kebersihan} onChange={(e) => handleInputChange(index, "kebersihan", e.target.value)} className="status-select">
+                      <select
+                        value={item.kebersihan}
+                        onChange={(e) => handleInputChange(index, "kebersihan", e.target.value)}
+                        className="status-select"
+                        disabled={loading}
+                      >
                         <option value="">Pilih</option>
                         <option value="OK">OK</option>
                         <option value="NG">NG</option>
                       </select>
                     </td>
                     <td>
-                      <select value={item.kondisiKabel} onChange={(e) => handleInputChange(index, "kondisiKabel", e.target.value)} className="status-select">
+                      <select
+                        value={item.kondisiKabel}
+                        onChange={(e) => handleInputChange(index, "kondisiKabel", e.target.value)}
+                        className="status-select"
+                        disabled={loading}
+                      >
                         <option value="">Pilih</option>
                         <option value="OK">OK</option>
                         <option value="NG">NG</option>
                       </select>
                     </td>
                     <td>
-                      <input type="text" value={item.keterangan} onChange={(e) => handleInputChange(index, "keterangan", e.target.value)} placeholder="Catatan..." className="notes-input" />
+                      <input
+                        type="text"
+                        value={item.keterangan}
+                        onChange={(e) => handleInputChange(index, "keterangan", e.target.value)}
+                        placeholder="Wajib diisi jika NG"
+                        className="notes-input"
+                        disabled={loading}
+                      />
                     </td>
                     <td>
-                      <input type="text" value={item.tindakanPerbaikan} onChange={(e) => handleInputChange(index, "tindakanPerbaikan", e.target.value)} placeholder="Tindakan perbaikan..." className="notes-input" />
+                      <input
+                        type="text"
+                        value={item.tindakanPerbaikan}
+                        onChange={(e) => handleInputChange(index, "tindakanPerbaikan", e.target.value)}
+                        placeholder="Tindakan perbaikan..."
+                        className="notes-input"
+                        disabled={loading}
+                      />
                     </td>
                     <td>
-                      <input type="text" value={item.pic} onChange={(e) => handleInputChange(index, "pic", e.target.value)} placeholder="PIC" className="notes-input" />
+                      <div className="info-cell">{item.pic}</div>
                     </td>
                     <td>
-                      <input type="date" value={item.dueDate} onChange={(e) => handleInputChange(index, "dueDate", e.target.value)} className="date-input" />
-                    </td>
-                    <td>
-                      <select value={item.verifikasi} onChange={(e) => handleInputChange(index, "verifikasi", e.target.value)} className="status-select">
-                        <option value="">Pilih</option>
-                        <option value="OK">OK</option>
-                        <option value="NG">NG</option>
-                      </select>
-                    </td>
-                    <td>
-                      <input type="text" value={item.ttdPic} onChange={(e) => handleInputChange(index, "ttdPic", e.target.value)} placeholder="Tanda tangan" className="notes-input" />
+                      <div className="image-upload">
+                        {/* ✅ Tampilkan foto yang sudah diupload ATAU temporary preview */}
+                        {(items[index].foto || tempPhotoPreviews[index]) ? (
+                          <div className="image-preview">
+                            <img 
+                              src={
+                                tempPhotoPreviews[index] || 
+                                (items[index].foto.startsWith('data:') 
+                                  ? items[index].foto 
+                                  : `${process.env.NEXT_PUBLIC_BASE_URL || ''}${items[index].foto}`)
+                              } 
+                              alt="Preview" 
+                              className="uploaded-image" 
+                            />
+                            <button
+                              type="button"
+                              onClick={() => handleRemoveImage(index)}
+                              className="remove-btn"
+                              disabled={loading}
+                            >
+                              ✕
+                            </button>
+                            {/* ✅ Loading indicator saat upload */}
+                            {loading && (
+                              <div className="upload-loading">
+                                <div className="spinner-small"></div>
+                              </div>
+                            )}
+                          </div>
+                        ) : (
+                          <label className="file-label">
+                            📷 Unggah
+                            <input
+                              type="file"
+                              accept="image/*"
+                              onChange={(e) => handleImageUpload(e, index)}
+                              className="file-input"
+                              disabled={loading}
+                            />
+                          </label>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -354,13 +594,24 @@ export default function EmergencyLampChecklist({ params }: { params: Promise<{ a
             </table>
 
             <div className="form-actions">
-              <button onClick={() => router.push("/inspeksi-emergency")} className="btn-cancel">Batal</button>
-              <button onClick={handleShowPreview} className="btn-submit">👁️ Preview & Simpan</button>
+              <button
+                onClick={() => router.push("/status-ga/inspeksi-emergency")}
+                className="btn-cancel"
+                disabled={loading}
+              >
+                Batal
+              </button>
+              <button 
+                onClick={handleShowPreview} 
+                className="btn-submit"
+                disabled={loading}
+              >
+                👁️ Preview & Simpan
+              </button>
             </div>
           </div>
         ) : (
-          /* Preview Mode */
-          <div className="preview-container">
+          <div className="card-container preview-mode">
             <h2 className="preview-title">🔍 Preview Data</h2>
             <div className="preview-table">
               <table className="simple-table">
@@ -376,6 +627,7 @@ export default function EmergencyLampChecklist({ params }: { params: Promise<{ a
                     <th>Kebersihan</th>
                     <th>Kabel</th>
                     <th>Keterangan</th>
+                    <th>Foto</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -391,6 +643,17 @@ export default function EmergencyLampChecklist({ params }: { params: Promise<{ a
                       <td className={item.kebersihan === "NG" ? "status-ng" : ""}>{item.kebersihan}</td>
                       <td className={item.kondisiKabel === "NG" ? "status-ng" : ""}>{item.kondisiKabel}</td>
                       <td>{item.keterangan || "-"}</td>
+                      <td>
+                        {item.foto ? (
+                          <img 
+                            src={item.foto.startsWith('data:') ? item.foto : `${process.env.NEXT_PUBLIC_BASE_URL || ''}${item.foto}`} 
+                            alt="Foto" 
+                            className="preview-image" 
+                          />
+                        ) : (
+                          "–"
+                        )}
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -398,69 +661,141 @@ export default function EmergencyLampChecklist({ params }: { params: Promise<{ a
             </div>
 
             <div className="preview-actions">
-              <button onClick={handleCancelPreview} className="cancel-btn">← Kembali</button>
+              <button 
+                onClick={handleCancelPreview} 
+                className="cancel-btn"
+                disabled={loading}
+              >
+                ← Kembali
+              </button>
               {hasNg ? (
                 <div className="ng-actions">
-                  <button onClick={handleReportNg} className="report-btn">📢 Laporkan NG</button>
-                  <button onClick={handleSave} className="save-btn">💾 Simpan Tanpa Lapor</button>
+                  <button 
+                    onClick={handleReportNg} 
+                    className="report-btn"
+                    disabled={loading}
+                  >
+                    📢 Laporkan NG
+                  </button>
+                  <button 
+                    onClick={handleSave} 
+                    className="save-btn"
+                    disabled={loading}
+                  >
+                    💾 Simpan Tanpa Lapor
+                  </button>
                 </div>
               ) : (
-                <button onClick={handleSave} className="save-btn">💾 Simpan Data</button>
+                <button 
+                  onClick={handleSave} 
+                  className="save-btn"
+                  disabled={loading}
+                >
+                  💾 Simpan Data
+                </button>
               )}
             </div>
           </div>
         )}
       </div>
 
+      <style jsx global>{`
+        body {
+          font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu,
+            Cantarell, sans-serif;
+          margin: 0;
+          padding: 0;
+          background-color: #f8fafc;
+        }
+      `}</style>
+
       <style jsx>{`
+        .app-page {
+          display: flex;
+          min-height: 100vh;
+          background-color: #f7f9fc;
+        }
+
         .page-content {
+          flex: 1;
           max-width: 1200px;
           margin: 0 auto;
           padding: 24px;
+          color: #1e293b;
         }
 
-        .header h1 {
-          margin: 0;
-          color: #ffffff;
-          font-size: 2rem;
-        }
-
-        .header-top {
+        /* Header Banner */
+        .header-banner {
+          background: linear-gradient(135deg, #1976d2 0%, #0d47a1 100%);
+          color: white;
+          padding: 16px 24px;
+          border-radius: 16px;
+          margin-bottom: 24px;
+          box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
           display: flex;
           align-items: center;
           gap: 16px;
-          margin-bottom: 12px;
         }
 
         .btn-back {
-          padding: 8px 16px;
-          background: #f5f5f5;
-          color: #333;
-          border: 1px solid #ddd;
-          border-radius: 6px;
-          font-weight: 600;
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          padding: 6px 12px;
+          background: rgba(255, 255, 255, 0.2);
+          color: white;
+          border: none;
+          border-radius: 8px;
           cursor: pointer;
-          transition: all 0.3s;
-          font-size: 0.95rem;
+          font-weight: 600;
+          transition: all 0.3s ease;
+          font-size: 0.9rem;
         }
 
         .btn-back:hover {
-          background: #e0e0e0;
-          border-color: #999;
+          background: rgba(255, 255, 255, 0.3);
+        }
+
+        .page-title {
+          margin: 0;
+          font-size: 1.8rem;
+          font-weight: 700;
+          flex: 1;
         }
 
         .subtitle {
-          color: #666;
+          color: rgba(255, 255, 255, 0.95);
           margin-top: 8px;
+          margin-bottom: 24px;
+          font-size: 1.1rem;
+          display: flex;
+          align-items: center;
+          gap: 8px;
         }
 
-        .form-container,
-        .preview-container {
-          background: white;
-          border-radius: 12px;
-          box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+        .date-text {
+          font-weight: 700;
+          font-size: 1.2rem;
+          color: #ffeb3b;
+          text-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+          background: rgba(0, 0, 0, 0.2);
+          padding: 4px 12px;
+          border-radius: 8px;
+          letter-spacing: 0.3px;
+        }
+
+        .card-container {
+          background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
+          border-radius: 16px;
+          box-shadow: 0 6px 20px rgba(0, 0, 0, 0.15);
           padding: 24px;
           overflow-x: auto;
+          color: white;
+          position: relative;
+        }
+
+        .preview-mode {
+          background: linear-gradient(135deg, #0d47a1 0%, #1976d2 100%);
         }
 
         .checklist-table,
@@ -468,6 +803,7 @@ export default function EmergencyLampChecklist({ params }: { params: Promise<{ a
           width: 100%;
           border-collapse: collapse;
           margin-bottom: 24px;
+          color: #fff8f8;
         }
 
         .checklist-table th,
@@ -476,66 +812,127 @@ export default function EmergencyLampChecklist({ params }: { params: Promise<{ a
         .simple-table td {
           padding: 12px;
           text-align: left;
-          border: 1px solid #eee;
+          border: 1px solid rgba(255, 255, 255, 0.2);
+          color: white;
         }
 
         .checklist-table th,
         .simple-table th {
-          background: #f5f9ff;
+          background: rgba(0, 0, 0, 0.15);
           font-weight: 600;
           position: sticky;
           top: 0;
-        }
-
-        .status-select,
-        .notes-input,
-        .date-input {
-          width: 100%;
-          padding: 6px;
-          border: 1px solid #ddd;
-          border-radius: 4px;
-          font-size: 0.9rem;
-        }
-
-        .form-actions {
-          display: flex;
-          gap: 16px;
-          justify-content: flex-end;
-        }
-
-        .btn-cancel,
-        .btn-submit {
-          padding: 10px 24px;
-          border: none;
-          border-radius: 6px;
-          font-weight: 600;
-          cursor: pointer;
-        }
-
-        .btn-cancel {
-          background: #f5f5f5;
-          color: #333;
-        }
-
-        .btn-submit {
-          background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
           color: white;
         }
 
-        /* Preview Styles */
-        .preview-title {
-          margin: 0 0 24px;
-          color: #0d47a1;
-          font-size: 1.5rem;
-          text-align: center;
+        .status-select,
+        .notes-input {
+          width: 100%;
+          padding: 8px 10px;
+          border: 1px solid rgba(255, 255, 255, 0.4);
+          border-radius: 6px;
+          font-size: 0.9rem;
+          background: rgba(255, 255, 255, 0.9);
+          color: #333;
         }
 
-        .status-ng {
-          background: #ffebee;
-          color: #c62828;
-          font-weight: bold;
+        .status-select:focus,
+        .notes-input:focus {
+          outline: none;
+          border-color: #4fc3f7;
+          box-shadow: 0 0 0 2px rgba(79, 195, 247, 0.3);
         }
 
+        .status-select:disabled,
+        .notes-input:disabled {
+          background: rgba(255, 255, 255, 0.5);
+          cursor: not-allowed;
+        }
+
+        .info-cell {
+          background: rgba(255, 255, 255, 0.4);
+          color: white;
+          font-weight: 500;
+        }
+
+        /* Upload & Preview Image */
+        .image-upload {
+          display: flex;
+          justify-content: center;
+          align-items: center;
+          min-height: 40px;
+        }
+
+        .file-label {
+          display: inline-block;
+          padding: 6px 12px;
+          background: rgba(255, 255, 255, 0.9);
+          color: #333;
+          border-radius: 6px;
+          font-size: 0.85rem;
+          cursor: pointer;
+          transition: background 0.2s;
+        }
+
+        .file-label:hover {
+          background: rgba(255, 255, 255, 1);
+        }
+
+        .file-input {
+          display: none;
+        }
+
+        .image-preview {
+          position: relative;
+          width: 60px;
+          height: 60px;
+        }
+
+        .uploaded-image,
+        .preview-image {
+          width: 100%;
+          height: 100%;
+          object-fit: cover;
+          border-radius: 6px;
+          border: 2px solid white;
+        }
+
+        .preview-image {
+          max-width: 80px;
+          max-height: 80px;
+        }
+
+        .remove-btn {
+          position: absolute;
+          top: -8px;
+          right: -8px;
+          background: #f44336;
+          color: white;
+          border: 2px solid white;
+          border-radius: 50%;
+          width: 20px;
+          height: 20px;
+          font-size: 12px;
+          cursor: pointer;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          padding: 0;
+          transition: all 0.2s;
+        }
+
+        .remove-btn:hover {
+          background: #d32f2f;
+          transform: scale(1.1);
+        }
+
+        .remove-btn:disabled {
+          opacity: 0.5;
+          cursor: not-allowed;
+          transform: none;
+        }
+
+        .form-actions,
         .preview-actions {
           display: flex;
           gap: 16px;
@@ -543,40 +940,149 @@ export default function EmergencyLampChecklist({ params }: { params: Promise<{ a
           margin-top: 20px;
         }
 
-        .cancel-btn {
-          padding: 10px 24px;
-          background: #f5f5f5;
-          color: #333;
+        .btn-cancel,
+        .btn-submit,
+        .cancel-btn,
+        .save-btn,
+        .report-btn {
+          padding: 10px 20px;
           border: none;
-          border-radius: 6px;
+          border-radius: 8px;
           font-weight: 600;
           cursor: pointer;
+          font-size: 0.95rem;
+          transition: all 0.2s ease;
+        }
+
+        .btn-cancel,
+        .cancel-btn {
+          background: rgba(255, 255, 255, 0.2);
+          color: white;
+        }
+
+        .btn-cancel:hover,
+        .cancel-btn:hover {
+          background: rgba(255, 255, 255, 0.3);
+        }
+
+        .btn-cancel:disabled,
+        .cancel-btn:disabled {
+          opacity: 0.5;
+          cursor: not-allowed;
+        }
+
+        .btn-submit {
+          background: #4caf50;
+          color: white;
+        }
+
+        .btn-submit:hover {
+          background: #43a047;
+        }
+
+        .btn-submit:disabled {
+          opacity: 0.5;
+          cursor: not-allowed;
         }
 
         .save-btn {
-          padding: 10px 24px;
-          background: linear-gradient(135deg, #2e7d32 0%, #1b5e20 100%);
+          background: #2e7d32;
           color: white;
-          border: none;
-          border-radius: 6px;
-          font-weight: 600;
-          cursor: pointer;
+        }
+
+        .save-btn:hover {
+          background: #1b5e20;
+        }
+
+        .save-btn:disabled {
+          opacity: 0.5;
+          cursor: not-allowed;
         }
 
         .report-btn {
-          padding: 10px 24px;
-          background: linear-gradient(135deg, #d32f2f 0%, #b71c1c 100%);
+          background: #d32f2f;
           color: white;
-          border: none;
-          border-radius: 6px;
-          font-weight: 600;
-          cursor: pointer;
-          margin-right: 12px;
+        }
+
+        .report-btn:hover {
+          background: #b71c1c;
+        }
+
+        .report-btn:disabled {
+          opacity: 0.5;
+          cursor: not-allowed;
+        }
+
+        .preview-title {
+          margin: 0 0 24px;
+          color: white;
+          font-size: 1.5rem;
+          text-align: center;
+          font-weight: 700;
+        }
+
+        .status-ng {
+          background: rgba(244, 67, 54, 0.2);
+          color: #ffcdd2;
+          font-weight: bold;
+          border-radius: 4px;
         }
 
         .ng-actions {
           display: flex;
           gap: 12px;
+        }
+
+        /* Loading Overlay */
+        .loading-overlay {
+          position: fixed;
+          top: 0;
+          left: 0;
+          right: 0;
+          bottom: 0;
+          background: rgba(0, 0, 0, 0.7);
+          display: flex;
+          flex-direction: column;
+          justify-content: center;
+          align-items: center;
+          z-index: 9999;
+          color: white;
+        }
+
+        .spinner {
+          width: 60px;
+          height: 60px;
+          border: 6px solid rgba(255, 255, 255, 0.3);
+          border-top-color: #4caf50;
+          border-radius: 50%;
+          animation: spin 0.8s linear infinite;
+          margin-bottom: 16px;
+        }
+
+        .upload-loading {
+          position: absolute;
+          top: 0;
+          left: 0;
+          right: 0;
+          bottom: 0;
+          background: rgba(0, 0, 0, 0.5);
+          display: flex;
+          justify-content: center;
+          align-items: center;
+          border-radius: 6px;
+        }
+
+        .spinner-small {
+          width: 24px;
+          height: 24px;
+          border: 3px solid rgba(255, 255, 255, 0.3);
+          border-top-color: #4caf50;
+          border-radius: 50%;
+          animation: spin 0.8s linear infinite;
+        }
+
+        @keyframes spin {
+          to { transform: rotate(360deg); }
         }
 
         @media (max-width: 768px) {
@@ -592,17 +1098,28 @@ export default function EmergencyLampChecklist({ params }: { params: Promise<{ a
             padding: 8px 4px;
           }
 
+          .form-actions,
           .preview-actions,
           .ng-actions {
             flex-direction: column;
             gap: 12px;
           }
 
-          .report-btn {
-            margin-right: 0;
+          .page-title {
+            font-size: 1.5rem;
+          }
+
+          .image-preview {
+            width: 40px;
+            height: 40px;
+          }
+
+          .preview-image {
+            max-width: 60px;
+            max-height: 60px;
           }
         }
       `}</style>
     </div>
-  )
+  );
 }

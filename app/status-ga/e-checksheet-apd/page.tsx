@@ -1,6 +1,5 @@
 // app/status-ga/e-checksheet-apd/page.tsx
 "use client"
-
 import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { useAuth } from "@/lib/auth-context"
@@ -10,7 +9,7 @@ export default function EChecksheetApdPage() {
   const router = useRouter()
   const { user } = useAuth()
   const [redirected, setRedirected] = useState(false)
-
+  
   // Jenis APD dari Excel
   const apdTypes = [
     "SARUNG TANGAN BINTIL",
@@ -67,20 +66,24 @@ export default function EChecksheetApdPage() {
     dept: string
     jobDesc: string
     jumlah: number
+    ttd: string
     keterangan: string
   }>>([
-    { 
-      no: 1, 
-      nama: "", 
-      nik: "", 
-      tglPengambilan: new Date().toISOString().split('T')[0], 
-      dept: "", 
-      jobDesc: "", 
-      jumlah: 1, 
-      keterangan: "" 
+    {
+      no: 1,
+      nama: "",
+      nik: "",
+      tglPengambilan: new Date().toISOString().split('T')[0],
+      dept: "",
+      jobDesc: "",
+      jumlah: 1,
+      ttd: "",
+      keterangan: ""
     }
   ])
+
   const [showPreview, setShowPreview] = useState(false)
+  const [submitting, setSubmitting] = useState(false)
 
   // Validasi akses
   useEffect(() => {
@@ -92,15 +95,16 @@ export default function EChecksheetApdPage() {
   }, [user, router, redirected])
 
   const handleAddRow = () => {
-    setItems([...items, { 
-      no: items.length + 1, 
-      nama: "", 
-      nik: "", 
-      tglPengambilan: new Date().toISOString().split('T')[0], 
-      dept: "", 
-      jobDesc: "", 
-      jumlah: 1, 
-      keterangan: "" 
+    setItems([...items, {
+      no: items.length + 1,
+      nama: "",
+      nik: "",
+      tglPengambilan: new Date().toISOString().split('T')[0],
+      dept: "",
+      jobDesc: "",
+      jumlah: 1,
+      ttd: "",
+      keterangan: ""
     }])
   }
 
@@ -121,14 +125,14 @@ export default function EChecksheetApdPage() {
       alert("⚠️ Silakan pilih jenis APD terlebih dahulu!")
       return
     }
-
+    
     // Validasi semua baris
     for (const item of items) {
       if (!item.nama.trim()) {
         alert("⚠️ Kolom 'Nama' wajib diisi!")
         return
       }
-      if (!item.niki.trim()) {
+      if (!item.nik.trim()) {
         alert("⚠️ Kolom 'NIK' wajib diisi!")
         return
       }
@@ -159,53 +163,79 @@ export default function EChecksheetApdPage() {
     setShowPreview(true)
   }
 
-  const handleSave = () => {
-  const today = new Date().toISOString().split('T')[0];
-  const storageKey = `ga_apd_${selectedType}_${today}`;
-  
-  // Data lengkap untuk penyimpanan detail
-  const fullResult = {
-    id: `APD-${Date.now()}`,
-    jenisApd: selectedType,
-    date: today,
-    checker: user?.fullName || "",
-    items: items.filter(item => item.nama.trim()),
-    submittedAt: new Date().toISOString(),
-  };
-
-  // 🔹 1. Simpan ke localStorage spesifik (untuk detail & riwayat APD)
-  localStorage.setItem(storageKey, JSON.stringify(fullResult));
-
-  // 🔹 2. Simpan ke riwayat APD global (`ga_apd_history`)
-  const apdHistoryKey = "ga_apd_history";
-  const existingApdHistory = localStorage.getItem(apdHistoryKey) || "[]";
-  const apdHistory = JSON.parse(existingApdHistory);
-  apdHistory.push({ ...fullResult, id: storageKey }); // simpan dengan key sebagai ID
-  localStorage.setItem(apdHistoryKey, JSON.stringify(apdHistory));
-
-  // 🔹 3. Simpan ke riwayat checklist global (`checksheet_history`) → untuk Home
-  const globalHistoryKey = "checksheet_history";
-  const existingGlobalHistory = localStorage.getItem(globalHistoryKey) || "[]";
-  const globalHistory = JSON.parse(existingGlobalHistory);
-
-  // Format seragam untuk home
-  const homeEntry = {
-    id: `APD-${Date.now()}`,
-    type: "apd",
-    area: selectedType, // Nama jenis APD
-    status: "OK", // APD tidak punya NG
-    filledBy: user?.fullName || "Unknown User",
-    filledAt: new Date().toISOString(),
-  };
-
-  globalHistory.push(homeEntry);
-  localStorage.setItem(globalHistoryKey, JSON.stringify(globalHistory));
-
-  // ✅ Selesai
-  alert(`✅ Data berhasil disimpan!\nJenis: ${selectedType}`);
-  router.push("/status-ga/e-checksheet-apd/riwayat-apd");
-};
+  const handleSave = async () => {
+    setSubmitting(true)
     
+    try {
+      const today = new Date().toISOString().split('T')[0];
+      
+      // Prepare data untuk API
+      const apiPayload = {
+        jenisApd: selectedType,
+        date: today,
+        checker: user?.fullName || "",
+        checkerNik: user?.nik || "",
+        items: items.filter(item => item.nama.trim()).map(item => ({
+          no: item.no,
+          nama: item.nama,
+          nik: item.nik,
+          tglPengambilan: item.tglPengambilan,
+          dept: item.dept,
+          jobDesc: item.jobDesc,
+          jumlah: item.jumlah,
+          ttd: item.ttd || "",
+          keterangan: item.keterangan
+        }))
+      };
+
+      // Submit ke API
+      const response = await fetch('/api/apd/submit', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(apiPayload)
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || 'Gagal menyimpan data');
+      }
+
+      const result = await response.json();
+      
+      // Simpan ke localStorage untuk backup
+      const storageKey = `ga_apd_${selectedType}_${today}`;
+      localStorage.setItem(storageKey, JSON.stringify({
+        ...apiPayload,
+        id: result.id,
+        submittedAt: new Date().toISOString()
+      }));
+
+      // Update riwayat global
+      const globalHistoryKey = "checksheet_history";
+      const existingGlobalHistory = localStorage.getItem(globalHistoryKey) || "[]";
+      const globalHistory = JSON.parse(existingGlobalHistory);
+      
+      const homeEntry = {
+        id: result.id,
+        type: "apd",
+        area: selectedType,
+        status: "OK",
+        filledBy: user?.fullName || "Unknown User",
+        filledAt: new Date().toISOString(),
+      };
+      
+      globalHistory.push(homeEntry);
+      localStorage.setItem(globalHistoryKey, JSON.stringify(globalHistory));
+
+      alert(`✅ Data berhasil disimpan!\nJenis: ${selectedType}`);
+      router.push("/status-ga/e-checksheet-apd/riwayat-apd");
+    } catch (error) {
+      console.error('Save error:', error);
+      alert(`❌ Gagal menyimpan data: ${(error as any).message}`);
+    } finally {
+      setSubmitting(false)
+    }
+  };
 
   const handleCancelPreview = () => {
     setShowPreview(false)
@@ -216,7 +246,6 @@ export default function EChecksheetApdPage() {
   return (
     <div className="app-page">
       <Sidebar userName={user.fullName} />
-
       <div className="page-content">
         <div className="header">
           <h1>📋 Form Pengambilan APD</h1>
@@ -245,7 +274,6 @@ export default function EChecksheetApdPage() {
                     </option>
                   ))}
                 </select>
-
                 {/* Preview penyimpanan */}
                 {selectedType && (
                   <div className="preview-box">
@@ -287,9 +315,9 @@ export default function EChecksheetApdPage() {
                         <td>
                           <input
                             type="text"
-                            value={item.niki}
-                            onChange={(e) => handleInputChange(index, "niki", e.target.value)}
-                            placeholder="niki"
+                            value={item.nik}
+                            onChange={(e) => handleInputChange(index, "nik", e.target.value)}
+                            placeholder="NIK"
                             className="table-input"
                             required
                           />
@@ -362,8 +390,8 @@ export default function EChecksheetApdPage() {
                   <button onClick={handleAddRow} className="add-btn">
                     ➕ Tambah Baris
                   </button>
-                  <button onClick={handleShowPreview} className="submit-btn" disabled={!selectedType}>
-                    👁️ Preview & Simpan
+                  <button onClick={handleShowPreview} className="submit-btn" disabled={!selectedType || submitting}>
+                    {submitting ? "💾 Menyimpan..." : "👁️ Preview & Simpan"}
                   </button>
                 </div>
               </div>
@@ -396,7 +424,7 @@ export default function EChecksheetApdPage() {
                       <tr key={index}>
                         <td>{item.no}</td>
                         <td>{item.nama}</td>
-                        <td>{item.niki}</td>
+                        <td>{item.nik}</td>
                         <td>{item.tglPengambilan}</td>
                         <td>{item.dept}</td>
                         <td>{item.jobDesc}</td>
@@ -412,8 +440,8 @@ export default function EChecksheetApdPage() {
                 <button onClick={handleCancelPreview} className="cancel-btn">
                   ← Kembali ke Form
                 </button>
-                <button onClick={handleSave} className="save-btn">
-                  💾 Simpan Data
+                <button onClick={handleSave} className="save-btn" disabled={submitting}>
+                  {submitting ? "💾 Menyimpan..." : "💾 Simpan Data"}
                 </button>
               </div>
             </div>
@@ -422,7 +450,14 @@ export default function EChecksheetApdPage() {
       </div>
 
       <style jsx>{`
+        .app-page {
+          display: flex;
+          min-height: 100vh;
+          background-color: #f7f9fc;
+        }
+        
         .page-content {
+          flex: 1;
           max-width: 1200px;
           margin: 0 auto;
           padding: 24px;
@@ -638,7 +673,7 @@ export default function EChecksheetApdPage() {
           transition: all 0.3s;
         }
 
-        .save-btn:hover {
+        .save-btn:hover:not(:disabled) {
           transform: translateY(-2px);
         }
 
