@@ -1,10 +1,16 @@
 // app/api/ga/checksheet/[typeSlug]/by-area/[areaId]/dates/route.ts
+
 import { NextResponse } from 'next/server';
 import pool from '@/lib/db';
 
+type RouteParams = {
+  typeSlug: string;
+  areaId: string;
+};
+
 export async function GET(
   request: Request,
-  { params }: { params: { typeSlug: string; areaId: string } }
+  { params }: { params: Promise<RouteParams> }
 ) {
   try {
     const { typeSlug, areaId } = await params;
@@ -12,12 +18,12 @@ export async function GET(
     console.log('🔍 Fetching available dates for type:', typeSlug, 'area:', areaId);
 
     // Cek type
-    const [types]: any = await pool.query(
-      `SELECT id FROM ga_checksheet_types WHERE slug = ?`,
+    const typesResult = await pool.query(
+      `SELECT id FROM ga_checksheet_types WHERE slug = $1`,
       [typeSlug]
     );
 
-    if (types.length === 0) {
+    if (typesResult.rows.length === 0) {
       console.error('❌ Type not found:', typeSlug);
       return NextResponse.json(
         { success: false, message: 'Jenis checksheet tidak ditemukan' },
@@ -25,22 +31,23 @@ export async function GET(
       );
     }
 
-    const typeId = types[0].id;
+    const typeId = typesResult.rows[0].id;
 
-    // Ambil semua tanggal yang ada untuk area ini
-    const [dates]: any = await pool.query(
+    // ✅ PostgreSQL: TO_CHAR untuk format tanggal
+    const datesResult = await pool.query(
       `
-      SELECT DISTINCT DATE_FORMAT(check_date, '%Y-%m-%d') as date
+      SELECT DISTINCT DATE(check_date) as date
       FROM ga_checksheet_headers
-      WHERE type_id = ? AND area_id = ?
-      ORDER BY check_date DESC
+      WHERE type_id = $1 AND area_id = $2
+      ORDER BY date DESC
       `,
       [typeId, areaId]
     );
 
-    const availableDates = dates.map((row: any) => row.date);
+    const availableDates = datesResult.rows.map((row: any) => row.date);
 
     console.log('✅ Found', availableDates.length, 'dates');
+    
     return NextResponse.json({ 
       success: true, 
       data: availableDates

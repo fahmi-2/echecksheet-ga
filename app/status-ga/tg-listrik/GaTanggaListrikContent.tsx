@@ -1,12 +1,18 @@
-// app/status-ga/tg-listrik/GaTanggaListrikContent.tsx
 "use client";
 import { useState, useEffect } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
 import { Sidebar } from "@/components/Sidebar";
-// ✅ Import API helper yang reusable
-import { getAreasByType, getAvailableDates, getChecklistByDate } from "@/lib/api/checksheet";
 import { ArrowLeft } from "lucide-react";
+
+// ✅ Import API helper yang reusable
+import { 
+  getAreasByType, 
+  getAvailableDates, 
+  getChecklistByDate,
+  getItemsByType,
+  ChecklistItem
+} from "@/lib/api/checksheet";
 
 interface Area {
   id: number;
@@ -15,9 +21,20 @@ interface Area {
   location: string;
 }
 
-export function GaTanggaListrikContent({ openArea }: { openArea: string }) {
+interface AreaStatus {
+  [areaId: number]: {
+    statusLabel: string;
+    statusColor: string;
+    lastCheck: string;
+  };
+}
+
+export function GaTanggaListrikContent() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { user, loading } = useAuth();
+  
+  const openArea = searchParams.get('openArea') || '';
   const TYPE_SLUG = 'tg-listrik'; // ✅ Hardcode type slug
   
   const [isMounted, setIsMounted] = useState(false);
@@ -31,19 +48,88 @@ export function GaTanggaListrikContent({ openArea }: { openArea: string }) {
   const [selectedDateInModal, setSelectedDateInModal] = useState("");
   const [availableDates, setAvailableDates] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [inspectionItems, setInspectionItems] = useState<ChecklistItem[]>([]);
+  
+  // ✅ NEW: State untuk menyimpan status semua area
+  const [areaStatuses, setAreaStatuses] = useState<AreaStatus>({});
+  const [isLoadingStatuses, setIsLoadingStatuses] = useState(false);
+
+  // ✅ Load inspection items dari API
+  useEffect(() => {
+    const loadItems = async () => {
+      try {
+        const items = await getItemsByType(TYPE_SLUG);
+        console.log('✅ Loaded inspection items:', items);
+        setInspectionItems(items);
+      } catch (error) {
+        console.error("❌ Failed to load checklist items:", error);
+      }
+    };
+    loadItems();
+  }, []);
 
   // ✅ Load areas dari API berdasarkan type
   useEffect(() => {
     const loadAreas = async () => {
       try {
         const data = await getAreasByType(TYPE_SLUG);
+        console.log('✅ Loaded areas:', data);
         setAreas(data);
       } catch (error) {
-        console.error("Failed to load areas:", error);
+        console.error("❌ Failed to load areas:", error);
       }
     };
     loadAreas();
   }, []);
+
+  // ✅ Load status untuk semua area SEKALI SAJA setelah areas loaded
+  useEffect(() => {
+    if (areas.length === 0 || isLoadingStatuses) return;
+
+    const loadAllStatuses = async () => {
+      setIsLoadingStatuses(true);
+      console.log('🔄 Loading statuses for all areas...');
+      
+      const statusMap: AreaStatus = {};
+
+      for (const area of areas) {
+        try {
+          const dates = await getAvailableDates(TYPE_SLUG, area.id);
+          
+          if (dates.length > 0) {
+            const latest = dates[0]; // Dates sudah sorted DESC dari API
+            statusMap[area.id] = {
+              statusLabel: "Ada Data",
+              statusColor: "#4caf50",
+              lastCheck: new Date(latest).toLocaleDateString("id-ID", { 
+                day: "numeric", 
+                month: "short" 
+              })
+            };
+          } else {
+            statusMap[area.id] = {
+              statusLabel: "Belum Ada Data",
+              statusColor: "#9e9e9e",
+              lastCheck: "-"
+            };
+          }
+        } catch (error) {
+          console.error(`❌ Error loading status for area ${area.id}:`, error);
+          statusMap[area.id] = {
+            statusLabel: "Error",
+            statusColor: "#f44336",
+            lastCheck: "-"
+          };
+        }
+      }
+
+      console.log('✅ All statuses loaded:', statusMap);
+      setAreaStatuses(statusMap);
+      setIsLoadingStatuses(false);
+    };
+
+    loadAllStatuses();
+  }, [areas]);
 
   useEffect(() => {
     setIsMounted(true);
@@ -56,13 +142,16 @@ export function GaTanggaListrikContent({ openArea }: { openArea: string }) {
     }
   }, [user, loading, router]);
 
+  // ✅ Auto-open modal jika ada openArea param
   useEffect(() => {
-    if (!isMounted || loading) return;
-    if (!openArea) return;
+    if (!isMounted || loading || !openArea || areas.length === 0) return;
     
+    console.log('🔍 Searching for area to auto-open:', openArea);
     const found = areas.find((item) => item.name === openArea);
+    
     if (found) {
-      setTimeout(() => openDetail(found), 50);
+      console.log('✅ Found area, opening detail:', found);
+      setTimeout(() => openDetail(found), 100);
     }
   }, [isMounted, loading, openArea, areas]);
 
@@ -75,24 +164,27 @@ export function GaTanggaListrikContent({ openArea }: { openArea: string }) {
     try {
       // Load available dates
       const dates = await getAvailableDates(TYPE_SLUG, area.id);
+      console.log('📅 Available dates:', dates);
       setAvailableDates(dates);
 
       if (dates.length > 0) {
-        const latestDate = dates[0];
+        const latestDate = dates[0]; // Sudah sorted DESC
         setSelectedDateInModal(latestDate);
 
         // Load checklist data untuk tanggal terbaru
         const data = await getChecklistByDate(TYPE_SLUG, area.id, latestDate);
+        console.log('📦 Loaded checklist data:', data);
         setChecksheetData(data);
       } else {
         setChecksheetData(null);
         setSelectedDateInModal("");
       }
     } catch (error) {
-      console.error("Error loading detail:", error);
+      console.error("❌ Error loading detail:", error);
       setChecksheetData(null);
       setAvailableDates([]);
       setSelectedDateInModal("");
+      alert("Gagal memuat data. Silakan coba lagi.");
     } finally {
       setIsLoading(false);
     }
@@ -113,10 +205,12 @@ export function GaTanggaListrikContent({ openArea }: { openArea: string }) {
     const loadData = async () => {
       setIsLoading(true);
       try {
+        console.log('📥 Loading data for date:', selectedDateInModal);
         const data = await getChecklistByDate(TYPE_SLUG, selectedArea.id, selectedDateInModal);
+        console.log('📦 Received data:', data);
         setChecksheetData(data);
       } catch (error) {
-        console.error("Error loading checklist ", error);
+        console.error("❌ Error loading checklist:", error);
         setChecksheetData(null);
       } finally {
         setIsLoading(false);
@@ -136,50 +230,28 @@ export function GaTanggaListrikContent({ openArea }: { openArea: string }) {
     setCurrentImageUrl("");
   };
 
-  // Static inspection items untuk display (bisa juga diambil dari API jika perlu)
-  const inspectionItems = [
-    { key: "sistemPenggerak", no: 1, item: "Roda/Ban Masih Layak dan tidak seret dan mudah gerak" },
-    { key: "rantaiPenarik", no: 2, item: "Rantai Penarik Hidrolis Tidak putus, Tidak Terlalu Kencang/terlalu kendor" },
-    { key: "kabelHidrolis", no: 3, item: "Kondisi Kabel Hidrolis Tidak lecet" },
-    { key: "pelumasanSistem", no: 4, item: "Mudah di putar, masih dalam kondisi pelumasan" },
-    { key: "emergencyBrake", no: 5, item: "Putar ke kiri untuk membuka angin (Emergency Brake)" },
-    { key: "rumahLenganPenumpu", no: 6, item: "Rumah Lengan Penumpu" },
-    { key: "lenganPenumpu", no: 7, item: "Lengan-Lengan Penumpu" },
-    { key: "telapakPenumpu", no: 8, item: "Telapak Penumpu" },
-    { key: "pengikatRumahPenumpu", no: 9, item: "Pengikat Rumah Penumpu" },
-    { key: "kunciPengamanPenumpu", no: 10, item: "Kunci Pengaman Penumpu" },
-    { key: "limitSwitchUp", no: 11, item: "Limit switch UP (Batas Ketinggian Maksimal) – Sensor berfungsi" },
-    { key: "pushButtonNaik", no: 12, item: "Push button Naik – Berfungsi saat ditekan" },
-    { key: "emergencyStop", no: 13, item: "Emergency Stop – Berfungsi sesuai fungsinya" },
-    { key: "keranjangKondisi", no: 14, item: "Keranjang tidak berkarat, masih layak & bawah keranjang tidak ada kotoran/sampah" },
-    { key: "engselKeranjang1", no: 15, item: "Engsel Keranjang tidak seret dan tidak berkarat, baut mur kencang" },
-    { key: "engselKeranjang2", no: 16, item: "Engsel Keranjang tidak seret dan tidak berkarat, baut mur kencang" },
-    { key: "pompaHidrolik", no: 17, item: "Pompa Hidrolik – Tidak bunyi, hidrolik tidak seret dan masih terlumasi, tidak berkarat" },
-    { key: "selangPenghubung", no: 18, item: "Selang Penghubung – Ada Cover, bersih dan tidak putus" },
-    { key: "electricalBox", no: 19, item: "Electrical Box – Bersih, cat masih bagus, terdapat ID dan kunci" },
-    { key: "waterPass", no: 20, item: "Water Pass – Sesuai level" },
-  ];
-
   const filteredData = areas.filter(item =>
     item.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
     item.location.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
   if (!isMounted) return null;
+  
   if (loading) {
     return (
       <div style={{ display: "flex", justifyContent: "center", alignItems: "center", minHeight: "100vh", background: "#f5f5f5" }}>
-        Loading...
+        <p style={{ fontSize: "16px", color: "#666" }}>Loading...</p>
       </div>
     );
   }
+  
   if (!user || (user.role !== "inspector-ga")) {
     return null;
   }
 
   return (
     <div style={{ minHeight: "100vh", background: "#f8f9fa" }}>
-      <Sidebar userName={user?.fullName} />
+      <Sidebar userName={user.fullName} />
       <div style={{
         paddingLeft: "95px",
         paddingRight: "25px",
@@ -191,8 +263,8 @@ export function GaTanggaListrikContent({ openArea }: { openArea: string }) {
         {/* Header */}
         <div style={{ marginBottom: "24px" }} className="header">
           <button
-          onClick={() => router.push("/status-ga")}
-          className="btn-back"
+            onClick={() => router.push("/status-ga")}
+            className="btn-back"
           >
             <ArrowLeft size={18}/> Kembali
           </button>
@@ -217,16 +289,17 @@ export function GaTanggaListrikContent({ openArea }: { openArea: string }) {
         }}>
           <input
             type="text"
-            placeholder="Cari area atau lokasi..."
+            placeholder="🔍 Cari area atau lokasi..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             style={{
-              padding: "8px 12px",
+              padding: "10px 14px",
               border: "1px solid #1e88e5",
               borderRadius: "6px",
-              fontSize: "13px",
+              fontSize: "14px",
               color: "#333",
-              width: "100%"
+              width: "100%",
+              outline: "none"
             }}
           />
         </div>
@@ -239,104 +312,119 @@ export function GaTanggaListrikContent({ openArea }: { openArea: string }) {
           overflow: "hidden",
           border: "1px solid #e8e8e8"
         }}>
+          {isLoadingStatuses && (
+            <div style={{ 
+              padding: "12px 20px", 
+              background: "#fff3cd", 
+              borderBottom: "1px solid #e8e8e8",
+              color: "#856404",
+              fontSize: "13px",
+              textAlign: "center"
+            }}>
+              ⏳ Loading status data...
+            </div>
+          )}
+          
           <div style={{ overflowX: "auto" }}>
             <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "14px", minWidth: "700px" }}>
               <thead>
                 <tr>
-                  <th style={{ padding: "12px 16px", textAlign: "center", background: "#f5f7fa", fontWeight: "600", color: "#0d47a1", fontSize: "13px", textTransform: "uppercase", borderBottom: "2px solid #e8e8e8" }}>No</th>
-                  <th style={{ padding: "12px 16px", textAlign: "left", background: "#f5f7fa", fontWeight: "600", color: "#0d47a1", fontSize: "13px", textTransform: "uppercase", borderBottom: "2px solid #e8e8e8" }}>Nama Area</th>
-                  <th style={{ padding: "12px 16px", textAlign: "left", background: "#f5f7fa", fontWeight: "600", color: "#0d47a1", fontSize: "13px", textTransform: "uppercase", borderBottom: "2px solid #e8e8e8" }}>Lokasi</th>
-                  <th style={{ padding: "12px 16px", textAlign: "center", background: "#f5f7fa", fontWeight: "600", color: "#0d47a1", fontSize: "13px", textTransform: "uppercase", borderBottom: "2px solid #e8e8e8" }}>Status</th>
-                  <th style={{ padding: "12px 16px", textAlign: "center", background: "#f5f7fa", fontWeight: "600", color: "#0d47a1", fontSize: "13px", textTransform: "uppercase", borderBottom: "2px solid #e8e8e8" }}>Aksi</th>
+                  <th style={{ padding: "14px 16px", textAlign: "center", background: "#f5f7fa", fontWeight: "600", color: "#0d47a1", fontSize: "13px", textTransform: "uppercase", borderBottom: "2px solid #e8e8e8" }}>No</th>
+                  <th style={{ padding: "14px 16px", textAlign: "left", background: "#f5f7fa", fontWeight: "600", color: "#0d47a1", fontSize: "13px", textTransform: "uppercase", borderBottom: "2px solid #e8e8e8" }}>Nama Area</th>
+                  <th style={{ padding: "14px 16px", textAlign: "left", background: "#f5f7fa", fontWeight: "600", color: "#0d47a1", fontSize: "13px", textTransform: "uppercase", borderBottom: "2px solid #e8e8e8" }}>Lokasi</th>
+                  <th style={{ padding: "14px 16px", textAlign: "center", background: "#f5f7fa", fontWeight: "600", color: "#0d47a1", fontSize: "13px", textTransform: "uppercase", borderBottom: "2px solid #e8e8e8" }}>Status</th>
+                  <th style={{ padding: "14px 16px", textAlign: "center", background: "#f5f7fa", fontWeight: "600", color: "#0d47a1", fontSize: "13px", textTransform: "uppercase", borderBottom: "2px solid #e8e8e8" }}>Aksi</th>
                 </tr>
               </thead>
               <tbody>
-                {filteredData.map((area) => {
-                  let statusLabel = "Belum Ada Data";
-                  let statusColor = "#9e9e9e";
-                  let lastCheck = "-";
+                {filteredData.length === 0 ? (
+                  <tr>
+                    <td colSpan={5} style={{ padding: "40px 20px", textAlign: "center", color: "#999" }}>
+                      {searchTerm ? "Tidak ada data yang sesuai dengan pencarian" : "Tidak ada data"}
+                    </td>
+                  </tr>
+                ) : (
+                  filteredData.map((area) => {
+                    // ✅ Ambil status dari state yang sudah di-load
+                    const status = areaStatuses[area.id] || {
+                      statusLabel: "Loading...",
+                      statusColor: "#9e9e9e",
+                      lastCheck: "-"
+                    };
 
-                  // ✅ Cek status dari API
-                  const checkStatus = async () => {
-                    try {
-                      const dates = await getAvailableDates(TYPE_SLUG, area.id);
-                      
-                      if (dates.length > 0) {
-                        const latest = dates.sort().pop();
-                        lastCheck = new Date(latest!).toLocaleDateString("id-ID", { day: "numeric", month: "short" });
-                        statusLabel = "Ada Data";
-                        statusColor = "#4caf50";
-                      }
-                    } catch (error) {
-                      console.error("Error checking status:", error);
-                    }
-                  };
-
-                  // Panggil checkStatus
-                  checkStatus();
-
-                  return (
-                    <tr key={area.id}>
-                      <td style={{ padding: "12px 16px", borderBottom: "1px solid #f0f0f0", textAlign: "center", fontWeight: "600" }}>{area.no}</td>
-                      <td style={{ padding: "12px 16px", borderBottom: "1px solid #f0f0f0", fontWeight: "500", color: "#1e88e5" }}>{area.name}</td>
-                      <td style={{ padding: "12px 16px", borderBottom: "1px solid #f0f0f0", color: "#666" }}>{area.location}</td>
-                      <td style={{ padding: "12px 16px", borderBottom: "1px solid #f0f0f0", textAlign: "center" }}>
-                        <span style={{
-                          padding: "4px 12px",
-                          background: statusColor,
-                          color: "white",
-                          borderRadius: "6px",
-                          fontSize: "11px",
-                          fontWeight: "700"
-                        }}>
-                          {statusLabel}
-                        </span>
-                        <br />
-                        <span style={{ fontSize: "10px", color: "#999" }}>{lastCheck}</span>
-                      </td>
-                      <td style={{ padding: "12px 16px", borderBottom: "1px solid #f0f0f0" }}>
-                        <div style={{ display: "flex", gap: "8px", justifyContent: "center" }}>
-                          <button
-                            onClick={() => openDetail(area)}
-                            style={{
-                              padding: "6px 14px",
-                              borderRadius: "6px",
-                              fontSize: "12px",
-                              fontWeight: "600",
-                              background: "#1e88e5",
+                    return (
+                      <tr key={area.id}>
+                        <td style={{ padding: "14px 16px", borderBottom: "1px solid #f0f0f0", textAlign: "center", fontWeight: "600", color: "#0d47a1" }}>
+                          {area.no}
+                        </td>
+                        <td style={{ padding: "14px 16px", borderBottom: "1px solid #f0f0f0", fontWeight: "500", color: "#1e88e5" }}>
+                          {area.name}
+                        </td>
+                        <td style={{ padding: "14px 16px", borderBottom: "1px solid #f0f0f0", color: "#666", fontSize: "13px" }}>
+                          {area.location}
+                        </td>
+                        <td style={{ padding: "14px 16px", borderBottom: "1px solid #f0f0f0", textAlign: "center" }}>
+                          <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "4px" }}>
+                            <span style={{
+                              padding: "5px 12px",
+                              background: status.statusColor,
                               color: "white",
-                              border: "none",
-                              cursor: "pointer"
-                            }}
-                          >
-                            DETAIL
-                          </button>
-                          <a
-                            href={`/e-checksheet-tg-listrik?areaName=${encodeURIComponent(area.name)}&lokasi=${encodeURIComponent(area.location)}`}
-                            style={{
-                              padding: "6px 14px",
-                              borderRadius: "6px",
-                              fontSize: "12px",
-                              fontWeight: "600",
-                              background: "#4caf50",
-                              color: "white",
-                              textDecoration: "none",
+                              borderRadius: "12px",
+                              fontSize: "11px",
+                              fontWeight: "700",
                               display: "inline-block"
-                            }}
-                          >
-                            CHECK
-                          </a>
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })}
+                            }}>
+                              {status.statusLabel}
+                            </span>
+                            <span style={{ fontSize: "11px", color: "#9e9e9e" }}>
+                              {status.lastCheck}
+                            </span>
+                          </div>
+                        </td>
+                        <td style={{ padding: "14px 16px", borderBottom: "1px solid #f0f0f0" }}>
+                          <div style={{ display: "flex", gap: "8px", justifyContent: "center" }}>
+                            <button
+                              onClick={() => openDetail(area)}
+                              style={{
+                                padding: "7px 14px",
+                                borderRadius: "6px",
+                                fontSize: "13px",
+                                fontWeight: "600",
+                                background: "#1e88e5",
+                                color: "white",
+                                border: "none",
+                                cursor: "pointer"
+                              }}
+                            >
+                              DETAIL
+                            </button>
+                            <a
+                              href={`/e-checksheet-tg-listrik?areaName=${encodeURIComponent(area.name)}&lokasi=${encodeURIComponent(area.location)}`}
+                              style={{
+                                padding: "7px 14px",
+                                borderRadius: "6px",
+                                fontSize: "13px",
+                                fontWeight: "600",
+                                background: "#4caf50",
+                                color: "white",
+                                textDecoration: "none",
+                                display: "inline-block"
+                              }}
+                            >
+                              CHECK
+                            </a>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })
+                )}
               </tbody>
             </table>
           </div>
         </div>
 
-        {/* Modal Detail - sama seperti sebelumnya */}
+        {/* Modal Detail */}
         {showModal && selectedArea && (
           <div
             onClick={closeDetail}
@@ -368,9 +456,11 @@ export function GaTanggaListrikContent({ openArea }: { openArea: string }) {
                 flexDirection: "column"
               }}
             >
+              {/* Modal Header */}
               <div style={{
                 display: "flex",
                 justifyContent: "space-between",
+                alignItems: "flex-start",
                 padding: "20px 24px",
                 background: "#f5f7fa",
                 borderBottom: "2px solid #e8e8e8"
@@ -379,86 +469,160 @@ export function GaTanggaListrikContent({ openArea }: { openArea: string }) {
                   <h2 style={{ margin: "0 0 4px 0", color: "#0d47a1", fontSize: "20px", fontWeight: "700" }}>
                     Detail Tangga Listrik
                   </h2>
-                  <p style={{ margin: "4px 0", color: "#1e88e5", fontWeight: "500" }}>{selectedArea.name}</p>
-                  <p style={{ margin: "0", color: "#777", fontSize: "12px" }}>{selectedArea.location}</p>
+                  <p style={{ margin: "4px 0", color: "#1e88e5", fontWeight: "500", fontSize: "14px" }}>
+                    {selectedArea.name}
+                  </p>
+                  <p style={{ margin: "0", color: "#777", fontSize: "12px" }}>
+                    {selectedArea.location}
+                  </p>
                 </div>
-                <button onClick={closeDetail} style={{ background: "none", border: "none", fontSize: "28px", cursor: "pointer", color: "#999" }}>×</button>
+                <button 
+                  onClick={closeDetail} 
+                  style={{ 
+                    background: "none", 
+                    border: "none", 
+                    fontSize: "32px", 
+                    cursor: "pointer", 
+                    color: "#999",
+                    lineHeight: "1"
+                  }}
+                >
+                  ×
+                </button>
               </div>
 
               {/* Dropdown Tanggal */}
-              <div style={{ padding: "12px 20px", background: "#f9f9f9", borderBottom: "1px solid #e0e0e0" }}>
-                <label style={{ fontWeight: "600", color: "#0d47a1", marginRight: "12px", fontSize: "13px" }}>
+              <div style={{ 
+                padding: "14px 20px", 
+                background: "#f9f9f9", 
+                borderBottom: "1px solid #e0e0e0" 
+              }}>
+                <label style={{ 
+                  fontWeight: "600", 
+                  color: "#0d47a1", 
+                  marginRight: "12px", 
+                  fontSize: "13px" 
+                }}>
                   Pilih Tanggal:
                 </label>
                 <select
                   value={selectedDateInModal}
                   onChange={(e) => setSelectedDateInModal(e.target.value)}
+                  disabled={availableDates.length === 0}
                   style={{
                     color: "#0d47a1",
-                    padding: "6px 10px",
+                    padding: "8px 12px",
                     border: "1px solid #1e88e5",
                     borderRadius: "6px",
                     fontSize: "13px",
                     fontWeight: "500",
-                    minWidth: "140px"
+                    minWidth: "160px",
+                    cursor: availableDates.length > 0 ? "pointer" : "not-allowed"
                   }}
                 >
-                  <option value="">-- Pilih Tanggal --</option>
-                  {availableDates.map(date => (
-                    <option key={date} value={date}>
-                      {new Date(date).toLocaleDateString("id-ID", { day: "2-digit", month: "short", year: "numeric" })}
-                    </option>
-                  ))}
+                  {availableDates.length === 0 ? (
+                    <option value="">Belum ada data</option>
+                  ) : (
+                    <>
+                      <option value="">-- Pilih Tanggal --</option>
+                      {availableDates.map(date => (
+                        <option key={date} value={date}>
+                          {new Date(date).toLocaleDateString("id-ID", { 
+                            day: "2-digit", 
+                            month: "short", 
+                            year: "numeric" 
+                          })}
+                        </option>
+                      ))}
+                    </>
+                  )}
                 </select>
               </div>
 
-              <div style={{ padding: "16px 20px", overflowY: "auto", flex: 1 }}>
-                {!checksheetData ? (
-                  <div style={{ textAlign: "center", padding: "40px 20px", color: "#999" }}>
-                    Belum ada data pengecekan
+              {/* Modal Body */}
+              <div style={{ padding: "20px 24px", overflowY: "auto", flex: 1 }}>
+                {isLoading ? (
+                  <div style={{ textAlign: "center", padding: "40px 20px", color: "#666" }}>
+                    ⏳ Loading data...
                   </div>
                 ) : !selectedDateInModal ? (
                   <div style={{ textAlign: "center", padding: "40px 20px", color: "#666" }}>
-                    Pilih tanggal untuk melihat detail
+                    {availableDates.length === 0 
+                      ? "📭 Belum ada data pengecekan untuk area ini"
+                      : "👆 Pilih tanggal untuk melihat detail"}
+                  </div>
+                ) : !checksheetData ? (
+                  <div style={{ textAlign: "center", padding: "40px 20px", color: "#999" }}>
+                    ❌ Tidak ada data untuk tanggal ini
                   </div>
                 ) : (
                   <div style={{ overflowX: "auto" }}>
-                    <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "11px", minWidth: "1200px", border: "2px solid #0d47a1" }}>
+                    <table style={{ 
+                      width: "100%", 
+                      borderCollapse: "collapse", 
+                      fontSize: "11px", 
+                      minWidth: "1200px", 
+                      border: "2px solid #0d47a1" 
+                    }}>
                       <thead>
                         <tr style={{ background: "#e3f2fd" }}>
-                          <th style={{ padding: "10px", border: "1px solid #0d47a1", fontWeight: "700", color: "#01579b", textAlign: "center", width: "50px" }}>No</th>
-                          <th style={{ padding: "10px", border: "1px solid #0d47a1", fontWeight: "700", color: "#01579b", textAlign: "left", minWidth: "300px" }}>Item Pengecekan</th>
-                          <th style={{ padding: "10px", border: "1px solid #0d47a1", fontWeight: "700", color: "#01579b", textAlign: "center", width: "100px" }}>Hasil</th>
-                          <th style={{ padding: "10px", border: "1px solid #0d47a1", fontWeight: "700", color: "#01579b", textAlign: "center", minWidth: "180px" }}>Keterangan Temuan</th>
-                          <th style={{ padding: "10px", border: "1px solid #0d47a1", fontWeight: "700", color: "#01579b", textAlign: "center", minWidth: "180px" }}>Tindakan Perbaikan</th>
-                          <th style={{ padding: "10px", border: "1px solid #0d47a1", fontWeight: "700", color: "#01579b", textAlign: "center", width: "120px" }}>Dokumentasi</th>
-                          <th style={{ padding: "10px", border: "1px solid #0d47a1", fontWeight: "700", color: "#01579b", textAlign: "center", width: "80px" }}>PIC</th>
-                          <th style={{ padding: "10px", border: "1px solid #0d47a1", fontWeight: "700", color: "#01579b", textAlign: "center", width: "100px" }}>Due Date</th>
-                          <th style={{ padding: "10px", border: "1px solid #0d47a1", fontWeight: "700", color: "#01579b", textAlign: "center", width: "80px" }}>Verify</th>
-                          <th style={{ padding: "10px", border: "1px solid #0d47a1", fontWeight: "700", color: "#01579b", textAlign: "center", width: "100px" }}>Inspector</th>
+                          <th style={{ padding: "10px 8px", border: "1px solid #0d47a1", fontWeight: "700", color: "#01579b", textAlign: "center", width: "50px" }}>No</th>
+                          <th style={{ padding: "10px 8px", border: "1px solid #0d47a1", fontWeight: "700", color: "#01579b", textAlign: "left", minWidth: "300px" }}>Item Pengecekan</th>
+                          <th style={{ padding: "10px 8px", border: "1px solid #0d47a1", fontWeight: "700", color: "#01579b", textAlign: "center", width: "100px" }}>Hasil</th>
+                          <th style={{ padding: "10px 8px", border: "1px solid #0d47a1", fontWeight: "700", color: "#01579b", textAlign: "center", minWidth: "180px" }}>Keterangan Temuan</th>
+                          <th style={{ padding: "10px 8px", border: "1px solid #0d47a1", fontWeight: "700", color: "#01579b", textAlign: "center", minWidth: "180px" }}>Tindakan Perbaikan</th>
+                          <th style={{ padding: "10px 8px", border: "1px solid #0d47a1", fontWeight: "700", color: "#01579b", textAlign: "center", width: "120px" }}>Dokumentasi</th>
+                          <th style={{ padding: "10px 8px", border: "1px solid #0d47a1", fontWeight: "700", color: "#01579b", textAlign: "center", width: "80px" }}>PIC</th>
+                          <th style={{ padding: "10px 8px", border: "1px solid #0d47a1", fontWeight: "700", color: "#01579b", textAlign: "center", width: "100px" }}>Due Date</th>
+                          <th style={{ padding: "10px 8px", border: "1px solid #0d47a1", fontWeight: "700", color: "#01579b", textAlign: "center", width: "80px" }}>Verify</th>
+                          <th style={{ padding: "10px 8px", border: "1px solid #0d47a1", fontWeight: "700", color: "#01579b", textAlign: "center", width: "100px" }}>Inspector</th>
                         </tr>
                       </thead>
                       <tbody>
-                        {inspectionItems.map(row => {
-                          const entry = checksheetData[row.key] || null;
-                          const images = entry?.images || [];
+                        {inspectionItems.length === 0 ? (
+                          <tr>
+                            <td colSpan={10} style={{ padding: "20px", textAlign: "center", color: "#999" }}>
+                              Loading items...
+                            </td>
+                          </tr>
+                        ) : (
+                          inspectionItems.map(item => {
+                            // ✅ Ambil data dari checksheetData berdasarkan item_key
+                            const entry = checksheetData[item.item_key] || null;
+                            const images = entry?.images || [];
 
-                          return (
-                            <tr key={row.key}>
-                              <td style={{ padding: "8px", border: "1px solid #0d47a1", textAlign: "center", fontWeight: "600" }}>
-                                {row.no}
-                              </td>
+                            return (
+                              <tr key={item.id}>
+                                <td style={{ 
+                                  padding: "8px 6px", 
+                                  border: "1px solid #0d47a1", 
+                                  textAlign: "center", 
+                                  fontWeight: "600",
+                                  background: "white"
+                                }}>
+                                  {item.no}
+                                </td>
 
-                              <td style={{ padding: "8px", border: "1px solid #0d47a1", lineHeight: "1.4" }}>
-                                {row.item}
-                              </td>
+                                <td style={{ 
+                                  padding: "8px 6px", 
+                                  border: "1px solid #0d47a1", 
+                                  lineHeight: "1.4",
+                                  background: "white"
+                                }}>
+                                  <div style={{ fontWeight: "600", color: "#0d47a1", marginBottom: "4px" }}>
+                                    {item.item_group}
+                                  </div>
+                                  <div style={{ color: "#555" }}>
+                                    {item.item_check}
+                                  </div>
+                                </td>
 
-                              <td
-                                style={{
-                                  padding: "8px",
+                                <td style={{
+                                  padding: "8px 6px",
                                   border: "1px solid #0d47a1",
                                   textAlign: "center",
                                   fontWeight: "700",
+                                  fontSize: "12px",
                                   background:
                                     entry?.hasilPemeriksaan === "OK"
                                       ? "#c8e6c9"
@@ -471,80 +635,102 @@ export function GaTanggaListrikContent({ openArea }: { openArea: string }) {
                                       : entry?.hasilPemeriksaan === "NG"
                                       ? "#c62828"
                                       : "#999"
-                                }}
-                              >
-                                {entry?.hasilPemeriksaan === "OK"
-                                  ? "✓ OK"
-                                  : entry?.hasilPemeriksaan === "NG"
-                                  ? "✗ NG"
-                                  : "-"}
-                              </td>
+                                }}>
+                                  {entry?.hasilPemeriksaan === "OK"
+                                    ? "✓ OK"
+                                    : entry?.hasilPemeriksaan === "NG"
+                                    ? "✗ NG"
+                                    : "-"}
+                                </td>
 
-                              <td style={{ padding: "8px", border: "1px solid #0d47a1" }}>
-                                {entry?.keteranganTemuan || "-"}
-                              </td>
+                                <td style={{ padding: "8px 6px", border: "1px solid #0d47a1", fontSize: "10px", background: "white" }}>
+                                  {entry?.keteranganTemuan || "-"}
+                                </td>
 
-                              <td style={{ padding: "8px", border: "1px solid #0d47a1" }}>
-                                {entry?.tindakanPerbaikan || "-"}
-                              </td>
+                                <td style={{ padding: "8px 6px", border: "1px solid #0d47a1", fontSize: "10px", background: "white" }}>
+                                  {entry?.tindakanPerbaikan || "-"}
+                                </td>
 
-                              <td style={{ padding: "8px", border: "1px solid #0d47a1", textAlign: "center" }}>
-                                {images.length > 0 ? (
-                                  <div style={{ display: "flex", gap: "4px", justifyContent: "center", flexWrap: "wrap" }}>
-                                    {images.map((imgUrl: string, idx: number) => (
-                                      <div
-                                        key={idx}
-                                        onClick={() => openImageModal(imgUrl)}
-                                        style={{
-                                          width: "50px",
-                                          height: "50px",
-                                          borderRadius: "4px",
-                                          overflow: "hidden",
-                                          cursor: "pointer",
-                                          border: "1px solid #ccc"
-                                        }}
-                                      >
-                                        <img
-                                          src={imgUrl}
-                                          alt={`Dok ${idx + 1}`}
-                                          style={{ width: "100%", height: "100%", objectFit: "cover" }}
-                                        />
-                                      </div>
-                                    ))}
-                                  </div>
-                                ) : (
-                                  "-"
-                                )}
-                              </td>
+                                <td style={{ padding: "8px 6px", border: "1px solid #0d47a1", textAlign: "center", background: "white" }}>
+                                  {images.length > 0 ? (
+                                    <div style={{ display: "flex", gap: "4px", justifyContent: "center", flexWrap: "wrap" }}>
+                                      {images.map((imgUrl: string, idx: number) => (
+                                        <div
+                                          key={idx}
+                                          onClick={() => openImageModal(imgUrl)}
+                                          style={{
+                                            width: "50px",
+                                            height: "50px",
+                                            borderRadius: "4px",
+                                            overflow: "hidden",
+                                            cursor: "pointer",
+                                            border: "1px solid #ccc"
+                                          }}
+                                        >
+                                          <img
+                                            src={imgUrl}
+                                            alt={`Dok ${idx + 1}`}
+                                            style={{ width: "100%", height: "100%", objectFit: "cover" }}
+                                          />
+                                        </div>
+                                      ))}
+                                    </div>
+                                  ) : (
+                                    <span style={{ color: "#999" }}>-</span>
+                                  )}
+                                </td>
 
-                              <td style={{ padding: "8px", border: "1px solid #0d47a1", textAlign: "center" }}>
-                                {entry?.pic || "-"}
-                              </td>
+                                <td style={{ padding: "8px 6px", border: "1px solid #0d47a1", textAlign: "center", fontSize: "10px", background: "white" }}>
+                                  {entry?.pic || "-"}
+                                </td>
 
-                              <td style={{ padding: "8px", border: "1px solid #0d47a1", textAlign: "center" }}>
-                                {entry?.dueDate
-                                  ? new Date(entry.dueDate).toLocaleDateString("id-ID", { day: "2-digit", month: "short" })
-                                  : "-"}
-                              </td>
+                                <td style={{ padding: "8px 6px", border: "1px solid #0d47a1", textAlign: "center", fontSize: "10px", background: "white" }}>
+                                  {entry?.dueDate
+                                    ? new Date(entry.dueDate).toLocaleDateString("id-ID", { 
+                                        day: "2-digit", 
+                                        month: "short",
+                                        year: "numeric"
+                                      })
+                                    : "-"}
+                                </td>
 
-                              <td style={{ padding: "8px", border: "1px solid #0d47a1", textAlign: "center" }}>
-                                {entry?.verify || "-"}
-                              </td>
+                                <td style={{ padding: "8px 6px", border: "1px solid #0d47a1", textAlign: "center", fontSize: "10px", background: "white" }}>
+                                  {entry?.verify || "-"}
+                                </td>
 
-                              <td style={{ padding: "8px", border: "1px solid #0d47a1", textAlign: "center" }}>
-                                {entry?.inspector || "-"}
-                              </td>
-                            </tr>
-                          );
-                        })}
+                                <td style={{ padding: "8px 6px", border: "1px solid #0d47a1", textAlign: "center", fontSize: "10px", fontWeight: "600", color: "#0d47a1", background: "white" }}>
+                                  {entry?.inspector || "-"}
+                                </td>
+                              </tr>
+                            );
+                          })
+                        )}
                       </tbody>
                     </table>
                   </div>
                 )}
               </div>
 
-              <div style={{ padding: "16px 20px", background: "#f5f7fa", borderTop: "1px solid #e8e8e8", textAlign: "right" }}>
-                <button onClick={closeDetail} style={{ padding: "8px 20px", background: "#bdbdbd", color: "white", border: "none", borderRadius: "6px", fontWeight: "600" }}>
+              {/* Modal Footer */}
+              <div style={{ 
+                padding: "16px 24px", 
+                background: "#f5f7fa", 
+                borderTop: "1px solid #e8e8e8", 
+                textAlign: "right" 
+              }}>
+                <button 
+                  onClick={closeDetail} 
+                  style={{ 
+                    padding: "8px 20px", 
+                    background: "#bdbdbd", 
+                    color: "white", 
+                    border: "none", 
+                    borderRadius: "6px", 
+                    fontWeight: "600",
+                    cursor: "pointer",
+                    fontSize: "13px"
+                  }}
+                >
                   Tutup
                 </button>
               </div>

@@ -3,9 +3,15 @@ import { NextResponse } from 'next/server';
 import pool from '@/lib/db';
 import { format } from 'date-fns';
 
+type RouteParams = {
+  typeSlug: string;
+  areaId: string;
+  date: string;
+};
+
 export async function GET(
   request: Request,
-  { params }: { params: { typeSlug: string; areaId: string; date: string } }
+  { params }: { params: Promise<RouteParams> }
 ) {
   try {
     const { typeSlug, areaId, date } = await params;
@@ -24,12 +30,12 @@ export async function GET(
     const formattedDate = format(parsedDate, 'yyyy-MM-dd');
 
     // Cek type
-    const [types]: any = await pool.query(
-      `SELECT id FROM ga_checksheet_types WHERE slug = ?`,
+    const typesResult = await pool.query(
+      `SELECT id FROM ga_checksheet_types WHERE slug = $1`,
       [typeSlug]
     );
 
-    if (types.length === 0) {
+    if (typesResult.rows.length === 0) {
       console.error('❌ Type not found:', typeSlug);
       return NextResponse.json(
         { success: false, message: 'Jenis checksheet tidak ditemukan' },
@@ -37,19 +43,19 @@ export async function GET(
       );
     }
 
-    const typeId = types[0].id;
+    const typeId = typesResult.rows[0].id;
 
     // Cek apakah checklist sudah ada
-    const [headers]: any = await pool.query(
+    const headersResult = await pool.query(
       `
       SELECT h.id, h.check_date, h.inspector_id, h.inspector_name, h.status
       FROM ga_checksheet_headers h
-      WHERE h.type_id = ? AND h.area_id = ? AND h.check_date = ?
+      WHERE h.type_id = $1 AND h.area_id = $2 AND h.check_date = $3
       `,
       [typeId, areaId, formattedDate]
     );
 
-    if (headers.length === 0) {
+    if (headersResult.rows.length === 0) {
       console.log('⚠️ No checklist found for this date');
       return NextResponse.json({ 
         success: true, 
@@ -58,11 +64,11 @@ export async function GET(
       });
     }
 
-    const headerId = headers[0].id;
+    const headerId = headersResult.rows[0].id;
     console.log('✅ Header ID:', headerId);
 
     // Ambil detail checklist
-    const [details]: any = await pool.query(
+    const detailsResult = await pool.query(
       `
       SELECT 
         ci.item_key,
@@ -81,7 +87,7 @@ export async function GET(
         cd.notes
       FROM ga_checksheet_details cd
       JOIN ga_checksheet_items ci ON cd.item_id = ci.id
-      WHERE cd.header_id = ?
+      WHERE cd.header_id = $1
       ORDER BY ci.sort_order ASC, ci.no ASC
       `,
       [headerId]
@@ -89,7 +95,7 @@ export async function GET(
 
     // Transform data ke format yang sesuai dengan frontend
     const formattedDetails: any = {};
-    details.forEach((detail: any) => {
+    detailsResult.rows.forEach((detail: any) => {
       formattedDetails[detail.item_key] = {
         date: formattedDate,
         hasilPemeriksaan: detail.result || '',
@@ -98,17 +104,18 @@ export async function GET(
         pic: detail.pic || '',
         dueDate: detail.due_date || '',
         verify: detail.verified_by || '',
-        inspector: headers[0].inspector_name,
-        images: detail.images ? JSON.parse(detail.images) : [],
+        inspector: headersResult.rows[0].inspector_name,
+        images: detail.images ? detail.images : [], // ✅ PostgreSQL JSONB sudah auto-parse
         notes: detail.notes || ''
       };
     });
 
-    console.log('✅ Found', details.length, 'details');
+    console.log('✅ Found', detailsResult.rows.length, 'details');
+    
     return NextResponse.json({ 
       success: true, 
       data: formattedDetails,
-      headerInfo: headers[0]
+      headerInfo: headersResult.rows[0]
     });
   } catch (error) {
     console.error('❌ Error fetching checklist:', error);
@@ -121,8 +128,10 @@ export async function GET(
 
 export async function POST(
   request: Request,
-  { params }: { params: { typeSlug: string; areaId: string; date: string } }
+  { params }: { params: Promise<RouteParams> }
 ) {
+  const client = await pool.connect(); // ✅ PostgreSQL: Gunakan client untuk transaction
+  
   try {
     const { typeSlug, areaId, date } = await params;
     const body = await request.json();
@@ -146,15 +155,15 @@ export async function POST(
       );
     }
 
-    const formattedDate = parsedDate.toISOString().split('T')[0];
+    const formattedDate = format(parsedDate, 'yyyy-MM-dd');
 
     // Cek type
-    const [types]: any = await pool.query(
-      `SELECT id FROM ga_checksheet_types WHERE slug = ?`,
+    const typesResult = await client.query(
+      `SELECT id FROM ga_checksheet_types WHERE slug = $1`,
       [typeSlug]
     );
 
-    if (types.length === 0) {
+    if (typesResult.rows.length === 0) {
       console.error('❌ Type not found:', typeSlug);
       return NextResponse.json(
         { success: false, message: 'Jenis checksheet tidak ditemukan' },
@@ -162,53 +171,54 @@ export async function POST(
       );
     }
 
-    const typeId = types[0].id;
+    const typeId = typesResult.rows[0].id;
 
-    // Mulai transaction
-    const connection = await pool.getConnection();
-    await connection.beginTransaction();
+    // ✅ Mulai transaction PostgreSQL
+    await client.query('BEGIN');
 
     try {
       // Cek atau buat header
-      let [headers]: any = await connection.query(
+      let headersResult = await client.query(
         `
         SELECT id FROM ga_checksheet_headers
-        WHERE type_id = ? AND area_id = ? AND check_date = ?
+        WHERE type_id = $1 AND area_id = $2 AND check_date = $3
         `,
         [typeId, areaId, formattedDate]
       );
 
       let headerId: number;
-      if (headers.length > 0) {
-        headerId = headers[0].id;
+      
+      if (headersResult.rows.length > 0) {
+        headerId = headersResult.rows[0].id;
         // Update header
         console.log('🔄 Updating existing header:', headerId);
-        await connection.query(
+        await client.query(
           `
           UPDATE ga_checksheet_headers
-          SET inspector_id = ?, inspector_name = ?, status = ?
-          WHERE id = ?
+          SET inspector_id = $1, inspector_name = $2, status = $3, updated_at = CURRENT_TIMESTAMP
+          WHERE id = $4
           `,
           [inspectorId, inspectorName, status, headerId]
         );
       } else {
-        // Insert baru
+        // Insert baru dengan RETURNING (fitur PostgreSQL)
         console.log('➕ Creating new header');
-        const [result]: any = await connection.query(
+        const insertResult = await client.query(
           `
           INSERT INTO ga_checksheet_headers 
           (type_id, area_id, check_date, inspector_id, inspector_name, status)
-          VALUES (?, ?, ?, ?, ?, ?)
+          VALUES ($1, $2, $3, $4, $5, $6)
+          RETURNING id
           `,
           [typeId, areaId, formattedDate, inspectorId, inspectorName, status]
         );
-        headerId = result.insertId;
+        headerId = insertResult.rows[0].id;
         console.log('✅ New header created with ID:', headerId);
       }
 
       // Ambil semua item untuk type ini
-      const [allItems]: any = await connection.query(
-        `SELECT id, item_key FROM ga_checksheet_items WHERE type_id = ?`,
+      const allItemsResult = await client.query(
+        `SELECT id, item_key FROM ga_checksheet_items WHERE type_id = $1`,
         [typeId]
       );
 
@@ -216,40 +226,45 @@ export async function POST(
 
       // Insert atau update detail
       for (const [itemKey, itemData] of Object.entries(checklistData)) {
-        const item = allItems.find((i: any) => i.item_key === itemKey);
+        const item = allItemsResult.rows.find((i: any) => i.item_key === itemKey);
         if (!item) {
           console.warn('⚠️ Item not found:', itemKey);
           continue;
         }
 
         const detail = itemData as any;
-        const imagesJson = detail.images ? JSON.stringify(detail.images) : null;
+        
+        // ✅ PostgreSQL: JSONB bisa langsung JSON.stringify atau object
+        const imagesJson = detail.images && Array.isArray(detail.images)
+          ? JSON.stringify(detail.images)
+          : JSON.stringify([]);
+
 
         // Cek apakah sudah ada
-        const [existing]: any = await connection.query(
+        const existingResult = await client.query(
           `
           SELECT id FROM ga_checksheet_details
-          WHERE header_id = ? AND item_id = ?
+          WHERE header_id = $1 AND item_id = $2
           `,
           [headerId, item.id]
         );
 
-        if (existing.length > 0) {
+        if (existingResult.rows.length > 0) {
           // Update
           console.log('🔄 Updating detail for item:', itemKey);
-          await connection.query(
+          await client.query(
             `
             UPDATE ga_checksheet_details
             SET 
-              result = ?,
-              finding = ?,
-              corrective_action = ?,
-              pic = ?,
-              due_date = ?,
-              verified_by = ?,
-              images = ?,
-              notes = ?
-            WHERE id = ?
+              result = $1,
+              finding = $2,
+              corrective_action = $3,
+              pic = $4,
+              due_date = $5,
+              verified_by = $6,
+              images = $7,
+              notes = $8
+            WHERE id = $9
             `,
             [
               detail.hasilPemeriksaan || '',
@@ -258,20 +273,20 @@ export async function POST(
               detail.pic || '',
               detail.dueDate || null,
               detail.verify || '',
-              imagesJson,
+              imagesJson, // ✅ PostgreSQL auto-handle JSONB
               detail.notes || '',
-              existing[0].id
+              existingResult.rows[0].id
             ]
           );
         } else {
           // Insert baru
           console.log('➕ Inserting new detail for item:', itemKey);
-          await connection.query(
+          await client.query(
             `
             INSERT INTO ga_checksheet_details
             (header_id, item_id, result, finding, corrective_action, 
              pic, due_date, verified_by, images, notes)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
             `,
             [
               headerId,
@@ -289,25 +304,31 @@ export async function POST(
         }
       }
 
-      await connection.commit();
-      connection.release();
+      // ✅ Commit transaction
+      await client.query('COMMIT');
 
       console.log('✅ Checklist saved successfully');
+      
       return NextResponse.json({ 
         success: true, 
         message: 'Data berhasil disimpan',
         headerId 
       });
+      
     } catch (error) {
-      await connection.rollback();
-      connection.release();
+      // ✅ Rollback jika error
+      await client.query('ROLLBACK');
       throw error;
     }
+    
   } catch (error) {
     console.error('❌ Error saving checklist:', error);
     return NextResponse.json(
       { success: false, message: 'Gagal menyimpan data checklist' },
       { status: 500 }
     );
+  } finally {
+    // ✅ Release client kembali ke pool
+    client.release();
   }
 }

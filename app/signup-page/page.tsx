@@ -1,4 +1,4 @@
-// app/signup-page.tsx
+// app/signup-page/page.tsx
 "use client"
 
 import type React from "react"

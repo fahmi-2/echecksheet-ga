@@ -1,22 +1,27 @@
 // app/api/ga/checksheet/[typeSlug]/items/route.ts
+
 import { NextResponse } from 'next/server';
 import pool from '@/lib/db';
 
+type RouteParams = {
+  typeSlug: string;
+};
+
 export async function GET(
   request: Request,
-  { params }: { params: { typeSlug: string } }
+  { params }: { params: Promise<RouteParams> }
 ) {
   try {
     const { typeSlug } = await params;
 
     console.log('🔍 Fetching items for type:', typeSlug);
 
-    const [types]: any = await pool.query(
-      `SELECT id FROM ga_checksheet_types WHERE slug = ? AND is_active = TRUE`,
+    const typesResult = await pool.query(
+      `SELECT id FROM ga_checksheet_types WHERE slug = $1 AND is_active = TRUE`,
       [typeSlug]
     );
 
-    if (types.length === 0) {
+    if (typesResult.rows.length === 0) {
       console.error('❌ Type not found:', typeSlug);
       return NextResponse.json(
         { success: false, message: 'Jenis checksheet tidak ditemukan' },
@@ -24,21 +29,25 @@ export async function GET(
       );
     }
 
-    const typeId = types[0].id;
+    const typeId = typesResult.rows[0].id;
     console.log('✅ Type ID:', typeId);
 
-    const [rows]: any = await pool.query(
+    const itemsResult = await pool.query(
       `
       SELECT id, item_key, no, item_group, item_check, method, image
       FROM ga_checksheet_items
-      WHERE type_id = ? AND is_active = TRUE
+      WHERE type_id = $1 AND is_active = TRUE
       ORDER BY sort_order ASC, no ASC
       `,
       [typeId]
     );
 
-    console.log('✅ Found', rows.length, 'items');
-    return NextResponse.json({ success: true, data: rows });
+    console.log('✅ Found', itemsResult.rows.length, 'items');
+    
+    return NextResponse.json({ 
+      success: true, 
+      data: itemsResult.rows 
+    });
   } catch (error) {
     console.error('❌ Error fetching checklist items:', error);
     return NextResponse.json(
