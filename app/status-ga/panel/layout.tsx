@@ -1,4 +1,4 @@
-// app/status-ga/panel/lyout.tsx
+// app/status-ga/panel/layout.tsx
 import type React from "react"
 import { Suspense } from "react"
 

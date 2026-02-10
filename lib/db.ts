@@ -1,17 +1,19 @@
 // lib/db.ts
-import * as mysql from 'mysql2/promise';
 
-const pool = mysql.createPool({
-  host: 'localhost',
-  port: 3306,
-  user: 'root',
-  password: '',
-  database: 'e_checksheet_ga',
-  waitForConnections: true,
-  connectionLimit: 10,
-  queueLimit: 0,
-  enableKeepAlive: true,
-  keepAliveInitialDelay: 0
+import { Pool } from 'pg';
+
+const pool = new Pool({
+  host: process.env.DB_HOST || 'localhost',
+  port: parseInt(process.env.DB_PORT || '5432'),
+  user: process.env.DB_USER || 'postgres',
+  password: process.env.DB_PASSWORD || '12345678',
+  database: process.env.DB_NAME || 'e_checksheet_ga',
+  max: 10,
+});
+
+// Helper untuk error handling
+pool.on('error', (err) => {
+  console.error('Unexpected database error:', err);
 });
 
 export default pool;

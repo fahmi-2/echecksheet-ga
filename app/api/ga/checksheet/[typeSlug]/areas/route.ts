@@ -1,4 +1,5 @@
 // app/api/ga/checksheet/[typeSlug]/areas/route.ts
+
 import { NextResponse } from 'next/server';
 import pool from '@/lib/db';
 
@@ -11,7 +12,7 @@ export async function GET(
   { params }: { params: Promise<RouteParams> }
 ) {
   try {
-    // ⬇️ WAJIB await params (Next.js 16+)
+    // ⬇️ WAJIB await params (Next.js 15+)
     const { typeSlug } = await params;
 
     // Debug log
@@ -24,12 +25,13 @@ export async function GET(
       );
     }
 
-    const [types]: any = await pool.query(
-      `SELECT id FROM ga_checksheet_types WHERE slug = ? AND is_active = TRUE`,
+    // ✅ PostgreSQL: Gunakan $1 bukan ?
+    const typesResult = await pool.query(
+      `SELECT id FROM ga_checksheet_types WHERE slug = $1 AND is_active = TRUE`,
       [typeSlug]
     );
 
-    if (!types || types.length === 0) {
+    if (!typesResult.rows || typesResult.rows.length === 0) {
       console.error('❌ Type not found:', typeSlug);
       return NextResponse.json(
         { success: false, message: 'Jenis checksheet tidak ditemukan' },
@@ -37,24 +39,25 @@ export async function GET(
       );
     }
 
-    const typeId = types[0].id;
+    const typeId = typesResult.rows[0].id;
     console.log('✅ Type ID:', typeId);
 
-    const [rows]: any = await pool.query(
+    // ✅ PostgreSQL: result.rows untuk mengakses data
+    const areasResult = await pool.query(
       `
       SELECT id, no, name, location
       FROM ga_checksheet_areas
-      WHERE type_id = ? AND is_active = TRUE
+      WHERE type_id = $1 AND is_active = TRUE
       ORDER BY no ASC
       `,
       [typeId]
     );
 
-    console.log('✅ Found', rows.length, 'areas');
+    console.log('✅ Found', areasResult.rows.length, 'areas');
 
     return NextResponse.json({
       success: true,
-      data: rows,
+      data: areasResult.rows,
     });
   } catch (error) {
     console.error('❌ Error fetching areas:', error);

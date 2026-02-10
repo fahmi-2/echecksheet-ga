@@ -1,12 +1,13 @@
-// app/e-checksheet-tg-listrik/EChecksheetTgListrikForm.tsx
 "use client";
 import { useState, useEffect, useRef } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
 import { Sidebar } from "@/components/Sidebar";
 import React from "react";
+
 // ✅ Import API helper yang reusable
 import {
+  getAreasByType,
   getItemsByType,
   getChecklistByDate,
   saveChecklist,
@@ -15,15 +16,14 @@ import {
   ChecklistData
 } from "@/lib/api/checksheet";
 
-export function EChecksheetTgListrikForm({
-  areaName,
-  lokasi,
-}: {
-  areaName: string;
-  lokasi: string;
-}) {
+export function EChecksheetTgListrikForm() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { user, loading } = useAuth();
+  
+  // ✅ Get params dari URL
+  const areaName = searchParams.get('areaName') || '';
+  const lokasi = searchParams.get('lokasi') || '';
   
   // ✅ Hardcode type slug untuk page ini
   const TYPE_SLUG = 'tg-listrik';
@@ -51,29 +51,44 @@ export function EChecksheetTgListrikForm({
     const loadItems = async () => {
       try {
         const items = await getItemsByType(TYPE_SLUG);
+        console.log('✅ Loaded inspection items:', items);
         setInspectionItems(items);
       } catch (error) {
-        console.error("Failed to load checklist items:", error);
+        console.error("❌ Failed to load checklist items:", error);
+        alert("Gagal memuat daftar item checklist. Silakan refresh halaman.");
       }
     };
     loadItems();
   }, []);
 
-  // ✅ Load areaId dan available dates
+  // ✅ Load areaId dan available dates - DIPERBAIKI
   useEffect(() => {
     if (!areaName || !isMounted) return;
     
     const loadAreaData = async () => {
       try {
-        const areas = await (await fetch(`/api/ga/checksheet/${TYPE_SLUG}/areas`)).json();
-        const area = areas.data.find((a: any) => a.name === areaName);
+        const areas = await getAreasByType(TYPE_SLUG);
+        console.log('🔍 Searching for area:', areaName);
+        console.log('📋 Available areas:', areas);
+        
+        // ✅ PERBAIKAN: Cari area yang exact match
+        const area = areas.find((a: any) => a.name === areaName);
+        
         if (area) {
+          console.log('✅ Found area:', area);
           setAreaId(area.id);
+          
+          // Load available dates untuk area ini
           const dates = await getAvailableDates(TYPE_SLUG, area.id);
+          console.log('📅 Available dates:', dates);
           setAvailableDates(dates);
+        } else {
+          console.warn('⚠️ Area not found:', areaName);
+          alert(`Area "${areaName}" tidak ditemukan di database.`);
         }
       } catch (error) {
-        console.error("Failed to load area data:", error);
+        console.error("❌ Failed to load area data:", error);
+        alert("Gagal memuat data area. Silakan coba lagi.");
       }
     };
     
@@ -98,7 +113,7 @@ export function EChecksheetTgListrikForm({
     const startCamera = async () => {
       try {
         const stream = await navigator.mediaDevices.getUserMedia({
-          video: true, // ⬅️ JANGAN pakai facingMode dulu
+          video: { facingMode: "environment" } // ✅ Gunakan kamera belakang di mobile
         });
 
         setCameraStream(stream);
@@ -106,7 +121,7 @@ export function EChecksheetTgListrikForm({
           videoRef.current.srcObject = stream;
         }
       } catch (err) {
-        console.error("Gagal membuka kamera:", err);
+        console.error("❌ Gagal membuka kamera:", err);
         alert("Tidak bisa mengakses kamera. Pastikan izin kamera diaktifkan.");
         setShowCameraModal(false);
       }
@@ -135,21 +150,25 @@ export function EChecksheetTgListrikForm({
 
     try {
       setIsLoading(true);
+      console.log('📥 Loading data for date:', selectedDate);
+      
       const data = await getChecklistByDate(TYPE_SLUG, areaId, selectedDate);
+      console.log('📦 Received data:', data);
       
       if (data) {
         const existingData: Record<string, string> = {};
         const loadedImages: { key: string; url: string }[] = [];
 
         Object.entries(data).forEach(([itemKey, entry]) => {
-          existingData[`${itemKey}_hasil`] = entry.hasilPemeriksaan;
-          existingData[`${itemKey}_keterangan`] = entry.keteranganTemuan;
-          existingData[`${itemKey}_tindakan`] = entry.tindakanPerbaikan;
-          existingData[`${itemKey}_pic`] = entry.pic;
-          existingData[`${itemKey}_dueDate`] = entry.dueDate;
-          existingData[`${itemKey}_verify`] = entry.verify;
+          existingData[`${itemKey}_hasil`] = entry.hasilPemeriksaan || "";
+          existingData[`${itemKey}_keterangan`] = entry.keteranganTemuan || "";
+          existingData[`${itemKey}_tindakan`] = entry.tindakanPerbaikan || "";
+          existingData[`${itemKey}_pic`] = entry.pic || "";
+          existingData[`${itemKey}_dueDate`] = entry.dueDate || "";
+          existingData[`${itemKey}_verify`] = entry.verify || "";
 
-          if (entry.images && entry.images.length > 0) {
+          // ✅ Handle images dari PostgreSQL JSONB
+          if (entry.images && Array.isArray(entry.images) && entry.images.length > 0) {
             entry.images.forEach((url: string) => {
               loadedImages.push({ key: itemKey, url });
             });
@@ -158,14 +177,14 @@ export function EChecksheetTgListrikForm({
 
         setAnswers(existingData);
         setImages(loadedImages);
-        alert("Data berhasil dimuat!");
+        alert("✅ Data berhasil dimuat!");
       } else {
-        alert("Tidak ada data untuk tanggal ini.");
+        alert("⚠️ Tidak ada data untuk tanggal ini.");
         setAnswers({});
         setImages([]);
       }
     } catch (error) {
-      console.error("Error loading checklist data:", error);
+      console.error("❌ Error loading checklist data:", error);
       alert("Gagal memuat data. Silakan coba lagi.");
     } finally {
       setIsLoading(false);
@@ -186,9 +205,10 @@ export function EChecksheetTgListrikForm({
     }
 
     if (!areaId) {
-      alert("Area tidak valid!");
+      alert("Area tidak valid! Silakan kembali ke halaman status.");
       return;
     }
+
     // Validasi semua item sudah diisi
     const allFieldsFilled = inspectionItems.every((item) => 
       answers[`${item.item_key}_hasil`]
@@ -201,6 +221,7 @@ export function EChecksheetTgListrikForm({
 
     try {
       setIsLoading(true);
+      console.log('💾 Saving checklist data...');
 
       // Format data untuk API
       const checklistData: ChecklistData = {};
@@ -222,6 +243,8 @@ export function EChecksheetTgListrikForm({
         };
       });
 
+      console.log('📤 Checklist data to save:', checklistData);
+
       // Save ke API
       await saveChecklist(
         TYPE_SLUG,
@@ -232,12 +255,12 @@ export function EChecksheetTgListrikForm({
         user.fullName || "Unknown Inspector"
       );
 
-      alert(`Data berhasil disimpan untuk tanggal ${new Date(selectedDate).toLocaleDateString("id-ID")}`);
+      alert(`✅ Data berhasil disimpan untuk tanggal ${new Date(selectedDate).toLocaleDateString("id-ID")}`);
       
       // Redirect ke status page
       router.push(`/status-ga/tg-listrik?openArea=${encodeURIComponent(areaName)}`);
     } catch (error) {
-      console.error("Error saving checklist data:", error);
+      console.error("❌ Error saving checklist data:", error);
       alert("Gagal menyimpan data. Silakan coba lagi.");
     } finally {
       setIsLoading(false);
@@ -251,6 +274,7 @@ export function EChecksheetTgListrikForm({
   const handleImageUpload = (event: React.ChangeEvent<HTMLInputElement>, itemKey: string) => {
     const files = event.target.files;
     if (!files) return;
+    
     Array.from(files).forEach(file => {
       const reader = new FileReader();
       reader.onloadend = () => {
@@ -281,6 +305,7 @@ export function EChecksheetTgListrikForm({
 
   const captureImage = () => {
     if (!videoRef.current || !canvasRef.current) return;
+    
     const video = videoRef.current;
     const canvas = canvasRef.current;
     const context = canvas.getContext('2d');
@@ -294,12 +319,13 @@ export function EChecksheetTgListrikForm({
     const imageUrl = canvas.toDataURL('image/jpeg', 0.8);
     setImages(prev => [...prev, { key: currentItemKey, url: imageUrl }]);
     setShowCameraModal(false);
+    
     if (cameraStream) {
       cameraStream.getTracks().forEach(track => track.stop());
     }
   };
 
-  // Group items untuk tampilan tabel
+  // ✅ Group items untuk tampilan tabel
   const groupedItems = inspectionItems.reduce((acc: Record<string, ChecklistItem[]>, item) => {
     if (!acc[item.item_group]) acc[item.item_group] = [];
     acc[item.item_group].push(item);
@@ -307,13 +333,15 @@ export function EChecksheetTgListrikForm({
   }, {});
 
   if (!isMounted) return null;
+  
   if (loading) {
     return (
       <div style={{ display: "flex", justifyContent: "center", alignItems: "center", minHeight: "100vh", background: "#f5f5f5" }}>
-        Loading...
+        <p style={{ fontSize: "16px", color: "#666" }}>Loading...</p>
       </div>
     );
   }
+  
   if (!user || (user.role !== "inspector-ga")) {
     return null;
   }
@@ -356,9 +384,9 @@ export function EChecksheetTgListrikForm({
           marginBottom: "20px"
         }}>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(250px, 1fr))", gap: "12px" }}>
-            <div><strong>Nama Area:</strong> {areaName}</div>
-            <div><strong>Lokasi:</strong> {lokasi}</div>
-            <div><strong>PIC:</strong> {user.fullName}</div>
+            <div className="text-black"><strong>Nama Area:</strong> {areaName}</div>
+            <div className="text-black"><strong>Lokasi:</strong> {lokasi}</div>
+            <div className="text-black"><strong>PIC:</strong> {user.fullName}</div>
           </div>
         </div>
 
@@ -425,11 +453,12 @@ export function EChecksheetTgListrikForm({
                 disabled={!selectedDate || isLoading}
                 style={{
                   padding: "8px 16px",
-                  background: selectedDate ? "#ff9800" : "#bdbdbd",
+                  background: (selectedDate && !isLoading) ? "#ff9800" : "#bdbdbd",
                   color: "white",
                   border: "none",
                   borderRadius: "6px",
-                  cursor: selectedDate ? "pointer" : "not-allowed"
+                  cursor: (selectedDate && !isLoading) ? "pointer" : "not-allowed",
+                  fontWeight: "600"
                 }}
               >
                 {isLoading ? "Memuat..." : "Muat Data"}
@@ -440,8 +469,14 @@ export function EChecksheetTgListrikForm({
 
         {/* Checksheet Table */}
         {inspectionItems.length === 0 ? (
-          <div style={{ textAlign: "center", padding: "40px", color: "#999" }}>
-            Loading checklist items...
+          <div style={{ 
+            textAlign: "center", 
+            padding: "40px", 
+            background: "white",
+            borderRadius: "12px",
+            border: "2px dashed #ccc"
+          }}>
+            <p style={{ color: "#999", fontSize: "16px", margin: 0 }}>⏳ Loading checklist items...</p>
           </div>
         ) : (
           <div style={{
@@ -453,7 +488,8 @@ export function EChecksheetTgListrikForm({
             marginBottom: "20px"
           }}>
             <div style={{ overflowX: "auto" }}>
-              <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "11px", minWidth: "1200px" }}>
+              <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "11px", minWidth: "1200px", border: "2px solid #0d47a1" }}>
+                {/* Table content sama seperti sebelumnya */}
                 <thead>
                   <tr style={{ background: "#e3f2fd" }}>
                     <th style={{ padding: "10px", border: "1px solid #0d47a1", fontWeight: "700", color: "#01579b", textAlign: "center", width: "40px" }}>No</th>
@@ -517,44 +553,21 @@ export function EChecksheetTgListrikForm({
                                 objectFit: "contain",
                                 border: "1px solid #ccc",
                                 borderRadius: "4px",
-                                cursor: "pointer",
-                                transform: "scale(1)"
+                                cursor: "pointer"
                               }}
                               onClick={(e) => {
                                 e.stopPropagation();
-                                setCurrentImage(`/tangga_listrik/${item.image}`);
-                                setShowImageModal(true);
-                              }}
-                              onMouseOver={(e) => {
-                                e.currentTarget.style.transform = "scale(1.05)";
-                              }}
-                              onMouseOut={(e) => {
-                                e.currentTarget.style.transform = "scale(1)";
+                                openImageModal(`/tangga_listrik/${item.image}`);
                               }}
                             />
                           </td>
-                          <td style={{
-                            padding: "8px",
-                            border: "1px solid #0d47a1",
-                            lineHeight: "1.4",
-                            verticalAlign: "top"
-                          }}>
+                          <td style={{ padding: "8px", border: "1px solid #0d47a1", lineHeight: "1.4", verticalAlign: "top" }}>
                             {item.item_check}
                           </td>
-                          <td style={{
-                            padding: "8px",
-                            border: "1px solid #0d47a1",
-                            textAlign: "center",
-                            verticalAlign: "top"
-                          }}>
+                          <td style={{ padding: "8px", border: "1px solid #0d47a1", textAlign: "center", verticalAlign: "top" }}>
                             {item.method}
                           </td>
-                          <td style={{
-                            padding: "8px",
-                            border: "1px solid #0d47a1",
-                            textAlign: "center",
-                            verticalAlign: "top"
-                          }}>
+                          <td style={{ padding: "8px", border: "1px solid #0d47a1", textAlign: "center", verticalAlign: "top" }}>
                             <select
                               value={answers[`${item.item_key}_hasil`] || ""}
                               onChange={(e) => handleInputChange(`${item.item_key}_hasil`, e.target.value)}
@@ -572,11 +585,7 @@ export function EChecksheetTgListrikForm({
                               <option value="NG">✗ NG</option>
                             </select>
                           </td>
-                          <td style={{
-                            padding: "8px",
-                            border: "1px solid #0d47a1",
-                            verticalAlign: "top"
-                          }}>
+                          <td style={{ padding: "8px", border: "1px solid #0d47a1", verticalAlign: "top" }}>
                             <textarea
                               value={answers[`${item.item_key}_keterangan`] || ""}
                               onChange={(e) => handleInputChange(`${item.item_key}_keterangan`, e.target.value)}
@@ -591,23 +600,19 @@ export function EChecksheetTgListrikForm({
                               }}
                             />
                           </td>
-                          <td style={{
-                            padding: "8px",
-                            border: "1px solid #0d47a1",
-                            verticalAlign: "top"
-                          }}>
+                          <td style={{ padding: "8px", border: "1px solid #0d47a1", verticalAlign: "top" }}>
                             <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
                               <button
                                 onClick={() => openCamera(item.item_key)}
+                                disabled={!selectedDate}
                                 style={{
                                   padding: "4px 8px",
-                                  background: "#1e88e5",
+                                  background: selectedDate ? "#1e88e5" : "#bdbdbd",
                                   color: "white",
                                   borderRadius: "4px",
                                   fontSize: "11px",
-                                  cursor: "pointer",
-                                  textAlign: "center",
-                                  whiteSpace: "nowrap"
+                                  cursor: selectedDate ? "pointer" : "not-allowed",
+                                  border: "none"
                                 }}
                               >
                                 📷 Kamera
@@ -616,13 +621,12 @@ export function EChecksheetTgListrikForm({
                                 htmlFor={`file-${item.item_key}`}
                                 style={{
                                   padding: "4px 8px",
-                                  background: "#4caf50",
+                                  background: selectedDate ? "#4caf50" : "#bdbdbd",
                                   color: "white",
                                   borderRadius: "4px",
                                   fontSize: "11px",
-                                  cursor: "pointer",
-                                  textAlign: "center",
-                                  whiteSpace: "nowrap"
+                                  cursor: selectedDate ? "pointer" : "not-allowed",
+                                  textAlign: "center"
                                 }}
                               >
                                 🖼️ File
@@ -632,21 +636,22 @@ export function EChecksheetTgListrikForm({
                                 type="file"
                                 accept="image/*"
                                 multiple
-                                onChange={(e) => handleImageUpload(e as any, item.item_key)}
+                                disabled={!selectedDate}
+                                onChange={(e) => handleImageUpload(e, item.item_key)}
                                 style={{ display: "none" }}
                               />
                               <div style={{ display: "flex", flexWrap: "wrap", gap: "4px", marginTop: "4px" }}>
                                 {images.filter(img => img.key === item.item_key).map((img, idx) => (
-                                  <div key={idx} style={{ position: "relative", width: "60px", height: "60px", borderRadius: "4px", overflow: "hidden", cursor: "pointer" }}>
+                                  <div key={idx} style={{ position: "relative", width: "60px", height: "60px", borderRadius: "4px", overflow: "hidden" }}>
                                     <img
                                       src={img.url}
-                                      alt={`Dokumentasi ${item.item_key} ${idx + 1}`}
+                                      alt={`Dok ${idx + 1}`}
                                       onClick={() => openImageModal(img.url)}
                                       style={{
                                         width: "100%",
                                         height: "100%",
                                         objectFit: "cover",
-                                        borderRadius: "4px"
+                                        cursor: "pointer"
                                       }}
                                     />
                                     <button
@@ -658,15 +663,17 @@ export function EChecksheetTgListrikForm({
                                         position: "absolute",
                                         top: "2px",
                                         right: "2px",
-                                        background: "rgba(0,0,0,0.5)",
+                                        background: "rgba(0,0,0,0.6)",
                                         color: "white",
                                         border: "none",
                                         borderRadius: "50%",
-                                        width: "16px",
-                                        height: "16px",
-                                        fontSize: "10px",
+                                        width: "18px",
+                                        height: "18px",
+                                        fontSize: "12px",
                                         cursor: "pointer",
-                                        padding: "0"
+                                        display: "flex",
+                                        alignItems: "center",
+                                        justifyContent: "center"
                                       }}
                                     >
                                       ×
@@ -676,11 +683,7 @@ export function EChecksheetTgListrikForm({
                               </div>
                             </div>
                           </td>
-                          <td style={{
-                            padding: "8px",
-                            border: "1px solid #0d47a1",
-                            verticalAlign: "top"
-                          }}>
+                          <td style={{ padding: "8px", border: "1px solid #0d47a1", verticalAlign: "top" }}>
                             <textarea
                               value={answers[`${item.item_key}_tindakan`] || ""}
                               onChange={(e) => handleInputChange(`${item.item_key}_tindakan`, e.target.value)}
@@ -695,11 +698,7 @@ export function EChecksheetTgListrikForm({
                               }}
                             />
                           </td>
-                          <td style={{
-                            padding: "8px",
-                            border: "1px solid #0d47a1",
-                            verticalAlign: "top"
-                          }}>
+                          <td style={{ padding: "8px", border: "1px solid #0d47a1", verticalAlign: "top" }}>
                             <input
                               type="text"
                               value={answers[`${item.item_key}_pic`] || ""}
@@ -713,11 +712,7 @@ export function EChecksheetTgListrikForm({
                               }}
                             />
                           </td>
-                          <td style={{
-                            padding: "8px",
-                            border: "1px solid #0d47a1",
-                            verticalAlign: "top"
-                          }}>
+                          <td style={{ padding: "8px", border: "1px solid #0d47a1", verticalAlign: "top" }}>
                             <input
                               type="date"
                               value={answers[`${item.item_key}_dueDate`] || ""}
@@ -730,11 +725,7 @@ export function EChecksheetTgListrikForm({
                               }}
                             />
                           </td>
-                          <td style={{
-                            padding: "8px",
-                            border: "1px solid #0d47a1",
-                            verticalAlign: "top"
-                          }}>
+                          <td style={{ padding: "8px", border: "1px solid #0d47a1", verticalAlign: "top" }}>
                             <input
                               type="text"
                               value={answers[`${item.item_key}_verify`] || ""}
@@ -768,25 +759,29 @@ export function EChecksheetTgListrikForm({
               color: "white",
               border: "none",
               borderRadius: "8px",
-              fontWeight: "600"
+              fontWeight: "600",
+              cursor: "pointer"
             }}
           >
             ← Kembali
           </button>
           <button
             onClick={handleSave}
-            disabled={!selectedDate || isLoading}
+            disabled={!selectedDate || isLoading || !areaId}
             style={{
               padding: "12px 28px",
-              background: selectedDate ? "linear-gradient(135deg, #1e88e5, #0d47a1)" : "#bdbdbd",
+              background: (selectedDate && !isLoading && areaId) 
+                ? "linear-gradient(135deg, #1e88e5, #0d47a1)" 
+                : "#bdbdbd",
               color: "white",
               border: "none",
               borderRadius: "8px",
               fontWeight: "600",
-              opacity: selectedDate ? 1 : 0.6
+              cursor: (selectedDate && !isLoading && areaId) ? "pointer" : "not-allowed",
+              opacity: (selectedDate && !isLoading && areaId) ? 1 : 0.6
             }}
           >
-            {isLoading ? "Menyimpan..." : "✓ Simpan Data"}
+            {isLoading ? "⏳ Menyimpan..." : "✓ Simpan Data"}
           </button>
         </div>
 
@@ -808,12 +803,7 @@ export function EChecksheetTgListrikForm({
               padding: "20px"
             }}
           >
-            <div
-              onClick={(e) => e.stopPropagation()}
-              style={{
-                textAlign: "center"
-              }}
-            >
+            <div onClick={(e) => e.stopPropagation()} style={{ textAlign: "center" }}>
               <img
                 src={currentImage}
                 alt="Dokumentasi"
@@ -825,7 +815,9 @@ export function EChecksheetTgListrikForm({
                   border: "3px solid white",
                 }}
               />
-              <div style={{ marginTop: "16px", color: "white", fontSize: "14px" }}>Click outside to close</div>
+              <div style={{ marginTop: "16px", color: "white", fontSize: "14px" }}>
+                Click outside to close
+              </div>
             </div>
           </div>
         )}
@@ -863,9 +855,9 @@ export function EChecksheetTgListrikForm({
                 width: "100%",
               }}
             >
-              <h3 style={{ margin: "0 0 12px 0", color: "#212121" }}>Ambil Foto</h3>
+              <h3 style={{ margin: "0 0 12px 0", color: "#212121" }}>📸 Ambil Foto</h3>
               <video
-                ref={videoRef as any}
+                ref={videoRef}
                 autoPlay
                 playsInline
                 style={{
@@ -876,7 +868,7 @@ export function EChecksheetTgListrikForm({
                   transform: "scaleX(-1)"
                 }}
               />
-              <canvas ref={canvasRef as any} style={{ display: "none" }} />
+              <canvas ref={canvasRef} style={{ display: "none" }} />
               <div style={{ marginTop: "16px", display: "flex", gap: "12px", justifyContent: "center" }}>
                 <button
                   onClick={captureImage}

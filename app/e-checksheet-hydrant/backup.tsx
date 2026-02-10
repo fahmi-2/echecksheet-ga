@@ -20,7 +20,7 @@ export function EChecksheetHydrantForm() {
   const searchParams = useSearchParams();
   const { user, loading } = useAuth();
   
-  // ✅ Get params dari URL (BUKAN props)
+  // ✅ Get params dari URL
   const no = searchParams.get('no') || '';
   const lokasi = searchParams.get('lokasi') || '';
   const zona = searchParams.get('zona') || '';
@@ -68,8 +68,8 @@ export function EChecksheetHydrantForm() {
     
     const loadAreaData = async () => {
       try {
-        console.log('🔍 Searching for area with no:', no);
         const areas = await getAreasByType(TYPE_SLUG);
+        console.log('🔍 Searching for area with no:', no);
         console.log('📋 Available areas:', areas);
         
         // ✅ Cari area berdasarkan nomor (no)
@@ -103,7 +103,6 @@ export function EChecksheetHydrantForm() {
   useEffect(() => {
     if (!isMounted || loading) return;
     if (!user || (user.role !== "inspector-ga")) {
-      console.log('❌ User not authorized, redirecting to login');
       router.push("/login-page");
     }
   }, [user, loading, router, isMounted]);
@@ -250,13 +249,6 @@ export function EChecksheetHydrantForm() {
     setCurrentImage("");
   };
 
-  // ✅ FIX: Hitung tanggal maksimum dengan benar (hari ini)
-  const getMaxDate = () => {
-    const today = new Date();
-    today.setHours(23, 59, 59, 999); // Set ke akhir hari
-    return today.toISOString().split('T')[0];
-  };
-
   if (!isMounted) return null;
   if (loading) {
     return (
@@ -370,7 +362,7 @@ export function EChecksheetHydrantForm() {
               </span>
             </div>
 
-            {/* Input tanggal utama - ✅ FIX DI SINI */}
+            {/* Input tanggal utama */}
             <div style={{ 
               display: "flex", 
               alignItems: "center", 
@@ -389,7 +381,7 @@ export function EChecksheetHydrantForm() {
                 type="date"
                 value={selectedDate}
                 onChange={(e) => setSelectedDate(e.target.value)}
-                max={getMaxDate()} // ✅ FIX: Gunakan fungsi untuk pastikan hari ini bisa dipilih
+                max={new Date().toISOString().split("T")[0]}
                 style={{
                   color: "#212121",
                   padding: "7px 12px",
@@ -400,16 +392,6 @@ export function EChecksheetHydrantForm() {
                   minWidth: "160px",
                 }}
               />
-              {/* ✅ Debug info untuk development */}
-              <span style={{ 
-                fontSize: "11px", 
-                color: "#666",
-                background: "#f0f0f0",
-                padding: "4px 8px",
-                borderRadius: "4px"
-              }}>
-                Max: {getMaxDate()}
-              </span>
             </div>
 
             {/* Dropdown riwayat pengisian */}
@@ -478,6 +460,16 @@ export function EChecksheetHydrantForm() {
             )}
           </div>
 
+          {/* Tabel Inspeksi */}
+          <div style={{
+            background: "white",
+            borderRadius: "8px",
+            boxShadow: "0 1px 3px rgba(0,0,0,0.08)",
+            overflow: "hidden",
+            border: "1px solid #e0e0e0",
+            marginBottom: "24px",
+          }}>
+            <div style={{ overflowX: "auto" }}>
               <table style={{
                 width: "100%",
                 borderCollapse: "collapse",
@@ -998,6 +990,9 @@ export function EChecksheetHydrantForm() {
                   </tr>
                 </tbody>
               </table>
+            </div>
+          </div>
+
           {/* Action Buttons */}
           <div style={{ 
             display: "flex", 
