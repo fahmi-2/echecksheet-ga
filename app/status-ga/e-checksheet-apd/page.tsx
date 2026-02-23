@@ -167,73 +167,107 @@ export default function EChecksheetApdPage() {
     setSubmitting(true)
     
     try {
-      const today = new Date().toISOString().split('T')[0];
-      
-      // Prepare data untuk API
-      const apiPayload = {
-        jenisApd: selectedType,
-        date: today,
-        checker: user?.fullName || "",
-        checkerNik: user?.nik || "",
-        items: items.filter(item => item.nama.trim()).map(item => ({
-          no: item.no,
-          nama: item.nama,
-          nik: item.nik,
-          tglPengambilan: item.tglPengambilan,
-          dept: item.dept,
-          jobDesc: item.jobDesc,
-          jumlah: item.jumlah,
-          ttd: item.ttd || "",
-          keterangan: item.keterangan
-        }))
-      };
-
-      // Submit ke API
-      const response = await fetch('/api/apd/submit', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(apiPayload)
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.message || 'Gagal menyimpan data');
+      // 1. Validasi awal
+      if (!selectedType.trim()) {
+        throw new Error("Jenis APD belum dipilih");
       }
 
-      const result = await response.json();
-      
-      // Simpan ke localStorage untuk backup
-      const storageKey = `ga_apd_${selectedType}_${today}`;
-      localStorage.setItem(storageKey, JSON.stringify({
-        ...apiPayload,
-        id: result.id,
-        submittedAt: new Date().toISOString()
-      }));
+      if (!user?.fullName || !user?.nik) {
+        throw new Error("Informasi user tidak lengkap");
+      }
 
-      // Update riwayat global
-      const globalHistoryKey = "checksheet_history";
-      const existingGlobalHistory = localStorage.getItem(globalHistoryKey) || "[]";
-      const globalHistory = JSON.parse(existingGlobalHistory);
+      // 2. Filter dan validasi items
+      const validItems = items.filter(item => item.nama.trim() && item.nik.trim());
       
-      const homeEntry = {
-        id: result.id,
-        type: "apd",
-        area: selectedType,
-        status: "OK",
-        filledBy: user?.fullName || "Unknown User",
-        filledAt: new Date().toISOString(),
-      };
-      
-      globalHistory.push(homeEntry);
-      localStorage.setItem(globalHistoryKey, JSON.stringify(globalHistory));
+      if (validItems.length === 0) {
+        throw new Error("Minimal 1 baris harus diisi dengan Nama dan NIK");
+      }
 
-      alert(`✅ Data berhasil disimpan!\nJenis: ${selectedType}`);
+      // 3. Validasi detail setiap item
+      for (const item of validItems) {
+        if (!item.nama.trim()) throw new Error(`Baris ${item.no}: Nama wajib diisi`);
+        if (!item.nik.trim()) throw new Error(`Baris ${item.no}: NIK wajib diisi`);
+        if (!item.tglPengambilan) throw new Error(`Baris ${item.no}: Tanggal pengambilan wajib diisi`);
+        if (!item.dept.trim()) throw new Error(`Baris ${item.no}: Departemen wajib diisi`);
+        if (!item.jobDesc.trim()) throw new Error(`Baris ${item.no}: Job Description wajib diisi`);
+        if (item.jumlah <= 0) throw new Error(`Baris ${item.no}: Jumlah harus lebih dari 0`);
+      }
+
+      // 4. Prepare data untuk API (sesuai struktur API PostgreSQL)
+      const today = new Date().toISOString().split('T')[0];
+      
+        const apiPayload = {
+      jenisApd: selectedType,
+      date: today,
+      checker: user.fullName,
+      checkerNik: user.nik,
+      items: validItems.map(item => ({
+        no: item.no,
+        nama: item.nama.trim(),
+        nik: item.nik.trim(),
+        tglPengambilan: item.tglPengambilan,
+        dept: item.dept.trim(),
+        jobDesc: item.jobDesc.trim(),
+        jumlah: item.jumlah,
+        keterangan: item.keterangan?.trim() || ""
+      }))
+    };
+
+    console.log('📤 Sending to API:', apiPayload);
+
+    const response = await fetch('/api/apd/submit', {
+      method: 'POST',
+      headers: { 
+        'Content-Type': 'application/json',
+        'Accept': 'application/json'
+      },
+      body: JSON.stringify(apiPayload),
+      credentials: 'include'
+    });
+
+    console.log('📥 Response status:', response.status);
+    console.log('📥 Response headers:', Object.fromEntries(response.headers.entries()));
+    
+    const result = await response.json();
+    console.log('📥 Response body:', result);
+
+    if (!response.ok || !result.success) {
+      // Tampilkan error detail
+      console.error('❌ API Error:', result);
+      throw new Error(result.message || 'Gagal menyimpan data');
+    }
+
+      // 7. Success feedback
+      alert(`✅ Data berhasil disimpan!\n\nID: ${result.id}\nJenis APD: ${selectedType}\nTotal Item: ${validItems.length}`);
+      
+      // 8. Reset form
+      setSelectedType("");
+      setItems([{
+        no: 1,
+        nama: "",
+        nik: "",
+        tglPengambilan: new Date().toISOString().split('T')[0],
+        dept: "",
+        jobDesc: "",
+        jumlah: 1,
+        ttd: "",
+        keterangan: ""
+      }]);
+      setShowPreview(false);
+      
+      // 9. Redirect ke riwayat
       router.push("/status-ga/e-checksheet-apd/riwayat-apd");
+      
     } catch (error) {
       console.error('Save error:', error);
-      alert(`❌ Gagal menyimpan data: ${(error as any).message}`);
+      
+      // Extract error message
+      const errorMessage = error instanceof Error ? error.message : 'Terjadi kesalahan tidak terduga';
+      
+      // Show user-friendly error
+      alert(`❌ Gagal menyimpan data\n\n${errorMessage}\n\nSilakan cek kembali data Anda dan coba lagi.`);
     } finally {
-      setSubmitting(false)
+      setSubmitting(false);
     }
   };
 
@@ -675,6 +709,11 @@ export default function EChecksheetApdPage() {
 
         .save-btn:hover:not(:disabled) {
           transform: translateY(-2px);
+        }
+
+        .save-btn:disabled {
+          opacity: 0.6;
+          cursor: not-allowed;
         }
 
         @media (max-width: 768px) {

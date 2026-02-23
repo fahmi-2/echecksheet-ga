@@ -1,3 +1,4 @@
+// app/api/lift-barang/preventive/route.ts
 import { NextRequest, NextResponse } from 'next/server';
 import pool from '@/lib/db';
 
@@ -134,94 +135,143 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Insert ke database - header
-    const [headerResult] = await pool.execute(
-      `INSERT INTO preventive_header 
-       (inspection_date, inspector, inspector_nik, additional_notes) 
-       VALUES (?, ?, ?, ?)`,
-      [inspection_date, inspector, inspector_nik || null, additional_notes || null]
-    );
-
-    const headerId = (headerResult as any).insertId;
-
-    // Insert ke database - items
-    const itemPromises = Object.entries(items).map(async ([id, itemData]) => {
-      const itemId = Number(id);
-      const item = itemData as any;
-      const details = getItemDetails(itemId);
+    // Mulai transaction
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
       
-      return pool.execute(
-        `INSERT INTO preventive_items 
-         (header_id, item_id, item_name, equipment_support, langkah_kerja, standar, status, keterangan, foto_path) 
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        [
-          headerId,
-          itemId,
-          details.item_name,
-          details.equipment_support,
-          details.langkah_kerja,
-          details.standar,
-          item.status,
-          item.keterangan || '',
-          item.foto_path || null
-        ]
+      // Insert ke database - header
+      const headerResult = await client.query(
+        `INSERT INTO preventive_header 
+         (inspection_date, inspector, inspector_nik, additional_notes) 
+         VALUES ($1, $2, $3, $4) 
+         RETURNING id`,
+        [inspection_date, inspector, inspector_nik || null, additional_notes || null]
       );
-    });
+      
+      const headerId = headerResult.rows[0].id;
+      console.log(`✅ Header inserted with ID: ${headerId}`);
 
-    await Promise.all(itemPromises);
+      // Insert ke database - items
+      const itemPromises = Object.entries(items).map(async ([id, itemData]) => {
+        const itemId = Number(id);
+        const item = itemData as any;
+        const details = getItemDetails(itemId);
+        
+        await client.query(
+          `INSERT INTO preventive_items 
+           (header_id, item_id, item_name, equipment_support, langkah_kerja, standar, status, keterangan, foto_path) 
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+          [
+            headerId,
+            itemId,
+            details.item_name,
+            details.equipment_support,
+            details.langkah_kerja,
+            details.standar,
+            item.status,
+            item.keterangan || '',
+            item.foto_path || null
+          ]
+        );
+      });
 
-    // Ambil data yang baru disimpan
-    const [headerRows] = await pool.execute(
-      'SELECT * FROM preventive_header WHERE id = ?',
-      [headerId]
-    ) as any;
-    
-    const headerRecord = headerRows[0] as HeaderRow;
+      await Promise.all(itemPromises);
+      console.log(`✅ ${Object.keys(items).length} items inserted`);
 
-    // Ambil item
-    const [itemRows] = await pool.execute(
-      'SELECT * FROM preventive_items WHERE header_id = ?',
-      [headerId]
-    ) as any;
+      // Commit transaction
+      await client.query('COMMIT');
+      
+      // Ambil data yang baru disimpan
+      const headerRows = await client.query(
+        'SELECT * FROM preventive_header WHERE id = $1',
+        [headerId]
+      );
 
-    // Format data untuk response
-    const formattedItems: Record<number, {
-      status: string;
-      keterangan: string;
-      foto_path: string | null;
-    }> = {};
-    
-    (itemRows as ItemRow[]).forEach(item => {
-      formattedItems[item.item_id] = {
-        status: item.status,
-        keterangan: item.keterangan || '',
-        foto_path: item.foto_path
-      };
-    });
+      const headerRecord = headerRows.rows[0] as HeaderRow;
 
-    return NextResponse.json({
-      success: true,
-      message: 'Preventive maintenance record created successfully',
-      data: {
-        id: headerRecord.id.toString(),
-        date: headerRecord.inspection_date,
-        inspector: headerRecord.inspector,
-        inspector_nik: headerRecord.inspector_nik,
-        items: formattedItems,
-        additionalNotes: headerRecord.additional_notes,
-        created_at: headerRecord.created_at,
-        updated_at: headerRecord.updated_at
+      // Ambil item
+      const itemRows = await client.query(
+        'SELECT * FROM preventive_items WHERE header_id = $1',
+        [headerId]
+      );
+
+      // Format data untuk response
+      const formattedItems: Record<number, {
+        status: string;
+        keterangan: string;
+        foto_path: string | null;
+      }> = {};
+      
+      itemRows.rows.forEach((item: ItemRow) => {
+        formattedItems[item.item_id] = {
+          status: item.status,
+          keterangan: item.keterangan || '',
+          foto_path: item.foto_path
+        };
+      });
+
+      return NextResponse.json({
+        success: true,
+        message: 'Preventive maintenance record created successfully',
+        data: {
+          id: headerRecord.id.toString(),
+          date: headerRecord.inspection_date,
+          inspector: headerRecord.inspector,
+          inspector_nik: headerRecord.inspector_nik,
+          items: formattedItems,
+          additionalNotes: headerRecord.additional_notes,
+          created_at: headerRecord.created_at,
+          updated_at: headerRecord.updated_at
+        }
+      });
+
+    } catch (transactionError) {
+      await client.query('ROLLBACK');
+      console.error('❌ Transaction error:', transactionError);
+      
+      // Deteksi error spesifik PostgreSQL
+      if (transactionError instanceof Error) {
+        if (transactionError.message.includes('column') && transactionError.message.includes('does not exist')) {
+          return NextResponse.json(
+            { 
+              success: false, 
+              message: 'Struktur tabel tidak sesuai. Periksa kolom di tabel preventive_header/preventive_items',
+              error: transactionError.message
+            },
+            { status: 500 }
+          );
+        }
+        
+        if (transactionError.message.includes('violates foreign key constraint')) {
+          return NextResponse.json(
+            { 
+              success: false, 
+              message: 'Error relasi database. Pastikan data referensi valid',
+              error: transactionError.message
+            },
+            { status: 500 }
+          );
+        }
       }
-    });
+      
+      throw transactionError;
+    } finally {
+      client.release();
+      console.log('🔓 Connection released');
+    }
 
   } catch (error) {
-    console.error('Error creating preventive record:', error);
+    console.error('❌ Error creating preventive record:', error);
     
     return NextResponse.json(
       { 
         success: false, 
         message: 'Internal server error',
-        error: process.env.NODE_ENV === 'development' ? (error as Error).message : undefined
+        error: process.env.NODE_ENV === 'development' ? {
+          message: (error as Error).message,
+          stack: (error as Error).stack?.split('\n').slice(0, 10)
+        } : undefined
       },
       { status: 500 }
     );
@@ -233,93 +283,136 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const date = searchParams.get('date');
     const inspector = searchParams.get('inspector');
+    const limit = parseInt(searchParams.get('limit') || '20');
+    const offset = parseInt(searchParams.get('offset') || '0');
 
-    let query = `
-      SELECT h.* 
-      FROM preventive_header h
-      WHERE 1=1
-    `;
-    const params: any[] = [];
+    // Mulai transaction
+    const client = await pool.connect();
+    try {
+      // Query untuk mendapatkan records
+      let query = `
+        SELECT h.* 
+        FROM preventive_header h
+        WHERE 1=1
+      `;
+      const params: any[] = [];
 
-    // Filter by date
-    if (date) {
-      query += ' AND h.inspection_date = ?';
-      params.push(date);
-    }
+      // Filter by date
+      if (date) {
+        query += ' AND h.inspection_date = $' + (params.length + 1);
+        params.push(date);
+      }
 
-    // Filter by inspector
-    if (inspector) {
-      query += ' AND h.inspector = ?';
-      params.push(inspector);
-    }
+      // Filter by inspector
+      if (inspector) {
+        query += ' AND h.inspector = $' + (params.length + 1);
+        params.push(inspector);
+      }
 
-    // Order by created_at descending
-    query += ' ORDER BY h.created_at DESC';
+      // Order by created_at descending
+      query += ' ORDER BY h.created_at DESC';
 
-    const [headerRows] = await pool.execute(query, params) as any;
-    
-    const headers = headerRows as HeaderRow[];
-    
-    // Ambil item untuk setiap header
-    const result: Array<{
-      id: string;
-      date: string;
-      inspector: string;
-      inspector_nik: string | null;
-      items: Record<number, {
-        status: string;
-        keterangan: string;
-        foto_path: string | null;
-      }>;
-      additionalNotes: string | null;
-      created_at: string;
-      updated_at: string;
-    }> = [];
-    
-    for (const header of headers) {
-      const [itemRows] = await pool.execute(
-        'SELECT * FROM preventive_items WHERE header_id = ?',
-        [header.id]
-      ) as any;
+      // Pagination
+      query += ' LIMIT $' + (params.length + 1) + ' OFFSET $' + (params.length + 2);
+      params.push(limit, offset);
+
+      const headerRows = await client.query(query, params);
       
-      const items: Record<number, {
-        status: string;
-        keterangan: string;
-        foto_path: string | null;
-      }> = {};
+      // Ambil total count
+      let countQuery = `
+        SELECT COUNT(*) as total
+        FROM preventive_header h
+        WHERE 1=1
+      `;
+      const countParams: any[] = [];
+
+      if (date) {
+        countQuery += ' AND h.inspection_date = $' + (countParams.length + 1);
+        countParams.push(date);
+      }
+
+      if (inspector) {
+        countQuery += ' AND h.inspector = $' + (countParams.length + 1);
+        countParams.push(inspector);
+      }
       
-      (itemRows as ItemRow[]).forEach(item => {
-        items[item.item_id] = {
-          status: item.status,
-          keterangan: item.keterangan || '',
-          foto_path: item.foto_path
-        };
+      const countResult = await client.query(countQuery, countParams);
+      const total = parseInt(countResult.rows[0].total);
+
+      // Ambil item untuk setiap header
+      const result: Array<{
+        id: string;
+        date: string;
+        inspector: string;
+        inspector_nik: string | null;
+        items: Record<number, {
+          status: string;
+          keterangan: string;
+          foto_path: string | null;
+        }>;
+        additionalNotes: string | null;
+        created_at: string;
+        updated_at: string;
+      }> = [];
+      
+      for (const header of headerRows.rows) {
+        const itemRows = await client.query(
+          'SELECT * FROM preventive_items WHERE header_id = $1',
+          [header.id]
+        );
+        
+        const items: Record<number, {
+          status: string;
+          keterangan: string;
+          foto_path: string | null;
+        }> = {};
+        
+        itemRows.rows.forEach((item: ItemRow) => {
+          items[item.item_id] = {
+            status: item.status,
+            keterangan: item.keterangan || '',
+            foto_path: item.foto_path
+          };
+        });
+        
+        result.push({
+          id: header.id.toString(),
+          date: header.inspection_date,
+          inspector: header.inspector,
+          inspector_nik: header.inspector_nik,
+          items: items,
+          additionalNotes: header.additional_notes,
+          created_at: header.created_at,
+          updated_at: header.updated_at
+        });
+      }
+
+      return NextResponse.json({
+        success: true,
+        data: result,
+        pagination: {
+          total,
+          limit,
+          offset,
+          hasMore: offset + limit < total
+        }
       });
-      
-      result.push({
-        id: header.id.toString(),
-        date: header.inspection_date,
-        inspector: header.inspector,
-        inspector_nik: header.inspector_nik,
-        items: items,
-        additionalNotes: header.additional_notes,
-        created_at: header.created_at,
-        updated_at: header.updated_at
-      });
-    }
 
-    return NextResponse.json({
-      success: true,
-      data: result
-    });
+    } finally {
+      client.release();
+      console.log('🔓 Connection released');
+    }
 
   } catch (error) {
-    console.error('Error fetching preventive records:', error);
+    console.error('❌ Error fetching preventive records:', error);
     return NextResponse.json(
       { 
         success: false, 
         message: 'Internal server error',
-        error: process.env.NODE_ENV === 'development' ? (error as Error).message : undefined
+        error: process.env.NODE_ENV === 'development' ? {
+          message: (error as Error).message,
+          stack: (error as Error).stack?.split('\n').slice(0, 10)
+        } : undefined
       },
       { status: 500 }
     );

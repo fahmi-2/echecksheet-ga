@@ -1,90 +1,68 @@
 // app/api/apar/delete/route.ts
 import { NextRequest, NextResponse } from 'next/server';
 import pool from '../../../../lib/db';
-import { unlink } from 'fs/promises';
-import { join } from 'path';
 
 export async function DELETE(request: NextRequest) {
   try {
-    const { searchParams } = new URL(request.url);
-    const id = searchParams.get('id');
+    const { id } = await request.json();
 
     if (!id) {
       return NextResponse.json(
-        { success: false, message: 'ID diperlukan' },
+        { success: false, message: 'ID record wajib disertakan' },
         { status: 400 }
       );
     }
 
-    const connection = await pool.getConnection();
+    const client = await pool.connect();
     
     try {
-      await connection.beginTransaction();
+      await client.query('BEGIN');
+      console.log('🔄 Transaction started for delete');
 
-      // Ambil semua foto yang akan dihapus
-      const [items] = await connection.query(
-        `SELECT foto FROM apar_items WHERE record_id = ? AND foto IS NOT NULL`,
-        [id]
-      );
-      const itemsArray = items as any[];
-
-      // Hapus file foto dari storage
-      for (const item of itemsArray) {
-        if (item.foto) {
-          try {
-            // Extract path dari URL (hapus base URL jika ada)
-            const fotoPath = item.foto.replace(process.env.NEXT_PUBLIC_BASE_URL || '', '');
-            const filePath = join(process.cwd(), 'public', fotoPath);
-            await unlink(filePath);
-            console.log('✅ Foto dihapus:', filePath);
-          } catch (err) {
-            console.warn('⚠️ Gagal menghapus file:', err);
-            // Lanjutkan meskipun gagal hapus file
-          }
-        }
-      }
-
-      // Delete record (items akan terhapus otomatis karena ON DELETE CASCADE)
-      const [result] = await connection.query(
-        `DELETE FROM apar_records WHERE id = ?`,
+      // Hapus items terlebih dahulu (karena foreign key constraint)
+      await client.query(
+        'DELETE FROM apar_items WHERE record_id = $1',
         [id]
       );
 
-      const resultObject = result as any;
+      // Hapus record utama
+      const deleteResult = await client.query(
+        'DELETE FROM apar_records WHERE id = $1 RETURNING *',
+        [id]
+      );
 
-      if (resultObject.affectedRows === 0) {
-        await connection.rollback();
+      if (deleteResult.rowCount === 0) {
+        await client.query('ROLLBACK');
         return NextResponse.json(
-          { success: false, message: 'Data tidak ditemukan' },
+          { success: false, message: 'Record tidak ditemukan' },
           { status: 404 }
         );
       }
 
-      await connection.commit();
+      await client.query('COMMIT');
+      console.log('✅ Record berhasil dihapus');
       
-      console.log('✅ Data APAR berhasil dihapus:', id);
-      
-      return NextResponse.json(
-        {
-          success: true,
-          message: 'Data APAR berhasil dihapus'
-        },
-        { status: 200 }
-      );
+      return NextResponse.json({
+        success: true,
+        message: 'Record berhasil dihapus'
+      });
     } catch (error) {
-      await connection.rollback();
+      await client.query('ROLLBACK');
       console.error('Delete transaction error:', error);
       throw error;
     } finally {
-      connection.release();
+      client.release();
+      console.log('🔓 Connection released');
     }
   } catch (error) {
     console.error('Delete APAR error:', error);
+    
+    // ✅ Fixed: Gunakan type assertion atau helper
     return NextResponse.json(
       { 
         success: false, 
-        message: 'Terjadi kesalahan server',
-        error: (error as any).message
+        message: 'Gagal menghapus record',
+        error: (error as Error).message  // ✅ Aman untuk Next.js
       },
       { status: 500 }
     );

@@ -1,3 +1,4 @@
+// app/api/pintu-darurat/history/route.ts
 import { NextRequest, NextResponse } from 'next/server';
 import pool from '../../../../lib/db';
 
@@ -7,46 +8,51 @@ export async function GET(request: NextRequest) {
     const date = searchParams.get('date');
     const location = searchParams.get('location');
 
+    // ✅ GUNAKAN QUOTE UNTUK ALIAS CAMELCASE
     let query = `
-      SELECT 
+      SELECT
         c.id,
-        c.checklist_date as date,
-        c.checker_name as checker,
-        c.checker_nik as nik,
-        c.checker_dept as department,
-        c.submitted_at as submittedAt,
-        i.id as item_id,
-        i.location_name as lokasi,
-        i.kondisi_pintu as kondisiPintu,
-        i.area_sekitar as areaSekitar,
-        i.palu_alat_bantu as paluAlatBantu,
-        i.identitas_pintu as identitasPintu,
-        i.id_peringatan as idPeringatan,
-        i.door_closer as doorCloser,
+        c.checklist_date as "date",
+        c.checker_name as "checker",
+        c.checker_nik as "nik",
+        c.checker_dept as "department",
+        c.submitted_at as "submittedAt",
+        i.id as "item_id",
+        i.location_name as "lokasi",
+        i.kondisi_pintu as "kondisiPintu",
+        i.area_sekitar as "areaSekitar",
+        i.palu_alat_bantu as "paluAlatBantu",
+        i.identitas_pintu as "identitasPintu",
+        i.id_peringatan as "idPeringatan",
+        i.door_closer as "doorCloser",
         i.keterangan,
-        i.tindakan_perbaikan as tindakanPerbaikan,
+        i.tindakan_perbaikan as "tindakanPerbaikan",
         i.pic,
-        i.foto_data as foto
+        i.foto_data as "foto"
       FROM pintu_darurat_checklists c
       JOIN pintu_darurat_checklist_items i ON c.id = i.checklist_id
       WHERE 1=1
     `;
-    
+
     const params: any[] = [];
+    let paramIndex = 1;
 
     if (date) {
-      query += ' AND c.checklist_date = ?';
+      query += ` AND c.checklist_date = $${paramIndex}`;
       params.push(date);
+      paramIndex++;
     }
 
     if (location) {
-      query += ' AND i.location_name = ?';
+      query += ` AND i.location_name = $${paramIndex}`;
       params.push(location);
+      paramIndex++;
     }
 
     query += ' ORDER BY c.checklist_date DESC, i.id ASC';
 
-    const [rows]: any = await pool.query(query, params);
+    const result = await pool.query(query, params);
+    const rows = result.rows;
 
     // ✅ Group by tanggal
     const grouped: any = {};
@@ -78,17 +84,13 @@ export async function GET(request: NextRequest) {
       });
     });
 
-    const result = Object.values(grouped);
+    const resultArray = Object.values(grouped);
 
-    console.log('✅ Pintu Darurat history loaded:', {
-      totalRecords: result.length,
-      totalItems: result.reduce((sum: number, rec: any) => sum + rec.items.length, 0)
-    });
-
-    return NextResponse.json(result);
+    return NextResponse.json(resultArray);
   } catch (error) {
     console.error('❌ Pintu Darurat history error:', error);
-    return NextResponse.json({ 
+    return NextResponse.json({
+      success: false,
       error: 'Gagal memuat riwayat',
       details: process.env.NODE_ENV === 'development' ? (error as Error).message : undefined
     }, { status: 500 });

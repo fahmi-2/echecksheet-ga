@@ -92,7 +92,7 @@ export default function FormStopKontak() {
         additional_notes: ""
       };
 
-      const response = await fetch('/api/electrical_inspections', {
+      const response = await fetch('/api/electrical_inspections/submit', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'

@@ -1,373 +1,457 @@
-    "use client";
+// app/status-ga/form-inspeksi-stop-kontak/instalasi-listrik/page.tsx
+"use client";
 
-    import { useEffect, useState } from "react";
-    import { useRouter } from "next/navigation";
-    import { useAuth } from "@/lib/auth-context";
-    import { Sidebar } from "@/components/Sidebar";
+import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
+import { useAuth } from "@/lib/auth-context";
+import { Sidebar } from "@/components/Sidebar";
 
-    const checklistInstalasi = [
-      {
-        no: 1,
-        item: "Standar Kabel Listrik",
-        detail: "Kabel sesuai standar dan tidak terkelupas",
-      },
-      {
-        no: 2,
-        item: "Kerapihan Instalasi",
-        detail: "Kabel tertata rapi dan tidak menggantung",
-      },
-      {
-        no: 3,
-        item: "Pelindung Kabel",
-        detail: "Menggunakan conduit / ducting",
-      },
-      {
-        no: 4,
-        item: "Sambungan Kabel",
-        detail: "Tidak ada sambungan terbuka",
-      },
-    ];
+const checklistInstalasi = [
+  {
+    no: 1,
+    item: "Standar Kabel Listrik",
+    detail: "Kabel sesuai standar dan tidak terkelupas",
+  },
+  {
+    no: 2,
+    item: "Kerapihan Instalasi",
+    detail: "Kabel tertata rapi dan tidak menggantung",
+  },
+  {
+    no: 3,
+    item: "Pelindung Kabel",
+    detail: "Menggunakan conduit / ducting",
+  },
+  {
+    no: 4,
+    item: "Sambungan Kabel",
+    detail: "Tidak ada sambungan terbuka",
+  },
+];
 
-    type CheckData = {
-      hasil: "OK" | "NOK" | "";
-      keterangan: string;
+type CheckData = {
+  hasil: "OK" | "NOK" | "";
+  keterangan: string;
+  foto_path?: string;
+};
+
+export default function FormInstalasiListrik() {
+  const router = useRouter();
+  const { user } = useAuth();
+  const [meta, setMeta] = useState({
+    tanggal: new Date().toISOString().split("T")[0],
+    area: "",
+    pic: user?.fullName || "",
+  });
+
+  const [checkData, setCheckData] = useState<Record<number, CheckData>>({});
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isLoaded, setIsLoaded] = useState(false);
+
+  useEffect(() => {
+    setIsLoaded(true);
+    if (!user) return;
+    if (user.role !== "inspector-ga") {
+      router.push("/home");
+    }
+  }, [user, router]);
+
+  useEffect(() => {
+    if (isLoaded && user) {
+      // Inisialisasi form dengan data default
+      const initialData: Record<number, CheckData> = {};
+      checklistInstalasi.forEach(item => {
+        initialData[item.no] = { hasil: "", keterangan: "" };
+      });
+      setCheckData(initialData);
+    }
+  }, [isLoaded, user]);
+
+  if (!user) return <div className="loading">Memuat...</div>;
+  if (user.role !== "inspector-ga") return null;
+
+  const handleResultChange = (no: number, hasil: "OK" | "NOK") => {
+    setCheckData(prev => ({
+      ...prev,
+      [no]: { ...prev[no], hasil }
+    }));
+  };
+
+  const handleKeteranganChange = (no: number, keterangan: string) => {
+    setCheckData(prev => ({
+      ...prev,
+      [no]: { ...prev[no], keterangan }
+    }));
+  };
+
+  const handleImageUpload = (no: number, e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      setCheckData(prev => ({
+        ...prev,
+        [no]: { ...prev[no], foto_path: reader.result as string }
+      }));
     };
+    reader.readAsDataURL(file);
+  };
 
-    export default function FormInstalasiListrik() {
-      const router = useRouter();
-      const { user } = useAuth();
-      const [meta, setMeta] = useState({
-        tanggal: new Date().toISOString().split("T")[0],
-        area: "",
-        pic: user?.fullName || "",
+  const handleSubmit = async () => {
+    if (!meta.area.trim()) {
+      alert("❗ Area harus diisi");
+      return;
+    }
+
+    const allChecked = checklistInstalasi.every(item => checkData[item.no]?.hasil);
+    if (!allChecked) {
+      alert("❗ Semua item harus diisi");
+      return;
+    }
+
+    setIsSubmitting(true);
+    try {
+      // Format data sesuai API yang dimigrasi
+      const formattedData: Record<string, any> = {};
+      checklistInstalasi.forEach(item => {
+        formattedData[item.no] = {
+          hasil: checkData[item.no].hasil,
+          keterangan: checkData[item.no].keterangan,
+          foto_path: checkData[item.no].foto_path || null
+        };
       });
 
-      const [checkData, setCheckData] = useState<Record<number, CheckData>>({});
-      const [isSubmitting, setIsSubmitting] = useState(false);
-
-      useEffect(() => {
-        if (!user) return;
-        if (user.role !== "inspector-ga") {
-          router.push("/home");
-        }
-      }, [user, router]);
-
-      if (!user) return <div className="loading">Memuat...</div>;
-      if (user.role !== "inspector-ga") return null;
-
-      const handleResultChange = (no: number, hasil: "OK" | "NOK") => {
-        setCheckData(prev => ({
-          ...prev,
-          [no]: { ...prev[no], hasil }
-        }));
+      const payload = {
+        type: "instalasi-listrik",
+        tanggal: meta.tanggal,
+        area: meta.area,
+        pic: meta.pic,
+        data: formattedData,
+        additional_notes: ""
       };
 
-      const handleKeteranganChange = (no: number, keterangan: string) => {
-        setCheckData(prev => ({
-          ...prev,
-          [no]: { ...prev[no], keterangan }
-        }));
-      };
+      // ✅ PERBAIKAN UTAMA: Gunakan endpoint API yang benar
+      const response = await fetch('/api/electrical_inspections/submit', {  // ✅ underscore (_)
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({
+    type: "instalasi-listrik",
+    tanggal: meta.tanggal,
+    area: meta.area,
+    pic: meta.pic,
+    items: formattedData,  // ✅ key 'items' sesuai interface API
+    additional_notes: ""
+  })
+});
 
-      const handleSubmit = async () => {
-        if (!meta.area.trim()) {
-          alert("❗ Area harus diisi");
-          return;
-        }
+      // ✅ Handle response dengan baik
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || 'Gagal menyimpan data');
+      }
 
-        const allChecked = checklistInstalasi.every(item => checkData[item.no]?.hasil);
-        if (!allChecked) {
-          alert("❗ Semua item harus diisi");
-          return;
-        }
-
-        setIsSubmitting(true);
-        try {
-          const payload = {
-            type: "instalasi-listrik",
-            tanggal: meta.tanggal,
-            area: meta.area,
-            pic: meta.pic,
-            data: checkData,
-            additional_notes: ""
-          };
-
-          const response = await fetch('/api/electrical_inspections', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json'
-            },
-            body: JSON.stringify(payload)
-          });
-
-          const result = await response.json();
-
-          if (!response.ok) {
-            throw new Error(result.message || 'Gagal menyimpan data');
-          }
-
-          alert("✅ Data berhasil disimpan!");
-          router.push("/status-ga/form-inspeksi-stop-kontak/instalasi-listrik/riwayat");
-        } catch (error) {
-          console.error('Error submitting form:', error);
-          alert(`❌ ${(error as Error).message}`);
-        } finally {
-          setIsSubmitting(false);
-        }
-      };
-
-      return (
-        <div className="app-page">
-          <Sidebar userName={user.fullName} />
-
-          <div className="page-content">
-            <button
-              onClick={() => router.back()}
-              className="back-btn"
-            >
-              ← Kembali
-            </button>
-
-            <h1 className="title">⚡ Pengecekan Instalasi Listrik</h1>
-
-            {/* HEADER FORM */}
-            <div className="form-header">
-              <div className="form-group">
-                <label>Tanggal</label>
-                <input
-                  type="date"
-                  value={meta.tanggal}
-                  onChange={(e) => setMeta({ ...meta, tanggal: e.target.value })}
-                />
-              </div>
-              <div className="form-group">
-                <label>Area</label>
-                <input
-                  type="text"
-                  placeholder="Masukkan area..."
-                  value={meta.area}
-                  onChange={(e) => setMeta({ ...meta, area: e.target.value })}
-                />
-              </div>
-              <div className="form-group">
-                <label>PIC</label>
-                <input
-                  type="text"
-                  placeholder="Person in Charge"
-                  value={meta.pic}
-                  onChange={(e) => setMeta({ ...meta, pic: e.target.value })}
-                />
-              </div>
-            </div>
-
-            {/* TABLE */}
-            <table className="checksheet">
-              <thead>
-                <tr>
-                  <th>No</th>
-                  <th>Item Pengecekan</th>
-                  <th>Detail</th>
-                  <th>OK</th>
-                  <th>N-OK</th>
-                  <th>Keterangan</th>
-                </tr>
-              </thead>
-              <tbody>
-                {checklistInstalasi.map((row) => (
-                  <tr key={row.no}>
-                    <td className="no-cell">{row.no}</td>
-                    <td>{row.item}</td>
-                    <td>{row.detail}</td>
-                    <td className="radio-cell">
-                      <input
-                        type="radio"
-                        name={`hasil-${row.no}`}
-                        checked={checkData[row.no]?.hasil === "OK"}
-                        onChange={() => handleResultChange(row.no, "OK")}
-                      />
-                    </td>
-                    <td className="radio-cell">
-                      <input
-                        type="radio"
-                        name={`hasil-${row.no}`}
-                        checked={checkData[row.no]?.hasil === "NOK"}
-                        onChange={() => handleResultChange(row.no, "NOK")}
-                      />
-                    </td>
-                    <td>
-                      <input
-                        type="text"
-                        placeholder="Catatan..."
-                        value={checkData[row.no]?.keterangan || ""}
-                        onChange={(e) => handleKeteranganChange(row.no, e.target.value)}
-                        className="text-input"
-                      />
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-
-            <div className="actions">
-              <button 
-                className="submit-btn" 
-                onClick={handleSubmit}
-                disabled={isSubmitting}
-              >
-                {isSubmitting ? '⏳ Menyimpan...' : '💾 Simpan Checksheet'}
-              </button>
-            </div>
-          </div>
-
-          <style jsx>{`
-            .page-content {
-              max-width: 1200px;
-              margin: 0 auto;
-              padding: 24px;
-              background: #fafafa;
-            }
-            .back-btn {
-              background: white;
-              border: 1.5px solid #e0e0e0;
-              padding: 10px 16px;
-              border-radius: 8px;
-              cursor: pointer;
-              margin-bottom: 24px;
-              font-weight: 600;
-              color: #1565c0;
-              transition: all 0.3s ease;
-            }
-            .back-btn:hover {
-              background: #f5f5f5;
-              border-color: #1565c0;
-              transform: translateX(-2px);
-              box-shadow: 0 2px 6px rgba(21, 101, 192, 0.15);
-            }
-            .title {
-              margin-bottom: 24px;
-              color: #0d47a1;
-              font-size: 1.8rem;
-              font-weight: 700;
-            }
-            .form-header {
-              display: flex;
-              gap: 16px;
-              margin-bottom: 24px;
-              flex-wrap: wrap;
-              background: white;
-              padding: 20px;
-              border-radius: 12px;
-              box-shadow: 0 2px 8px rgba(0,0,0,0.06);
-            }
-            .form-group {
-              display: flex;
-              flex-direction: column;
-              gap: 8px;
-              flex: 1;
-              min-width: 200px;
-            }
-            .form-group label {
-              font-weight: 600;
-              color: #1a237e;
-              font-size: 0.95rem;
-            }
-            .form-group input {
-              padding: 11px 12px;
-              border: 1.5px solid #e0e0e0;
-              border-radius: 8px;
-              font-size: 0.95rem;
-              transition: all 0.3s ease;
-              background: white;
-            }
-            .form-group input:focus {
-              outline: none;
-              border-color: #1e88e5;
-              box-shadow: 0 0 0 3px rgba(30, 136, 229, 0.1);
-              background: #f8fbff;
-            }
-            .checksheet {
-              width: 100%;
-              border-collapse: collapse;
-              background: white;
-              border-radius: 12px;
-              overflow: hidden;
-              box-shadow: 0 2px 12px rgba(0,0,0,0.08);
-              margin-bottom: 24px;
-            }
-            .checksheet th,
-            .checksheet td {
-              border: 1px solid #f0f0f0;
-              padding: 16px;
-              font-size: 0.95rem;
-              text-align: left;
-            }
-            .checksheet th {
-              background: linear-gradient(135deg, #1e88e5 0%, #1565c0 100%);
-              font-weight: 600;
-              color: white;
-            }
-            .checksheet tbody tr {
-              transition: background-color 0.2s ease;
-            }
-            .checksheet tbody tr:hover {
-              background-color: #f8f9fa;
-            }
-            .no-cell {
-              width: 60px;
-              text-align: center;
-              font-weight: 600;
-              color: #1565c0;
-            }
-            .radio-cell {
-              width: 70px;
-              text-align: center;
-            }
-            .radio-cell input {
-              width: 20px;
-              height: 20px;
-              cursor: pointer;
-              accent-color: #1e88e5;
-            }
-            .text-input {
-              width: 100%;
-              padding: 11px 12px;
-              border: 1.5px solid #e0e0e0;
-              border-radius: 8px;
-              font-size: 0.9rem;
-              transition: all 0.3s ease;
-              background: white;
-            }
-            .text-input:focus {
-              outline: none;
-              border-color: #1e88e5;
-              box-shadow: 0 0 0 3px rgba(30, 136, 229, 0.1);
-              background: #f8fbff;
-            }
-            .actions {
-              display: flex;
-              justify-content: flex-end;
-              gap: 12px;
-            }
-            .submit-btn {
-              padding: 13px 36px;
-              background: linear-gradient(135deg, #1e88e5 0%, #1565c0 100%);
-              color: white;
-              border: none;
-              border-radius: 8px;
-              cursor: pointer;
-              font-weight: 600;
-              font-size: 1rem;
-              transition: all 0.3s ease;
-              box-shadow: 0 4px 12px rgba(30, 136, 229, 0.25);
-            }
-            .submit-btn:hover {
-              box-shadow: 0 6px 20px rgba(30, 136, 229, 0.35);
-              transform: translateY(-2px);
-            }
-            .submit-btn:active {
-              transform: translateY(0);
-            }
-          `}</style>
-        </div>
-      );
+      const result = await response.json();
+      alert("✅ Data berhasil disimpan!");
+      router.push("/status-ga/form-inspeksi-stop-kontak/instalasi-listrik/riwayat");
+    } catch (error) {
+      console.error('Error submitting form:', error);
+      alert(`❌ ${(error as Error).message}`);
+    } finally {
+      setIsSubmitting(false);
     }
+  };
+
+  return (
+    <div className="app-page">
+      <Sidebar userName={user.fullName} />
+
+      <div className="page-content">
+        <button
+          onClick={() => router.back()}
+          className="back-btn"
+        >
+          ← Kembali
+        </button>
+
+        <h1 className="title">⚡ Pengecekan Instalasi Listrik</h1>
+
+        {/* HEADER FORM */}
+        <div className="form-header">
+          <div className="form-group">
+            <label>Tanggal</label>
+            <input
+              type="date"
+              value={meta.tanggal}
+              onChange={(e) => setMeta({ ...meta, tanggal: e.target.value })}
+            />
+          </div>
+          <div className="form-group">
+            <label>Area</label>
+            <input
+              type="text"
+              placeholder="Masukkan area..."
+              value={meta.area}
+              onChange={(e) => setMeta({ ...meta, area: e.target.value })}
+            />
+          </div>
+          <div className="form-group">
+            <label>PIC</label>
+            <input
+              type="text"
+              placeholder="Person in Charge"
+              value={meta.pic}
+              onChange={(e) => setMeta({ ...meta, pic: e.target.value })}
+            />
+          </div>
+        </div>
+
+        {/* TABLE */}
+        <table className="checksheet">
+          <thead>
+            <tr>
+              <th>No</th>
+              <th>Item Pengecekan</th>
+              <th>Detail</th>
+              <th>OK</th>
+              <th>N-OK</th>
+              <th>Keterangan</th>
+              <th>Foto</th>
+            </tr>
+          </thead>
+          <tbody>
+            {checklistInstalasi.map((row) => (
+              <tr key={row.no}>
+                <td className="no-cell">{row.no}</td>
+                <td>{row.item}</td>
+                <td>{row.detail}</td>
+                <td className="radio-cell">
+                  <input
+                    type="radio"
+                    name={`hasil-${row.no}`}
+                    checked={checkData[row.no]?.hasil === "OK"}
+                    onChange={() => handleResultChange(row.no, "OK")}
+                  />
+                </td>
+                <td className="radio-cell">
+                  <input
+                    type="radio"
+                    name={`hasil-${row.no}`}
+                    checked={checkData[row.no]?.hasil === "NOK"}
+                    onChange={() => handleResultChange(row.no, "NOK")}
+                  />
+                </td>
+                <td>
+                  <input
+                    type="text"
+                    placeholder="Catatan..."
+                    value={checkData[row.no]?.keterangan || ""}
+                    onChange={(e) => handleKeteranganChange(row.no, e.target.value)}
+                    className="text-input"
+                  />
+                </td>
+                <td>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={(e) => handleImageUpload(row.no, e)}
+                    className="file-input"
+                  />
+                  {checkData[row.no]?.foto_path && (
+                    <div className="image-preview">
+                      <img 
+                        src={checkData[row.no].foto_path} 
+                        alt={`Foto item ${row.no}`} 
+                        className="preview-image"
+                      />
+                    </div>
+                  )}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+
+        <div className="actions">
+          <button 
+            className="submit-btn" 
+            onClick={handleSubmit}
+            disabled={isSubmitting}
+          >
+            {isSubmitting ? '⏳ Menyimpan...' : '💾 Simpan Checksheet'}
+          </button>
+        </div>
+      </div>
+
+      <style jsx>{`
+        .page-content {
+          max-width: 1200px;
+          margin: 0 auto;
+          padding: 24px;
+          background: #fafafa;
+        }
+        .back-btn {
+          background: white;
+          border: 1.5px solid #e0e0e0;
+          padding: 10px 16px;
+          border-radius: 8px;
+          cursor: pointer;
+          margin-bottom: 24px;
+          font-weight: 600;
+          color: #1565c0;
+          transition: all 0.3s ease;
+        }
+        .back-btn:hover {
+          background: #f5f5f5;
+          border-color: #1565c0;
+          transform: translateX(-2px);
+          box-shadow: 0 2px 6px rgba(21, 101, 192, 0.15);
+        }
+        .title {
+          margin-bottom: 24px;
+          color: #0d47a1;
+          font-size: 1.8rem;
+          font-weight: 700;
+        }
+        .form-header {
+          display: flex;
+          gap: 16px;
+          margin-bottom: 24px;
+          flex-wrap: wrap;
+          background: white;
+          padding: 20px;
+          border-radius: 12px;
+          box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+        }
+        .form-group {
+          display: flex;
+          flex-direction: column;
+          gap: 8px;
+          flex: 1;
+          min-width: 200px;
+        }
+        .form-group label {
+          font-weight: 600;
+          color: #1a237e;
+          font-size: 0.95rem;
+        }
+        .form-group input {
+          padding: 11px 12px;
+          border: 1.5px solid #e0e0e0;
+          border-radius: 8px;
+          font-size: 0.95rem;
+          transition: all 0.3s ease;
+          background: white;
+        }
+        .form-group input:focus {
+          outline: none;
+          border-color: #1e88e5;
+          box-shadow: 0 0 0 3px rgba(30, 136, 229, 0.1);
+          background: #f8fbff;
+        }
+        .checksheet {
+          width: 100%;
+          border-collapse: collapse;
+          background: white;
+          border-radius: 12px;
+          overflow: hidden;
+          box-shadow: 0 2px 12px rgba(0,0,0,0.08);
+          margin-bottom: 24px;
+        }
+        .checksheet th,
+        .checksheet td {
+          border: 1px solid #f0f0f0;
+          padding: 16px;
+          font-size: 0.95rem;
+          text-align: left;
+        }
+        .checksheet th {
+          background: linear-gradient(135deg, #1e88e5 0%, #1565c0 100%);
+          font-weight: 600;
+          color: white;
+        }
+        .checksheet tbody tr {
+          transition: background-color 0.2s ease;
+        }
+        .checksheet tbody tr:hover {
+          background-color: #f8f9fa;
+        }
+        .no-cell {
+          width: 60px;
+          text-align: center;
+          font-weight: 600;
+          color: #1565c0;
+        }
+        .radio-cell {
+          width: 70px;
+          text-align: center;
+        }
+        .radio-cell input {
+          width: 20px;
+          height: 20px;
+          cursor: pointer;
+          accent-color: #1e88e5;
+        }
+        .text-input {
+          width: 100%;
+          padding: 11px 12px;
+          border: 1.5px solid #e0e0e0;
+          border-radius: 8px;
+          font-size: 0.9rem;
+          transition: all 0.3s ease;
+          background: white;
+        }
+        .text-input:focus {
+          outline: none;
+          border-color: #1e88e5;
+          box-shadow: 0 0 0 3px rgba(30, 136, 229, 0.1);
+          background: #f8fbff;
+        }
+        .file-input {
+          width: 100%;
+          padding: 10px 12px;
+          border: 1.5px solid #e0e0e0;
+          border-radius: 8px;
+          font-size: 0.9rem;
+          transition: all 0.3s ease;
+          background: white;
+          margin-top: 4px;
+        }
+        .image-preview {
+          margin-top: 8px;
+          text-align: center;
+        }
+        .preview-image {
+          max-width: 150px;
+          max-height: 150px;
+          border-radius: 8px;
+          border: 1px solid #e0e0e0;
+        }
+        .actions {
+          display: flex;
+          justify-content: flex-end;
+          gap: 12px;
+        }
+        .submit-btn {
+          padding: 13px 36px;
+          background: linear-gradient(135deg, #1e88e5 0%, #1565c0 100%);
+          color: white;
+          border: none;
+          border-radius: 8px;
+          cursor: pointer;
+          font-weight: 600;
+          font-size: 1rem;
+          transition: all 0.3s ease;
+          box-shadow: 0 4px 12px rgba(30, 136, 229, 0.25);
+        }
+        .submit-btn:hover {
+          box-shadow: 0 6px 20px rgba(30, 136, 229, 0.35);
+          transform: translateY(-2px);
+        }
+        .submit-btn:active {
+          transform: translateY(0);
+        }
+      `}</style>
+    </div>
+  );
+}

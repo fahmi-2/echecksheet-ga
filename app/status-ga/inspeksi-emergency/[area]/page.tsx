@@ -288,16 +288,72 @@ export default function EmergencyLampChecklist({ params }: { params: Promise<{ a
 
   // 🔥 SIMPAN KE API
   const handleSave = async () => {
-    try {
-      setLoading(true);
+  try {
+    setLoading(true);
+    console.log('🔍 [DEBUG] Mulai proses validasi dan submit...');
 
-      // Siapkan data untuk submit
-      const submitData = {
-        date,
-        area,
-        checker: user?.fullName || "",
-        checkerNik: user?.nik || "",
-        items: items.map(item => ({
+    // ✅ Validasi komprehensif sebelum submit
+    for (let index = 0; index < items.length; index++) {
+      const item = items[index];
+      
+      console.log(`📝 [DEBUG] Validasi item ${index + 1}:`, {
+        no: item.no,
+        lokasi: item.lokasi,
+        id: item.id
+      });
+
+      // Validasi field wajib
+      if (!item.no) {
+        throw new Error(`Baris ${index + 1}: Nomor urut tidak boleh kosong`);
+      }
+      
+      if (!item.lokasi || item.lokasi.trim() === '') {
+        throw new Error(`Baris ${index + 1}: Lokasi wajib diisi`);
+      }
+      
+      if (!item.id || item.id.trim() === '') {
+        throw new Error(`Baris ${index + 1}: ID wajib diisi`);
+      }
+
+      // Validasi semua status harus 'OK' atau 'NG'
+      const statusFields = [
+        'kondisiLampu', 'indicatorLamp', 'batteryCharger', 
+        'idNumber', 'kebersihan', 'kondisiKabel'
+      ];
+      
+      for (const field of statusFields) {
+        const value = item[field as keyof typeof item];
+        console.log(`   [DEBUG] ${field}:`, value);
+        
+        if (value === undefined || value === null || value === '') {
+          throw new Error(`Baris ${index + 1}: ${field} harus diisi dengan 'OK' atau 'NG'`);
+        }
+        
+        if (value !== 'OK' && value !== 'NG') {
+          throw new Error(`Baris ${index + 1}: ${field} harus diisi dengan 'OK' atau 'NG' (ditemukan: '${value}')`);
+        }
+      }
+
+      // Jika ada status 'NG', keterangan wajib diisi
+      const hasNg = statusFields.some(field => item[field as keyof typeof item] === 'NG');
+      if (hasNg) {
+        console.log(`   [DEBUG] Item ${index + 1} memiliki status NG`);
+        if (!item.keterangan || item.keterangan.trim() === '') {
+          throw new Error(`Baris ${index + 1}: Keterangan wajib diisi untuk item dengan status NG`);
+        }
+      }
+    }
+
+    console.log('✅ [DEBUG] Validasi berhasil!');
+
+    // Siapkan data untuk submit
+    const submitData = {
+      date,
+      area,
+      checker: user?.fullName || "",
+      checkerNik: user?.nik || "",
+      items: items.map((item, idx) => {
+        const itemData = {
           no: item.no,
           lokasi: item.lokasi,
           id: item.id,
@@ -310,31 +366,104 @@ export default function EmergencyLampChecklist({ params }: { params: Promise<{ a
           keterangan: item.keterangan || "",
           tindakanPerbaikan: item.tindakanPerbaikan || "",
           pic: item.pic,
-          foto: item.foto || null // Path file atau null
-        }))
-      };
+          foto: item.foto || null
+        };
+        
+        console.log(`📤 [DEBUG] Item ${idx + 1}:`, itemData);
+        return itemData;
+      })
+    };
 
-      const response = await fetch('/api/emergency-lamp/submit', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(submitData),
-      });
+    console.log('📤 [DEBUG] Data lengkap yang akan dikirim:', {
+      ...submitData,
+      items: submitData.items.map(i => ({ ...i, foto: i.foto ? '[FILE]' : null }))
+    });
 
-      const result = await response.json();
+    // Submit ke API
+    console.log('📡 [DEBUG] Mengirim request ke /api/emergency-lamp/submit...');
+    
+    const response = await fetch('/api/emergency-lamp/submit', {
+      method: 'POST',
+      headers: { 
+        'Content-Type': 'application/json',
+        'Accept': 'application/json'
+      },
+      body: JSON.stringify(submitData),
+      credentials: 'include'
+    });
 
-      if (response.ok && result.success) {
-        alert("✅ Data berhasil disimpan!");
-        router.push(`/status-ga/inspeksi-emergency/riwayat/${area}`);
-      } else {
-        alert("❌ Gagal menyimpan data: " + (result.message || 'Error tidak diketahui'));
+    console.log('📥 [DEBUG] Response status:', response.status);
+    console.log('📥 [DEBUG] Response headers:', Object.fromEntries(response.headers.entries()));
+
+    if (!response.ok) {
+      console.error('❌ [DEBUG] Response tidak OK. Status:', response.status);
+      
+      try {
+        const errorData = await response.json();
+        console.error('❌ [DEBUG] Error response body:', errorData);
+        throw new Error(errorData.message || `Server error: ${response.status}`);
+      } catch (parseError) {
+        console.error('❌ [DEBUG] Gagal parse error response:', parseError);
+        throw new Error(`Server error: ${response.status} - ${response.statusText}`);
       }
-    } catch (error) {
-      console.error('Submit error:', error);
-      alert("❌ Terjadi kesalahan saat menyimpan data: " + (error as any).message);
-    } finally {
-      setLoading(false);
     }
-  };
+
+    const result = await response.json();
+    console.log('✅ [DEBUG] Response berhasil:', result);
+
+    if (!result.success) {
+      console.error('❌ [DEBUG] API response success=false:', result);
+      throw new Error(result.message || 'Gagal menyimpan data');
+    }
+
+    // ✅ Berhasil tersimpan
+    console.log('🎉 [DEBUG] Data berhasil disimpan!');
+    
+    // Tampilkan informasi sukses
+    const successMessage = `✅ Data berhasil disimpan!\n\nID Record: ${result.data?.id || 'N/A'}\nTotal Item: ${items.length}\nArea: ${getAreaTitle()}`;
+    
+    alert(successMessage);
+
+    // Cek apakah ada NG untuk menawarkan pelaporan
+    const hasNgInResult = result.data?.hasNg;
+    if (hasNgInResult) {
+      console.log('⚠️ [DEBUG] Terdapat item NG, menawarkan pelaporan...');
+      const confirmReport = confirm('⚠️ Terdapat item dengan status NG. Apakah ingin langsung melaporkan?');
+      if (confirmReport) {
+        console.log('📢 [DEBUG] User memilih untuk melaporkan NG');
+        handleReportNg();
+        return;
+      }
+    }
+
+    // Redirect ke halaman riwayat
+    console.log('🔄 [DEBUG] Redirecting to history page...');
+    router.push(`/status-ga/inspeksi-emergency/riwayat/${area}`);
+
+  } catch (error) {
+    console.error('❌ [CRITICAL] Submit error:', error);
+    
+    let errorMessage = 'Terjadi kesalahan tidak terduga';
+    
+    if (error instanceof Error) {
+      errorMessage = error.message;
+      console.error('❌ [CRITICAL] Error details:', {
+        name: error.name,
+        message: error.message,
+        stack: error.stack
+      });
+    }
+
+    // Tampilkan error yang lebih informatif
+    const fullErrorMessage = `❌ Gagal menyimpan data\n\n${errorMessage}\n\nSilakan cek console untuk detail error dan coba lagi.`;
+    
+    console.error('❌ [CRITICAL] Full error message:', fullErrorMessage);
+    alert(fullErrorMessage);
+  } finally {
+    console.log('🔚 [DEBUG] Proses submit selesai');
+    setLoading(false);
+  }
+};
 
   const handleReportNg = () => {
     const ngItems = items

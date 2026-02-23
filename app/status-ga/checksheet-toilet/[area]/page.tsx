@@ -63,6 +63,7 @@ export default function ChecksheetToiletForm({ params }: { params: Promise<{ are
   const [selectedDate, setSelectedDate] = useState<string>("");
   const [answers, setAnswers] = useState<Record<string, string>>({});
   const [savedData, setSavedData] = useState<SavedData>({});
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const currentArea = AREA_MAP[areaId] || { title: decodeURIComponent(areaId), desc: "Lokasi tidak diketahui" };
   const isWanitaOnly = ["toilet-c2", "toilet-whs"].includes(areaId);
@@ -105,7 +106,6 @@ export default function ChecksheetToiletForm({ params }: { params: Promise<{ are
         newAnswers[`${item.key}_foto`] = "";
         newAnswers[`${item.key}_tindakan`] = "";
         newAnswers[`${item.key}_pic`] = picName;
-        
       });
     } else {
       INSPECTION_ITEMS.forEach((item) => {
@@ -114,14 +114,12 @@ export default function ChecksheetToiletForm({ params }: { params: Promise<{ are
         newAnswers[`${item.key}_L_foto`] = "";
         newAnswers[`${item.key}_L_tindakan`] = "";
         newAnswers[`${item.key}_L_pic`] = picName;
-        
 
         newAnswers[`${item.key}_P_hasil`] = "OK";
         newAnswers[`${item.key}_P_keterangan`] = "";
         newAnswers[`${item.key}_P_foto`] = "";
         newAnswers[`${item.key}_P_tindakan`] = "";
         newAnswers[`${item.key}_P_pic`] = picName;
-        
       });
     }
     setAnswers(newAnswers);
@@ -146,130 +144,239 @@ export default function ChecksheetToiletForm({ params }: { params: Promise<{ are
     reader.readAsDataURL(file);
   };
 
-  const handleLoadExisting = () => {
+  const handleLoadExisting = async () => {
     if (!selectedDate) {
       alert("Pilih tanggal terlebih dahulu!");
       return;
     }
 
-    const existingData: Record<string, string> = {};
-    let found = false;
-    const storageKey = `e-checksheet-toilet-${areaId}`;
-    const saved = localStorage.getItem(storageKey);
+    try {
+      // ✅ Cek ke API database terlebih dahulu
+      console.log('📥 Loading data from API for date:', selectedDate);
+      
+      const response = await fetch(
+        `/api/toilet-inspections/check-status?area_code=${areaId}&inspection_date=${selectedDate}&toilet_type=${isWanitaOnly ? 'wanita_only' : 'laki_perempuan'}`
+      );
 
-    if (saved) {
-      try {
-        const data = JSON.parse(saved);
+      if (!response.ok) {
+        throw new Error(`API error: ${response.status}`);
+      }
+
+      const result = await response.json();
+      console.log('📥 API Response:', result);
+
+      if (result.filled && result.data) {
+        // ✅ Data ada di database, load dari sana
+        const existingData: Record<string, string> = {};
+        const data = result.data;
+
         if (isWanitaOnly) {
           INSPECTION_ITEMS.forEach((item) => {
-            const entry = (data[item.key] || []).find((e: any) => e.date === selectedDate);
-            if (entry) {
-              found = true;
-              existingData[`${item.key}_hasil`] = entry.hasilPemeriksaan;
-              existingData[`${item.key}_keterangan`] = entry.keteranganTemuan;
-              existingData[`${item.key}_foto`] = entry.fotoTemuan || "";
-              existingData[`${item.key}_tindakan`] = entry.tindakanPerbaikan;
-              existingData[`${item.key}_pic`] = entry.pic;
-              
-            }
+            const itemNum = item.no;
+            existingData[`${item.key}_hasil`] = data[`item_${itemNum}_hasil_p`] || "OK";
+            existingData[`${item.key}_keterangan`] = data[`item_${itemNum}_keterangan_p`] || "";
+            existingData[`${item.key}_foto`] = data[`item_${itemNum}_foto_p`] || "";
+            existingData[`${item.key}_tindakan`] = data[`item_${itemNum}_tindakan_p`] || "";
+            existingData[`${item.key}_pic`] = data[`item_${itemNum}_pic_p`] || user?.fullName || "";
           });
         } else {
           INSPECTION_ITEMS.forEach((item) => {
-            const entryL = (data[`${item.key}_L`] || []).find((e: any) => e.date === selectedDate);
-            if (entryL) {
-              found = true;
-              existingData[`${item.key}_L_hasil`] = entryL.hasilPemeriksaan;
-              existingData[`${item.key}_L_keterangan`] = entryL.keteranganTemuan;
-              existingData[`${item.key}_L_foto`] = entryL.fotoTemuan || "";
-              existingData[`${item.key}_L_tindakan`] = entryL.tindakanPerbaikan;
-              existingData[`${item.key}_L_pic`] = entryL.pic;
-              
-            }
-            const entryP = (data[`${item.key}_P`] || []).find((e: any) => e.date === selectedDate);
-            if (entryP) {
-              found = true;
-              existingData[`${item.key}_P_hasil`] = entryP.hasilPemeriksaan;
-              existingData[`${item.key}_P_keterangan`] = entryP.keteranganTemuan;
-              existingData[`${item.key}_P_foto`] = entryP.fotoTemuan || "";
-              existingData[`${item.key}_P_tindakan`] = entryP.tindakanPerbaikan;
-              existingData[`${item.key}_P_pic`] = entryP.pic;
-              
-            }
+            const itemNum = item.no;
+            // Laki-laki
+            existingData[`${item.key}_L_hasil`] = data[`item_${itemNum}_hasil_l`] || "OK";
+            existingData[`${item.key}_L_keterangan`] = data[`item_${itemNum}_keterangan_l`] || "";
+            existingData[`${item.key}_L_foto`] = data[`item_${itemNum}_foto_l`] || "";
+            existingData[`${item.key}_L_tindakan`] = data[`item_${itemNum}_tindakan_l`] || "";
+            existingData[`${item.key}_L_pic`] = data[`item_${itemNum}_pic_l`] || user?.fullName || "";
+            // Perempuan
+            existingData[`${item.key}_P_hasil`] = data[`item_${itemNum}_hasil_p`] || "OK";
+            existingData[`${item.key}_P_keterangan`] = data[`item_${itemNum}_keterangan_p`] || "";
+            existingData[`${item.key}_P_foto`] = data[`item_${itemNum}_foto_p`] || "";
+            existingData[`${item.key}_P_tindakan`] = data[`item_${itemNum}_tindakan_p`] || "";
+            existingData[`${item.key}_P_pic`] = data[`item_${itemNum}_pic_p`] || user?.fullName || "";
           });
         }
-      } catch (e) {
-        console.warn("Error parsing existing data");
-      }
-    }
 
-    if (found) {
-      setAnswers(existingData);
-      alert("Data berhasil dimuat!");
-    } else {
-      alert("Tidak ada data untuk tanggal ini.");
-      // Reset ke default
-      const picName = user?.fullName || "";
-      const resetData: Record<string, string> = {};
-      if (isWanitaOnly) {
-        INSPECTION_ITEMS.forEach((item) => {
-          resetData[`${item.key}_hasil`] = "OK";
-          resetData[`${item.key}_keterangan`] = "";
-          resetData[`${item.key}_foto`] = "";
-          resetData[`${item.key}_tindakan`] = "";
-          resetData[`${item.key}_pic`] = picName;
-          
-        });
+        setAnswers(existingData);
+        alert("✓ Data berhasil dimuat dari database!");
       } else {
-        INSPECTION_ITEMS.forEach((item) => {
-          resetData[`${item.key}_L_hasil`] = "OK";
-          resetData[`${item.key}_L_keterangan`] = "";
-          resetData[`${item.key}_L_foto`] = "";
-          resetData[`${item.key}_L_tindakan`] = "";
-          resetData[`${item.key}_L_pic`] = picName;
-          
+        // ✅ Cek di localStorage sebagai fallback
+        console.log('📥 Data not found in database, checking localStorage...');
+        const storageKey = `e-checksheet-toilet-${areaId}`;
+        const saved = localStorage.getItem(storageKey);
 
-          resetData[`${item.key}_P_hasil`] = "OK";
-          resetData[`${item.key}_P_keterangan`] = "";
-          resetData[`${item.key}_P_foto`] = "";
-          resetData[`${item.key}_P_tindakan`] = "";
-          resetData[`${item.key}_P_pic`] = picName;
-          
-        });
+        if (saved) {
+          try {
+            const localData = JSON.parse(saved);
+            const existingData: Record<string, string> = {};
+            let found = false;
+
+            if (isWanitaOnly) {
+              INSPECTION_ITEMS.forEach((item) => {
+                const entry = (localData[item.key] || []).find((e: any) => e.date === selectedDate);
+                if (entry) {
+                  found = true;
+                  existingData[`${item.key}_hasil`] = entry.hasilPemeriksaan;
+                  existingData[`${item.key}_keterangan`] = entry.keteranganTemuan;
+                  existingData[`${item.key}_foto`] = entry.fotoTemuan || "";
+                  existingData[`${item.key}_tindakan`] = entry.tindakanPerbaikan;
+                  existingData[`${item.key}_pic`] = entry.pic;
+                }
+              });
+            } else {
+              INSPECTION_ITEMS.forEach((item) => {
+                const entryL = (localData[`${item.key}_L`] || []).find((e: any) => e.date === selectedDate);
+                if (entryL) {
+                  found = true;
+                  existingData[`${item.key}_L_hasil`] = entryL.hasilPemeriksaan;
+                  existingData[`${item.key}_L_keterangan`] = entryL.keteranganTemuan;
+                  existingData[`${item.key}_L_foto`] = entryL.fotoTemuan || "";
+                  existingData[`${item.key}_L_tindakan`] = entryL.tindakanPerbaikan;
+                  existingData[`${item.key}_L_pic`] = entryL.pic;
+                }
+                const entryP = (localData[`${item.key}_P`] || []).find((e: any) => e.date === selectedDate);
+                if (entryP) {
+                  found = true;
+                  existingData[`${item.key}_P_hasil`] = entryP.hasilPemeriksaan;
+                  existingData[`${item.key}_P_keterangan`] = entryP.keteranganTemuan;
+                  existingData[`${item.key}_P_foto`] = entryP.fotoTemuan || "";
+                  existingData[`${item.key}_P_tindakan`] = entryP.tindakanPerbaikan;
+                  existingData[`${item.key}_P_pic`] = entryP.pic;
+                }
+              });
+            }
+
+            if (found) {
+              setAnswers(existingData);
+              alert("✓ Data berhasil dimuat dari localStorage!");
+            } else {
+              alert("ℹ️ Tidak ada data untuk tanggal ini. Form direset ke kondisi default.");
+              // Reset ke default
+              const picName = user?.fullName || "";
+              const resetData: Record<string, string> = {};
+              if (isWanitaOnly) {
+                INSPECTION_ITEMS.forEach((item) => {
+                  resetData[`${item.key}_hasil`] = "OK";
+                  resetData[`${item.key}_keterangan`] = "";
+                  resetData[`${item.key}_foto`] = "";
+                  resetData[`${item.key}_tindakan`] = "";
+                  resetData[`${item.key}_pic`] = picName;
+                });
+              } else {
+                INSPECTION_ITEMS.forEach((item) => {
+                  resetData[`${item.key}_L_hasil`] = "OK";
+                  resetData[`${item.key}_L_keterangan`] = "";
+                  resetData[`${item.key}_L_foto`] = "";
+                  resetData[`${item.key}_L_tindakan`] = "";
+                  resetData[`${item.key}_L_pic`] = picName;
+
+                  resetData[`${item.key}_P_hasil`] = "OK";
+                  resetData[`${item.key}_P_keterangan`] = "";
+                  resetData[`${item.key}_P_foto`] = "";
+                  resetData[`${item.key}_P_tindakan`] = "";
+                  resetData[`${item.key}_P_pic`] = picName;
+                });
+              }
+              setAnswers(resetData);
+            }
+          } catch (e) {
+            console.warn("Error parsing localStorage data:", e);
+            alert("⚠️ Error saat memuat data lokal.");
+          }
+        } else {
+          alert("ℹ️ Tidak ada data untuk tanggal ini. Form direset ke kondisi default.");
+        }
       }
-      setAnswers(resetData);
+    } catch (error) {
+      console.error("❌ Error loading data:", error);
+      alert(`❌ Gagal memuat data: ${error instanceof Error ? error.message : "Error tidak diketahui"}`);
     }
   };
 
   const handleSave = async () => {
+    // ✅ Validasi tanggal
     if (!selectedDate) {
       alert("Pilih tanggal pemeriksaan terlebih dahulu!");
       return;
     }
 
-    const allFieldsFilled = isWanitaOnly
-      ? INSPECTION_ITEMS.every((item) => answers[`${item.key}_hasil`])
-      : INSPECTION_ITEMS.every(
-          (item) => answers[`${item.key}_L_hasil`] && answers[`${item.key}_P_hasil`]
-        );
-
-    if (!allFieldsFilled) {
-      alert("Mohon isi Hasil Pemeriksaan untuk semua item!");
+    // ✅ Validasi format tanggal
+    const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
+    if (!dateRegex.test(selectedDate)) {
+      alert("Format tanggal tidak valid!");
       return;
     }
 
-    // Pastikan user tidak null saat simpan
+    // ✅ Validasi tanggal tidak di masa depan (FIXED!)
+    const selectedDateObj = new Date(selectedDate);
+    const today = new Date();
+    
+    // Set both dates to midnight for comparison
+    selectedDateObj.setHours(0, 0, 0, 0);
+    today.setHours(0, 0, 0, 0);
+    
+    if (selectedDateObj > today) {
+      alert("Tanggal pemeriksaan tidak boleh di masa depan!");
+      return;
+    }
+
+    // ✅ Validasi semua field hasil pemeriksaan terisi
+    const missingFields: string[] = [];
+    
+    if (isWanitaOnly) {
+      INSPECTION_ITEMS.forEach((item) => {
+        if (!answers[`${item.key}_hasil`]) {
+          missingFields.push(`Item ${item.no} (Wanita)`);
+        }
+      });
+    } else {
+      INSPECTION_ITEMS.forEach((item) => {
+        if (!answers[`${item.key}_L_hasil`]) {
+          missingFields.push(`Item ${item.no} (Laki-laki)`);
+        }
+        if (!answers[`${item.key}_P_hasil`]) {
+          missingFields.push(`Item ${item.no} (Perempuan)`);
+        }
+      });
+    }
+
+    if (missingFields.length > 0) {
+      alert(`Mohon isi Hasil Pemeriksaan untuk:\n${missingFields.join('\n')}`);
+      return;
+    }
+
+    // ✅ Validasi user
     if (!user) {
       alert("User tidak ditemukan. Silakan login ulang.");
       return;
     }
 
+    setIsSubmitting(true);
+
     try {
+      // ✅ Generate timestamp yang kompatibel dengan PostgreSQL
+      const now = new Date();
+      // Format time untuk PostgreSQL: HH:mm:ss
+      const hours = now.getHours().toString().padStart(2, '0');
+      const minutes = now.getMinutes().toString().padStart(2, '0');
+      const seconds = now.getSeconds().toString().padStart(2, '0');
+      const inspection_time = `${hours}:${minutes}:${seconds}`;
+      
+      // ✅ Debug log untuk development
+      console.log('📤 Submitting data to API:', {
+        area_code: areaId,
+        inspection_date: selectedDate,
+        inspection_time: inspection_time,
+        toilet_type: isWanitaOnly ? "wanita_only" : "laki_perempuan",
+        user_id: user?.id?.substring(0, 20) + '...'
+      });
+
       // Transform form data ke format database API
       const apiPayload: Record<string, any> = {
         area_code: areaId,
         area_name: currentArea.title,
-        inspection_date: selectedDate,
-        inspection_time: new Date().toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" }),
+        inspection_date: selectedDate, // Format: YYYY-MM-DD (dari input type="date")
+        inspection_time: inspection_time, // Format: HH:mm:ss
         user_id: user.id || "",
         inspector_name: user.fullName || "Unknown User",
         inspector_nik: user.nik || "",
@@ -277,8 +384,6 @@ export default function ChecksheetToiletForm({ params }: { params: Promise<{ are
       };
 
       // Map form fields ke database fields (item_X_hasil_l/p format)
-      // Form uses: kebersihanLantai_L_hasil, kebersihanLantai_P_hasil, dll
-      // Database expects: item_1_hasil_l, item_1_hasil_p, dll
       if (isWanitaOnly) {
         INSPECTION_ITEMS.forEach((item) => {
           const itemNum = item.no;
@@ -306,20 +411,41 @@ export default function ChecksheetToiletForm({ params }: { params: Promise<{ are
         });
       }
 
-      // Submit ke API
+      // ✅ Submit ke API dengan timeout
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 30000); // 30s timeout
+
+      console.log('📤 Sending request to API...');
       const response = await fetch("/api/toilet-inspections/submit", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(apiPayload),
+        signal: controller.signal,
       });
 
+      clearTimeout(timeoutId);
+
+      console.log('📥 Response status:', response.status);
+
+      // ✅ Handle non-JSON responses
+      const contentType = response.headers.get("content-type");
+      if (!contentType || !contentType.includes("application/json")) {
+        const text = await response.text();
+        console.error("❌ Non-JSON response:", text.substring(0, 500));
+        throw new Error(`Server error: ${response.status} - ${response.statusText}\nResponse: ${text.substring(0, 200)}`);
+      }
+
       if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.message || `API error: ${response.status}`);
+        const errorData = await response.json();
+        console.error("❌ API Error:", errorData);
+        
+        // ✅ Tampilkan error spesifik dari server
+        const errorMessage = errorData.message || errorData.error?.message || `Error ${response.status}`;
+        throw new Error(errorMessage);
       }
 
       const result = await response.json();
-      console.log("API Response:", result);
+      console.log("✅ API Response:", result);
 
       // Juga simpan ke localStorage untuk backup
       const newData: SavedData = { ...savedData };
@@ -409,9 +535,33 @@ export default function ChecksheetToiletForm({ params }: { params: Promise<{ are
 
       alert(`✓ Data berhasil disimpan untuk tanggal: ${new Date(selectedDate).toLocaleDateString("id-ID")}`);
       router.push(`/status-ga/checksheet-toilet`);
+      
     } catch (err) {
-      console.error("Gagal menyimpan:", err);
-      alert(`❌ Gagal menyimpan data: ${err instanceof Error ? err.message : "Unknown error"}`);
+      console.error("❌ Save error:", err);
+      
+      // ✅ Handle timeout error
+      if (err instanceof Error && err.name === "AbortError") {
+        alert("Request timeout. Silakan coba lagi.");
+        return;
+      }
+
+      // ✅ Handle network error
+      if (err instanceof Error && err.message.includes("Failed to fetch")) {
+        alert("Gagal terhubung ke server. Periksa koneksi internet Anda.");
+        return;
+      }
+
+      // ✅ Handle CORS error
+      if (err instanceof Error && err.message.includes("CORS")) {
+        alert("Error CORS. Hubungi administrator.");
+        return;
+      }
+
+      // ✅ Error umum
+      alert(`❌ Gagal menyimpan: ${err instanceof Error ? err.message : "Terjadi kesalahan"}`);
+      
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -574,25 +724,40 @@ export default function ChecksheetToiletForm({ params }: { params: Promise<{ are
           </button>
           <button
             onClick={handleSave}
-            disabled={!selectedDate}
+            disabled={!selectedDate || isSubmitting}
             style={{
               padding: "12px 28px",
               border: "none",
               borderRadius: "8px",
               fontSize: "clamp(13px, 3vw, 14px)",
-              cursor: selectedDate ? "pointer" : "not-allowed",
+              cursor: (!selectedDate || isSubmitting) ? "not-allowed" : "pointer",
               fontWeight: "600",
               transition: "all 0.3s ease",
               textTransform: "uppercase",
               letterSpacing: "0.5px",
               minWidth: "160px",
-              background: selectedDate ? "linear-gradient(135deg, #4caf50, #2196f3)" : "#bdbdbd",
+              background: (!selectedDate || isSubmitting) ? "#bdbdbd" : "linear-gradient(135deg, #4caf50, #2196f3)",
               color: "white",
               boxShadow: "0 2px 8px rgba(33, 150, 243, 0.3)",
-              opacity: selectedDate ? 1 : 0.6,
+              opacity: (!selectedDate || isSubmitting) ? 0.6 : 1,
             }}
           >
-            ✓ Simpan Data
+            {isSubmitting ? (
+              <span style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: "8px" }}>
+                <span style={{ 
+                  display: "inline-block", 
+                  width: "16px", 
+                  height: "16px", 
+                  border: "2px solid white", 
+                  borderTop: "2px solid transparent", 
+                  borderRadius: "50%", 
+                  animation: "spin 1s linear infinite" 
+                }} />
+                Menyimpan...
+              </span>
+            ) : (
+              "✓ Simpan Data"
+            )}
           </button>
         </div>
 
@@ -611,6 +776,14 @@ export default function ChecksheetToiletForm({ params }: { params: Promise<{ are
           </p>
         </div>
       </div>
+      
+      {/* Loading Spinner Animation */}
+      <style jsx global>{`
+        @keyframes spin {
+          0% { transform: rotate(0deg); }
+          100% { transform: rotate(360deg); }
+        }
+      `}</style>
     </div>
   );
 }

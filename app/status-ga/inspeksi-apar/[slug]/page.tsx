@@ -262,32 +262,74 @@ const isExpired = (expDateString: string | null | undefined): boolean => {
 
   // 🔥 SIMPAN KE API
   const handleSave = async () => {
-    try {
-      setLoading(true);
+  try {
+    setLoading(true);
 
-      // ✅ Pastikan semua data valid sebelum kirim
-      const validItems = items.filter(item => 
-        item.no && item.lokasi && item.noApar && item.expDate &&
-        ["O", "X"].includes(item.check1) && ["O", "X"].includes(item.check2) &&
-        ["O", "X"].includes(item.check3) && ["O", "X"].includes(item.check4) &&
-        ["O", "X"].includes(item.check5) && ["O", "X"].includes(item.check6) &&
-        ["O", "X"].includes(item.check7) && ["O", "X"].includes(item.check8) &&
-        ["O", "X"].includes(item.check9) && ["O", "X"].includes(item.check10) &&
-        ["O", "X"].includes(item.check11) && ["O", "X"].includes(item.check12)
-      );
+    console.log('🔍 [DEBUG] Mulai proses validasi dan submit...');
+    console.log('📊 [DEBUG] Jumlah items:', items.length);
 
-      if (validItems.length === 0) {
-        alert("⚠️ Tidak ada item yang valid! Pastikan semua kolom diisi.");
-        return;
+    // ✅ Validasi komprehensif sebelum submit
+    for (let index = 0; index < items.length; index++) {
+      const item = items[index];
+      
+      console.log(`📝 [DEBUG] Validasi item ${index + 1}:`, {
+        no: item.no,
+        lokasi: item.lokasi,
+        noApar: item.noApar,
+        expDate: item.expDate
+      });
+
+      // Validasi field wajib
+      if (!item.no) {
+        throw new Error(`Baris ${index + 1}: Nomor urut tidak boleh kosong`);
+      }
+      
+      if (!item.lokasi || item.lokasi.trim() === '') {
+        throw new Error(`Baris ${index + 1}: Lokasi wajib diisi`);
+      }
+      
+      if (!item.noApar || item.noApar.trim() === '') {
+        throw new Error(`Baris ${index + 1}: Nomor APAR wajib diisi`);
+      }
+      
+      if (!item.expDate || item.expDate.trim() === '') {
+        throw new Error(`Baris ${index + 1}: Exp. Date wajib diisi`);
       }
 
-      // Siapkan data untuk submit
-      const submitData = {
-        date,
-        slug, // ✅ Kirim slug, bukan nama area
-        checker: user?.fullName || "",
-        checkerNik: user?.nik || "",
-        items: validItems.map(item => ({
+      // Validasi semua check items harus 'O' atau 'X'
+      for (let i = 1; i <= 12; i++) {
+        const checkValue = item[`check${i}`];
+        console.log(`   [DEBUG] Check ${i}:`, checkValue);
+        
+        if (checkValue === undefined || checkValue === null || checkValue === '') {
+          throw new Error(`Baris ${index + 1}: Check item ${i} harus diisi dengan 'O' atau 'X'`);
+        }
+        
+        if (checkValue !== 'O' && checkValue !== 'X') {
+          throw new Error(`Baris ${index + 1}: Check item ${i} harus diisi dengan 'O' atau 'X' (ditemukan: '${checkValue}')`);
+        }
+      }
+
+      // Jika ada status 'X' (NG), keterangan wajib diisi
+      const hasNg = Array.from({ length: 12 }, (_, i) => item[`check${i + 1}`] === 'X').some(Boolean);
+      if (hasNg) {
+        console.log(`   [DEBUG] Item ${index + 1} memiliki status NG`);
+        if (!item.keterangan || item.keterangan.trim() === '') {
+          throw new Error(`Baris ${index + 1}: Keterangan wajib diisi untuk item dengan status NG`);
+        }
+      }
+    }
+
+    console.log('✅ [DEBUG] Validasi berhasil!');
+
+    // Siapkan data untuk submit
+    const submitData = {
+      date,
+      slug,
+      checker: user?.fullName || "",
+      checkerNik: user?.nik || "",
+      items: items.map((item, idx) => {
+        const itemData = {
           no: item.no,
           jenisApar: item.jenisApar,
           lokasi: item.lokasi,
@@ -308,35 +350,104 @@ const isExpired = (expDateString: string | null | undefined): boolean => {
           keterangan: item.keterangan || "",
           tindakanPerbaikan: item.tindakanPerbaikan || "",
           pic: item.pic,
-          foto: item.foto || null // Path file atau null
-        }))
-      };
+          foto: item.foto || null
+        };
+        
+        console.log(`📤 [DEBUG] Item ${idx + 1}:`, itemData);
+        return itemData;
+      })
+    };
 
-      console.log('📤 Mengirim ', submitData); // ✅ DEBUG
+    console.log('📤 [DEBUG] Data lengkap yang akan dikirim:', {
+      ...submitData,
+      items: submitData.items.map(i => ({ ...i, foto: i.foto ? '[FILE]' : null }))
+    });
 
-      const response = await fetch('/api/apar/submit', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(submitData),
-      });
+    // Submit ke API
+    console.log('📡 [DEBUG] Mengirim request ke /api/apar/submit...');
+    
+    const response = await fetch('/api/apar/submit', {
+      method: 'POST',
+      headers: { 
+        'Content-Type': 'application/json',
+        'Accept': 'application/json'
+      },
+      body: JSON.stringify(submitData),
+      credentials: 'include'
+    });
 
-      const result = await response.json();
-      console.log('📥 Response:', result); // ✅ DEBUG
+    console.log('📥 [DEBUG] Response status:', response.status);
+    console.log('📥 [DEBUG] Response headers:', Object.fromEntries(response.headers.entries()));
 
-      if (response.ok && result.success) {
-        alert("✅ Data berhasil disimpan!");
-        router.push(`/status-ga/inspeksi-apar/${slug}/riwayat`);
-      } else {
-        alert("❌ Gagal menyimpan data: " + (result.message || 'Error tidak diketahui'));
+    if (!response.ok) {
+      console.error('❌ [DEBUG] Response tidak OK. Status:', response.status);
+      
+      try {
+        const errorData = await response.json();
+        console.error('❌ [DEBUG] Error response body:', errorData);
+        throw new Error(errorData.message || `Server error: ${response.status}`);
+      } catch (parseError) {
+        console.error('❌ [DEBUG] Gagal parse error response:', parseError);
+        throw new Error(`Server error: ${response.status} - ${response.statusText}`);
       }
-    } catch (error) {
-      console.error('Submit error:', error);
-      alert("❌ Terjadi kesalahan saat menyimpan data: " + (error as any).message);
-    } finally {
-      setLoading(false);
     }
-  };
 
+    const result = await response.json();
+    console.log('✅ [DEBUG] Response berhasil:', result);
+
+    if (!result.success) {
+      console.error('❌ [DEBUG] API response success=false:', result);
+      throw new Error(result.message || 'Gagal menyimpan data');
+    }
+
+    // ✅ Berhasil tersimpan
+    console.log('🎉 [DEBUG] Data berhasil disimpan!');
+    
+    // Tampilkan informasi sukses
+    const successMessage = `✅ Data berhasil disimpan!\n\nID Record: ${result.data?.id || 'N/A'}\nTotal Item: ${items.length}\nArea: ${areaNames[slug]}`;
+    
+    alert(successMessage);
+
+    // Cek apakah ada NG untuk menawarkan pelaporan
+    const hasNgInResult = result.data?.hasNg;
+    if (hasNgInResult) {
+      console.log('⚠️ [DEBUG] Terdapat item NG, menawarkan pelaporan...');
+      const confirmReport = confirm('⚠️ Terdapat item dengan status NG. Apakah ingin langsung melaporkan?');
+      if (confirmReport) {
+        console.log('📢 [DEBUG] User memilih untuk melaporkan NG');
+        handleReportNg();
+        return;
+      }
+    }
+
+    // Redirect ke halaman riwayat
+    console.log('🔄 [DEBUG] Redirecting to history page...');
+    router.push(`/status-ga/inspeksi-apar/${slug}/riwayat`);
+
+  } catch (error) {
+    console.error('❌ [CRITICAL] Submit error:', error);
+    
+    let errorMessage = 'Terjadi kesalahan tidak terduga';
+    
+    if (error instanceof Error) {
+      errorMessage = error.message;
+      console.error('❌ [CRITICAL] Error details:', {
+        name: error.name,
+        message: error.message,
+        stack: error.stack
+      });
+    }
+
+    // Tampilkan error yang lebih informatif
+    const fullErrorMessage = `❌ Gagal menyimpan data\n\n${errorMessage}\n\nSilakan cek console untuk detail error dan coba lagi.`;
+    
+    console.error('❌ [CRITICAL] Full error message:', fullErrorMessage);
+    alert(fullErrorMessage);
+  } finally {
+    console.log('🔚 [DEBUG] Proses submit selesai');
+    setLoading(false);
+  }
+};
   const handleReportNg = () => {
     const ngItems = items
       .filter((item) =>

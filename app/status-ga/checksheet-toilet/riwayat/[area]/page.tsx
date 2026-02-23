@@ -14,6 +14,12 @@ export default function RiwayatToilet({ params }: { params: Promise<{ area: stri
   const [inspections, setInspections] = useState<any[]>([]);
   const [filterDate, setFilterDate] = useState("");
   const [filterStatus, setFilterStatus] = useState<string>("all");
+  const [pagination, setPagination] = useState({
+    total: 0,
+    limit: 100,
+    offset: 0,
+    hasMore: false
+  });
 
   useEffect(() => {
     (async () => {
@@ -31,25 +37,46 @@ export default function RiwayatToilet({ params }: { params: Promise<{ area: stri
         
         const queryParams = new URLSearchParams({
           area_code: areaId,
-          limit: "100",
-          offset: "0"
+          limit: String(pagination.limit),
+          offset: String(pagination.offset)
         });
+        
         if (filterDate) queryParams.append("inspection_date", filterDate);
         
         const response = await fetch(`/api/toilet-inspections/history?${queryParams.toString()}`);
         
         if (response.ok) {
           const data = await response.json();
-          if (data.success) {
+          
+          // ✅ PERBAIKAN UTAMA: Validasi struktur response
+          if (data.success && Array.isArray(data.data)) {
             let inspectionData = data.data;
             
             // Filter by status
             if (filterStatus !== "all") {
-              inspectionData = inspectionData.filter((item: any) => item.overall_status === filterStatus);
+              inspectionData = inspectionData.filter((item: any) => 
+                item.overall_status?.toLowerCase() === filterStatus.toLowerCase()
+              );
             }
             
             setInspections(inspectionData);
+            
+            // Update pagination
+            if (data.pagination) {
+              setPagination(prev => ({
+                ...prev,
+                ...data.pagination,
+                hasMore: data.pagination.hasMore
+              }));
+            }
+          } else {
+            console.error("Invalid response structure:", data);
+            setInspections([]);
+            setPagination(prev => ({ ...prev, total: 0 }));
           }
+        } else {
+          console.error("API error:", response.status, await response.text());
+          alert(`Gagal memuat riwayat: Status ${response.status}`);
         }
       } catch (error) {
         console.error('Error loading history:', error);
@@ -60,7 +87,7 @@ export default function RiwayatToilet({ params }: { params: Promise<{ area: stri
     };
 
     loadHistory();
-  }, [user, areaId, filterDate, filterStatus]);
+  }, [user, areaId, filterDate, filterStatus, pagination.offset]);
 
   const areaNames: Record<string, string> = {
     "toilet-driver": "TOILET - DRIVER",
@@ -110,6 +137,15 @@ export default function RiwayatToilet({ params }: { params: Promise<{ area: stri
     document.body.removeChild(link);
   };
 
+  const handleLoadMore = () => {
+    if (pagination.hasMore && !loading) {
+      setPagination(prev => ({
+        ...prev,
+        offset: prev.offset + prev.limit
+      }));
+    }
+  };
+
   if (!user || !areaId) return null;
 
   return (
@@ -140,7 +176,10 @@ export default function RiwayatToilet({ params }: { params: Promise<{ area: stri
             <input
               type="date"
               value={filterDate}
-              onChange={(e) => setFilterDate(e.target.value)}
+              onChange={(e) => {
+                setFilterDate(e.target.value);
+                setPagination(prev => ({ ...prev, offset: 0 }));
+              }}
               className="filter-input"
             />
           </div>
@@ -148,7 +187,10 @@ export default function RiwayatToilet({ params }: { params: Promise<{ area: stri
             <label>Status:</label>
             <select
               value={filterStatus}
-              onChange={(e) => setFilterStatus(e.target.value)}
+              onChange={(e) => {
+                setFilterStatus(e.target.value);
+                setPagination(prev => ({ ...prev, offset: 0 }));
+              }}
               className="filter-select"
             >
               <option value="all">Semua</option>
@@ -170,7 +212,9 @@ export default function RiwayatToilet({ params }: { params: Promise<{ area: stri
           </div>
         ) : inspections.length === 0 ? (
           <div className="no-data">
-            <p>Tidak ada data riwayat</p>
+            <p>{filterDate || filterStatus !== "all" 
+              ? "Tidak ada data yang sesuai dengan filter" 
+              : "Tidak ada data riwayat"}</p>
           </div>
         ) : (
           <div className="table-container">
@@ -207,6 +251,19 @@ export default function RiwayatToilet({ params }: { params: Promise<{ area: stri
                 ))}
               </tbody>
             </table>
+            
+            {/* Pagination */}
+            {pagination.total > pagination.limit && (
+              <div className="pagination-container">
+                <button 
+                  className="btn-pagination"
+                  onClick={handleLoadMore}
+                  disabled={!pagination.hasMore || loading}
+                >
+                  {loading ? "Memuat..." : "Muat Lebih"}
+                </button>
+              </div>
+            )}
           </div>
         )}
       </div>
@@ -413,6 +470,28 @@ export default function RiwayatToilet({ params }: { params: Promise<{ area: stri
         .btn-detail:hover {
           background: #2563eb;
           transform: translateY(-1px);
+        }
+
+        .pagination-container {
+          display: flex;
+          justify-content: center;
+          margin-top: 20px;
+        }
+
+        .btn-pagination {
+          padding: 10px 20px;
+          background: #64748b;
+          color: white;
+          border: none;
+          border-radius: 8px;
+          font-weight: 600;
+          cursor: pointer;
+          transition: all 0.3s ease;
+        }
+
+        .btn-pagination:disabled {
+          opacity: 0.6;
+          cursor: not-allowed;
         }
 
         @media (max-width: 768px) {

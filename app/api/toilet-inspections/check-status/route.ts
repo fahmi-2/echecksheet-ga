@@ -1,36 +1,36 @@
-import type { NextApiRequest, NextApiResponse } from 'next';
-import pool from '../../../lib/db';
+// app/api/toilet-inspections/check-status/route.ts
+import { NextRequest, NextResponse } from 'next/server';
+import pool from '@/lib/db';
 
-export default async function handler(
-  req: NextApiRequest,
-  res: NextApiResponse
-) {
-  const { area_code, inspection_date, toilet_type = 'laki_perempuan' } = req.query;
-
+export async function GET(request: NextRequest) {
   try {
-    if (!area_code || !inspection_date) {
-      return res.status(400).json({ 
-        success: false, 
-        message: 'area_code dan inspection_date diperlukan' 
-      });
+    const { searchParams } = new URL(request.url);
+    const areaCode = searchParams.get('area_code');
+    const inspectionDate = searchParams.get('inspection_date');
+    const toiletType = searchParams.get('toilet_type') || 'laki_perempuan';
+
+    if (!areaCode || !inspectionDate) {
+      return NextResponse.json(
+        { success: false, message: 'area_code dan inspection_date diperlukan' },
+        { status: 400 }
+      );
     }
 
-    const [results] = await pool.query(
+    // ✅ PostgreSQL: Gunakan $1, $2, $3 untuk parameter binding
+    const result = await pool.query(
       `SELECT * FROM toilet_inspections 
-       WHERE area_code = ? AND inspection_date = ? AND toilet_type = ?`,
-      [area_code, inspection_date, toilet_type]
+       WHERE area_code = $1 AND inspection_date = $2 AND toilet_type = $3`,
+      [areaCode, inspectionDate, toiletType]
     );
 
-    const inspections = results as any[];
-
-    if (inspections.length > 0) {
-      return res.status(200).json({ 
+    if (result.rows.length > 0) {
+      return NextResponse.json({ 
         success: true, 
         filled: true,
-        data: inspections[0]
+        data: result.rows[0]
       });
     } else {
-      return res.status(200).json({ 
+      return NextResponse.json({ 
         success: true, 
         filled: false,
         data: null
@@ -38,9 +38,9 @@ export default async function handler(
     }
   } catch (error) {
     console.error('Check status error:', error);
-    return res.status(500).json({ 
-      success: false, 
-      message: 'Terjadi kesalahan server' 
-    });
+    return NextResponse.json(
+      { success: false, message: 'Terjadi kesalahan server' },
+      { status: 500 }
+    );
   }
 }
