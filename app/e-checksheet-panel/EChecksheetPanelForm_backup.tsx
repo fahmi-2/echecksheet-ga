@@ -1,4 +1,4 @@
-// app/e-checksheet-inf-jalan/EChecksheetInfJalanForm.tsx
+// app/e-checksheet-panel/EChecksheetPanelForm.tsx
 "use client";
 import { useState, useEffect, useRef } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -16,16 +16,15 @@ import {
   ChecklistData
 } from "@/lib/api/checksheet";
 
-export function EChecksheetInfJalanForm() {
+export function EChecksheetPanelForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { user, loading: authLoading, isInitialized } = useAuth();
   
   // ✅ Gunakan useSearchParams untuk membaca parameter
-  const areaName = searchParams.get('areaName') || '';
-  const kategori = searchParams.get('kategori') || '';
-  const lokasi = searchParams.get('lokasi') || '';
-  const TYPE_SLUG = 'inf-jalan';
+  const panelName = searchParams.get('panelName') || 'Panel';
+  const area = searchParams.get('area') || 'Area';
+  const TYPE_SLUG = 'panel';
   
   // ✅ CRITICAL FIX: State untuk tracking auth verification
   const [isMounted, setIsMounted] = useState(false);
@@ -39,13 +38,14 @@ export function EChecksheetInfJalanForm() {
   const [cameraStream, setCameraStream] = useState<MediaStream | null>(null);
   const [currentItemKey, setCurrentItemKey] = useState("");
   const [inspectionItems, setInspectionItems] = useState<ChecklistItem[]>([]);
+  const [areaId, setAreaId] = useState<number | null>(null);
   const [availableDates, setAvailableDates] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(false);
-  const [areaId, setAreaId] = useState<number | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
   const videoRef = useRef(null);
   const canvasRef = useRef(null);
 
-  // ✅ Load inspection items
+  // ✅ Load inspection items dari API
   useEffect(() => {
     const loadItems = async () => {
       try {
@@ -61,30 +61,25 @@ export function EChecksheetInfJalanForm() {
 
   // ✅ Load areaId dan available dates - HANYA SETELAH AUTH VERIFIED
   useEffect(() => {
-    if (!areaName || !isMounted || !authVerified) return;
+    if (!panelName || !area || !isMounted || !authVerified) return;
     
     const loadAreaData = async () => {
       try {
-        // Format nama area sesuai database: "NAMA AREA • KATEGORI • LOKASI"
-        const areaNameFormatted = `${areaName} • ${kategori} • ${lokasi}`;
+        // Format area name sesuai database: "PANEL NAME \u0007 AREA"
+        const areaName = `${panelName} \u0007 ${area}`;
         
         const areas = await getAreasByType(TYPE_SLUG);
-        const area = areas.find((a: any) => a.name === areaNameFormatted);
+        const areaItem = areas.find((a: any) => a.name === areaName);
         
-        if (area) {
-          setAreaId(area.id);
-          const dates = await getAvailableDates(TYPE_SLUG, area.id);
+        if (areaItem) {
+          setAreaId(areaItem.id);
+          
+          // Load available dates untuk area ini
+          const dates = await getAvailableDates(TYPE_SLUG, areaItem.id);
           setAvailableDates(dates);
         } else {
-          // Fallback: cari berdasarkan areaName saja
-          const fallbackArea = areas.find((a: any) => a.name.startsWith(areaName));
-          if (fallbackArea) {
-            setAreaId(fallbackArea.id);
-            const dates = await getAvailableDates(TYPE_SLUG, fallbackArea.id);
-            setAvailableDates(dates);
-          } else {
-            alert(`Area "${areaName}" tidak ditemukan.`);
-          }
+          console.warn(`Area not found: ${areaName}`);
+          alert(`Area "${panelName}" tidak ditemukan di database.`);
         }
       } catch (error) {
         console.error("Failed to load area data:", error);
@@ -93,7 +88,7 @@ export function EChecksheetInfJalanForm() {
     };
 
     loadAreaData();
-  }, [areaName, kategori, lokasi, isMounted, authVerified]);
+  }, [panelName, area, isMounted, authVerified]);
 
   useEffect(() => {
     setIsMounted(true);
@@ -156,7 +151,7 @@ export function EChecksheetInfJalanForm() {
     };
   }, [showCameraModal]);
 
-  // ✅ Load existing data
+  // ✅ Load existing data dari API
   const handleLoadExisting = async () => {
     if (!selectedDate) {
       alert("Pilih tanggal terlebih dahulu!");
@@ -232,7 +227,7 @@ export function EChecksheetInfJalanForm() {
     }
 
     try {
-      setIsLoading(true);
+      setIsSaving(true);
 
       const checklistData: ChecklistData = {};
       
@@ -264,12 +259,16 @@ export function EChecksheetInfJalanForm() {
 
       alert(`Data berhasil disimpan untuk tanggal ${new Date(selectedDate).toLocaleDateString("id-ID")}`);
       
-      router.push(`/status-ga/inf-jalan?openArea=${encodeURIComponent(areaName)}`);
+      // Redirect ke status page setelah 500ms
+      setTimeout(() => {
+        router.push(`/status-ga/panel?openPanel=${encodeURIComponent(panelName)}`);
+      }, 500);
+      
     } catch (error) {
       console.error("Error saving checklist data:", error);
       alert("Gagal menyimpan data.");
     } finally {
-      setIsLoading(false);
+      setIsSaving(false);
     }
   };
 
@@ -387,14 +386,14 @@ export function EChecksheetInfJalanForm() {
               fontSize: "clamp(20px, 5vw, 28px)",
               fontWeight: "700"
             }}>
-              Check Sheet Inspeksi Infrastruktur Jalan
+              Check Sheet Inspeksi Panel Listrik
             </h1>
             <p style={{
               margin: 0,
               color: "rgba(255,255,255,0.9)",
               fontSize: "14px"
             }}>
-              Form Pemeriksaan Kelayakan Jalan & Boardess
+              Form Pemeriksaan Kelayakan Panel Listrik
             </p>
           </div>
 
@@ -407,22 +406,19 @@ export function EChecksheetInfJalanForm() {
             boxShadow: "0 2px 6px rgba(0,0,0,0.05)",
             marginBottom: "20px"
           }}>
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(250px, 1fr))", gap: "12px" }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 0", borderBottom: "1px solid #f0f0f0" }}>
-                <span style={{ fontWeight: "600", color: "#0d47a1", fontSize: "clamp(11px, 2.5vw, 13px)" }}>Nama Area</span>
-                <span style={{ color: "#333", fontSize: "clamp(12px, 3vw, 14px)", fontWeight: "500" }}>{areaName}</span>
+            <div style={{ 
+              display: "grid", 
+              gridTemplateColumns: "repeat(auto-fit, minmax(250px, 1fr))", 
+              gap: "12px" 
+            }}>
+              <div style={{ color: "black" }}>
+                <strong>Nama Panel:</strong> {panelName}
               </div>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 0", borderBottom: "1px solid #f0f0f0" }}>
-                <span style={{ fontWeight: "600", color: "#0d47a1", fontSize: "clamp(11px, 2.5vw, 13px)" }}>Kategori</span>
-                <span style={{ color: "#333", fontSize: "clamp(12px, 3vw, 14px)", fontWeight: "500" }}>{kategori}</span>
+              <div style={{ color: "black" }}>
+                <strong>Area:</strong> {area}
               </div>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 0", borderBottom: "1px solid #f0f0f0" }}>
-                <span style={{ fontWeight: "600", color: "#0d47a1", fontSize: "clamp(11px, 2.5vw, 13px)" }}>Lokasi</span>
-                <span style={{ color: "#333", fontSize: "clamp(12px, 3vw, 14px)", fontWeight: "500" }}>{lokasi}</span>
-              </div>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 0", borderBottom: "1px solid #f0f0f0" }}>
-                <span style={{ fontWeight: "600", color: "#0d47a1", fontSize: "clamp(11px, 2.5vw, 13px)" }}>PIC Pengecekan</span>
-                <span style={{ color: "#333", fontSize: "clamp(12px, 3vw, 14px)", fontWeight: "500" }}>{user?.fullName}</span>
+              <div style={{ color: "black" }}>
+                <strong>PIC Pengecekan:</strong> {user?.fullName}
               </div>
             </div>
           </div>
@@ -441,7 +437,7 @@ export function EChecksheetInfJalanForm() {
                 color: "#0d47a1",
                 fontSize: "15px"
               }}>
-                📅 Jadwal Inspeksi: Setiap Minggu
+                📅 Jadwal Inspeksi: Setiap Hari
               </strong>
             </div>
 
@@ -529,7 +525,6 @@ export function EChecksheetInfJalanForm() {
                     border: "none",
                     borderRadius: "6px",
                     cursor: (selectedDate && !isLoading) ? "pointer" : "not-allowed",
-                    fontSize: "13px",
                     fontWeight: "600"
                   }}
                 >
@@ -548,358 +543,190 @@ export function EChecksheetInfJalanForm() {
             </p>
           </div>
 
-        {/* Tabel Checklist */}
-        <div style={{
-          background: "white",
-          borderRadius: "12px",
-          boxShadow: "0 2px 8px rgba(0, 0, 0, 0.06)",
-          overflow: "hidden",
-          border: "2px solid #0d47a1",
-          marginBottom: "20px"
-        }}>
-          <div style={{ overflowX: "auto" }}>
-            <table style={{
-              width: "100%",
-              borderCollapse: "collapse",
-              fontSize: "clamp(11px, 2.5vw, 13px)",
-              minWidth: "1000px"
+          {/* Checksheet Table */}
+          {inspectionItems.length === 0 ? (
+            <div style={{ textAlign: "center", padding: "40px", color: "#999" }}>
+              Loading checklist items...
+            </div>
+          ) : (
+            <div style={{
+              background: "white",
+              borderRadius: "12px",
+              boxShadow: "0 2px 8px rgba(0,0,0,0.06)",
+              overflow: "hidden",
+              border: "2px solid #0d47a1",
+              marginBottom: "20px"
             }}>
-              <thead>
-                <tr style={{ background: "#e3f2fd" }}>
-                  <th style={{
-                    padding: "10px",
-                    border: "1px solid #0d47a1",
-                    fontWeight: "700",
-                    color: "#01579b",
-                    textAlign: "center",
-                    width: "50px"
-                  }}>No</th>
-                  <th style={{
-                    padding: "10px",
-                    border: "1px solid #0d47a1",
-                    fontWeight: "700",
-                    color: "#01579b",
-                    textAlign: "left",
-                    minWidth: "300px"
-                  }}>Item Pengecekan</th>
-                  <th style={{
-                    padding: "10px",
-                    border: "1px solid #0d47a1",
-                    fontWeight: "700",
-                    color: "#01579b",
-                    textAlign: "center",
-                    width: "100px"
-                  }}>HASIL<br/>PEMERIKSAAN</th>
-                  <th style={{
-                    padding: "10px",
-                    border: "1px solid #0d47a1",
-                    fontWeight: "700",
-                    color: "#01579b",
-                    textAlign: "center",
-                    minWidth: "180px"
-                  }}>KETERANGAN TEMUAN</th>
-                  <th style={{
-                    padding: "10px",
-                    border: "1px solid #0d47a1",
-                    fontWeight: "700",
-                    color: "#01579b",
-                    textAlign: "center",
-                    minWidth: "180px"
-                  }}>DOKUMENTASI</th>
-                  <th style={{
-                    padding: "10px",
-                    border: "1px solid #0d47a1",
-                    fontWeight: "700",
-                    color: "#01579b",
-                    textAlign: "center",
-                    minWidth: "180px"
-                  }}>TINDAKAN PERBAIKAN</th>
-                  <th style={{
-                    padding: "10px",
-                    border: "1px solid #0d47a1",
-                    fontWeight: "700",
-                    color: "#01579b",
-                    textAlign: "center",
-                    width: "80px"
-                  }}>PIC</th>
-                  <th style={{
-                    padding: "10px",
-                    border: "1px solid #0d47a1",
-                    fontWeight: "700",
-                    color: "#01579b",
-                    textAlign: "center",
-                    width: "100px"
-                  }}>DUE DATE</th>
-                  <th style={{
-                    padding: "10px",
-                    border: "1px solid #0d47a1",
-                    fontWeight: "700",
-                    color: "#01579b",
-                    textAlign: "center",
-                    width: "80px"
-                  }}>VERIFY</th>
-                </tr>
-              </thead>
-              <tbody>
-                {inspectionItems.map((item, index) => (
-                  <tr key={item.item_key}>
-                    <td style={{
-                      padding: "8px",
-                      border: "1px solid #0d47a1",
-                      textAlign: "center",
-                      fontWeight: "600",
-                      background: "white"
-                    }}>
-                      {item.no}
-                    </td>
-                    <td style={{
-                      padding: "8px",
-                      border: "1px solid #0d47a1",
-                      lineHeight: "1.4",
-                      verticalAlign: "top",
-                      background: "white"
-                    }}>
-                      <div>{item.item_check}</div>
-                    </td>
-                    <td style={{
-                      padding: "8px",
-                      border: "1px solid #0d47a1",
-                      textAlign: "center",
-                      verticalAlign: "top",
-                      background: "white"
-                    }}>
-                      <select
-                        value={answers[`${item.item_key}_hasil`] || ""}
-                        onChange={(e) => handleInputChange(`${item.item_key}_hasil`, e.target.value)}
-                        disabled={!selectedDate}
-                        style={{
-                          width: "100%",
-                          padding: "4px",
-                          border: "1px solid #1e88e5",
-                          borderRadius: "4px",
-                          fontSize: "11px",
-                          fontWeight: "600",
-                          cursor: selectedDate ? "pointer" : "not-allowed",
-                          opacity: selectedDate ? 1 : 0.5
-                        }}
-                      >
-                        <option value="">-</option>
-                        <option value="OK">✓ OK</option>
-                        <option value="NG">✗ NG</option>
-                      </select>
-                    </td>
-                    <td style={{
-                      padding: "8px",
-                      border: "1px solid #0d47a1",
-                      verticalAlign: "top",
-                      background: "white"
-                    }}>
-                      <textarea
-                        value={answers[`${item.item_key}_keterangan`] || ""}
-                        onChange={(e) => handleInputChange(`${item.item_key}_keterangan`, e.target.value)}
-                        disabled={!selectedDate}
-                        placeholder="Keterangan..."
-                        rows={2}
-                        style={{
-                          width: "100%",
-                          padding: "4px",
-                          fontSize: "11px",
-                          resize: "vertical",
-                          border: "1px solid #ccc",
-                          borderRadius: "4px",
-                          opacity: selectedDate ? 1 : 0.5
-                        }}
-                      />
-                    </td>
-                    <td style={{
-                      padding: "8px",
-                      border: "1px solid #0d47a1",
-                      verticalAlign: "top",
-                      background: "white",
-                      textAlign:"center",
-                    }}>
-                      <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
-                        <div style={{ display: "flex", gap: "4px" }}>
-                          <button
-                            onClick={() => {
-                              setCurrentItemKey(item.item_key);
-                              setShowCameraModal(true);
-                            }}
+              <div style={{ overflowX: "auto" }}>
+                <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "12px", minWidth: "1000px" }}>
+                  <thead>
+                    <tr style={{ background: "#e3f2fd" }}>
+                      <th style={{ padding: "12px 8px", border: "1px solid #0d47a1", fontWeight: "700", color: "#01579b", textAlign: "center", width: "50px" }}>No</th>
+                      <th style={{ padding: "12px 8px", border: "1px solid #0d47a1", fontWeight: "700", color: "#01579b", textAlign: "left", minWidth: "250px" }}>ITEM</th>
+                      <th style={{ padding: "12px 8px", border: "1px solid #0d47a1", fontWeight: "700", color: "#01579b", textAlign: "center", width: "100px" }}>HASIL</th>
+                      <th style={{ padding: "12px 8px", border: "1px solid #0d47a1", fontWeight: "700", color: "#01579b", textAlign: "center", minWidth: "180px" }}>KETERANGAN N-OK</th>
+                      <th style={{ padding: "12px 8px", border: "1px solid #0d47a1", fontWeight: "700", color: "#01579b", textAlign: "center", minWidth: "180px" }}>DOKUMENTASI</th>
+                      <th style={{ padding: "12px 8px", border: "1px solid #0d47a1", fontWeight: "700", color: "#01579b", textAlign: "center", minWidth: "180px" }}>TINDAKAN PERBAIKAN</th>
+                      <th style={{ padding: "12px 8px", border: "1px solid #0d47a1", fontWeight: "700", color: "#01579b", textAlign: "center", width: "80px" }}>PIC</th>
+                      <th style={{ padding: "12px 8px", border: "1px solid #0d47a1", fontWeight: "700", color: "#01579b", textAlign: "center", width: "100px" }}>DUE DATE</th>
+                      <th style={{ padding: "12px 8px", border: "1px solid #0d47a1", fontWeight: "700", color: "#01579b", textAlign: "center", width: "80px" }}>VERIFY</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {inspectionItems.map((item, index) => (
+                      <tr key={item.id}>
+                        <td style={{ padding: "10px 8px", border: "1px solid #0d47a1", textAlign: "center", fontWeight: "600" }}>{index + 1}</td>
+                        <td style={{ padding: "10px 8px", border: "1px solid #0d47a1", lineHeight: "1.5" }}>{item.item_check}</td>
+                        <td style={{ padding: "8px", border: "1px solid #0d47a1", textAlign: "center" }}>
+                          <select
+                            value={answers[`${item.item_key}_hasil`] || ""}
+                            onChange={(e) => handleInputChange(`${item.item_key}_hasil`, e.target.value)}
                             disabled={!selectedDate}
-                            style={{
-                              padding: "4px 8px",
-                              background: selectedDate ? "#1e88e5" : "#bdbdbd",
-                              color: "white",
-                              borderRadius: "4px",
-                              fontSize: "11px",
-                              cursor: selectedDate ? "pointer" : "not-allowed",
-                              textAlign: "center",
-                              whiteSpace: "nowrap",
-                              border: "none"
-                            }}
+                            style={{ width: "100%", padding: "6px", border: "1px solid #1e88e5", borderRadius: "4px" }}
                           >
-                            📷 Kamera
-                          </button>
-                          <label
-                            htmlFor={`file-${item.item_key}`}
-                            style={{
-                              padding: "4px 8px",
-                              background: selectedDate ? "#4caf50" : "#bdbdbd",
-                              color: "white",
-                              borderRadius: "4px",
-                              fontSize: "11px",
-                              cursor: selectedDate ? "pointer" : "not-allowed",
-                              textAlign: "center",
-                              whiteSpace: "nowrap"
-                            }}
-                          >
-                            🖼️ File
-                          </label>
-                          <input
-                            id={`file-${item.item_key}`}
-                            type="file"
-                            accept="image/*"
-                            multiple
+                            <option value="">-</option>
+                            <option value="OK">✓ OK</option>
+                            <option value="NG">✗ NG</option>
+                          </select>
+                        </td>
+                        <td style={{ padding: "8px", border: "1px solid #0d47a1" }}>
+                          <textarea
+                            value={answers[`${item.item_key}_keterangan`] || ""}
+                            onChange={(e) => handleInputChange(`${item.item_key}_keterangan`, e.target.value)}
                             disabled={!selectedDate}
-                            onChange={(e) => handleImageUpload(e, item.item_key)}
-                            style={{ display: "none" }}
+                            placeholder="Keterangan jika NG..."
+                            rows={2}
+                            style={{ width: "100%", padding: "6px", fontSize: "12px", resize: "vertical" }}
                           />
-                        </div>
-                        <div style={{ display: "flex", flexWrap: "wrap", gap: "4px", marginTop: "4px" }}>
-                          {images.filter(img => img.key === item.item_key).map((img, idx) => (
-                            <div key={idx} style={{ position: "relative", width: "60px", height: "60px", borderRadius: "4px", overflow: "hidden", cursor: "pointer" }}>
-                              <img
-                                src={img.url}
-                                alt={`Dokumentasi ${item.item_key} ${idx + 1}`}
-                                onClick={() => openImageModal(img.url)}
-                                style={{
-                                  width: "100%",
-                                  height: "100%",
-                                  objectFit: "cover",
-                                  borderRadius: "4px"
-                                }}
-                              />
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  removeImage(images.findIndex(i => i.key === item.item_key && i.url === img.url));
-                                }}
-                                style={{
-                                  position: "absolute",
-                                  top: "2px",
-                                  right: "2px",
-                                  background: "rgba(0,0,0,0.5)",
-                                  color: "white",
-                                  border: "none",
-                                  borderRadius: "50%",
-                                  width: "16px",
-                                  height: "16px",
-                                  fontSize: "10px",
-                                  cursor: "pointer",
-                                  padding: "0"
-                                }}
-                              >
-                                ×
-                              </button>
+                        </td>
+                        <td style={{ padding: "8px", border: "1px solid #0d47a1" }}>
+                          <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
+                            <button
+                              onClick={() => openCamera(item.item_key)}
+                              disabled={!selectedDate}
+                              style={{
+                                padding: "4px 8px",
+                                background: selectedDate ? "#1e88e5" : "#bdbdbd",
+                                color: "white",
+                                borderRadius: "4px",
+                                fontSize: "11px",
+                                cursor: selectedDate ? "pointer" : "not-allowed",
+                                textAlign: "center",
+                                border: "none"
+                              }}
+                            >
+                              📷 Kamera
+                            </button>
+                            <label
+                              htmlFor={`file-${item.item_key}`}
+                              style={{
+                                padding: "4px 8px",
+                                background: selectedDate ? "#4caf50" : "#bdbdbd",
+                                color: "white",
+                                borderRadius: "4px",
+                                fontSize: "11px",
+                                cursor: selectedDate ? "pointer" : "not-allowed",
+                                textAlign: "center"
+                              }}
+                            >
+                              🖼️ File
+                            </label>
+                            <input
+                              id={`file-${item.item_key}`}
+                              type="file"
+                              accept="image/*"
+                              multiple
+                              disabled={!selectedDate}
+                              onChange={(e) => handleImageUpload(e as any, item.item_key)}
+                              style={{ display: "none" }}
+                            />
+                            <div style={{ display: "flex", flexWrap: "wrap", gap: "4px", marginTop: "4px" }}>
+                              {images.filter(img => img.key === item.item_key).map((img, idx) => (
+                                <div key={idx} style={{ position: "relative", width: "60px", height: "60px", borderRadius: "4px", overflow: "hidden", cursor: "pointer" }}>
+                                  <img
+                                    src={img.url}
+                                    alt={`Dokumentasi ${item.item_key} ${idx + 1}`}
+                                    onClick={() => openImageModal(img.url)}
+                                    style={{
+                                      width: "100%",
+                                      height: "100%",
+                                      objectFit: "cover",
+                                      borderRadius: "4px"
+                                    }}
+                                  />
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      removeImage(images.findIndex(i => i.key === item.item_key && i.url === img.url));
+                                    }}
+                                    style={{
+                                      position: "absolute",
+                                      top: "2px",
+                                      right: "2px",
+                                      background: "rgba(0,0,0,0.5)",
+                                      color: "white",
+                                      border: "none",
+                                      borderRadius: "50%",
+                                      width: "16px",
+                                      height: "16px",
+                                      fontSize: "10px",
+                                      cursor: "pointer",
+                                      padding: "0"
+                                    }}
+                                  >
+                                    ×
+                                  </button>
+                                </div>
+                              ))}
                             </div>
-                          ))}
-                        </div>
-                      </div>
-                    </td>
-                    <td style={{
-                      padding: "8px",
-                      border: "1px solid #0d47a1",
-                      verticalAlign: "top",
-                      background: "white"
-                    }}>
-                      <textarea
-                        value={answers[`${item.item_key}_tindakan`] || ""}
-                        onChange={(e) => handleInputChange(`${item.item_key}_tindakan`, e.target.value)}
-                        disabled={!selectedDate}
-                        placeholder="Tindakan..."
-                        rows={2}
-                        style={{
-                          width: "100%",
-                          padding: "4px",
-                          fontSize: "11px",
-                          resize: "vertical",
-                          border: "1px solid #ccc",
-                          borderRadius: "4px",
-                          opacity: selectedDate ? 1 : 0.5
-                        }}
-                      />
-                    </td>
-                    <td style={{
-                      padding: "8px",
-                      border: "1px solid #0d47a1",
-                      verticalAlign: "top",
-                      background: "white"
-                    }}>
-                      <input
-                        type="text"
-                        value={answers[`${item.item_key}_pic`] || ""}
-                        onChange={(e) => handleInputChange(`${item.item_key}_pic`, e.target.value)}
-                        disabled={!selectedDate}
-                        placeholder="PIC"
-                        style={{
-                          width: "100%",
-                          padding: "4px",
-                          fontSize: "11px",
-                          border: "1px solid #ccc",
-                          borderRadius: "4px",
-                          opacity: selectedDate ? 1 : 0.5
-                        }}
-                      />
-                    </td>
-                    <td style={{
-                      padding: "8px",
-                      border: "1px solid #0d47a1",
-                      verticalAlign: "top",
-                      background: "white"
-                    }}>
-                      <input
-                        type="date"
-                        value={answers[`${item.item_key}_dueDate`] || ""}
-                        onChange={(e) => handleInputChange(`${item.item_key}_dueDate`, e.target.value)}
-                        disabled={!selectedDate}
-                        style={{
-                          width: "100%",
-                          padding: "4px",
-                          fontSize: "11px",
-                          border: "1px solid #ccc",
-                          borderRadius: "4px",
-                          opacity: selectedDate ? 1 : 0.5
-                        }}
-                      />
-                    </td>
-                    <td style={{
-                      padding: "8px",
-                      border: "1px solid #0d47a1",
-                      verticalAlign: "top",
-                      background: "white"
-                    }}>
-                      <input
-                        type="text"
-                        value={answers[`${item.item_key}_verify`] || ""}
-                        onChange={(e) => handleInputChange(`${item.item_key}_verify`, e.target.value)}
-                        disabled={!selectedDate}
-                        placeholder="Verify"
-                        style={{
-                          width: "100%",
-                          padding: "4px",
-                          fontSize: "11px",
-                          border: "1px solid #ccc",
-                          borderRadius: "4px",
-                          opacity: selectedDate ? 1 : 0.5
-                        }}
-                      />
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
+                          </div>
+                        </td>
+                        <td style={{ padding: "8px", border: "1px solid #0d47a1" }}>
+                          <textarea
+                            value={answers[`${item.item_key}_tindakan`] || ""}
+                            onChange={(e) => handleInputChange(`${item.item_key}_tindakan`, e.target.value)}
+                            disabled={!selectedDate}
+                            placeholder="Tindakan perbaikan..."
+                            rows={2}
+                            style={{ width: "100%", padding: "6px", fontSize: "12px", resize: "vertical" }}
+                          />
+                        </td>
+                        <td style={{ padding: "8px", border: "1px solid #0d47a1" }}>
+                          <input
+                            type="text"
+                            value={answers[`${item.item_key}_pic`] || ""}
+                            onChange={(e) => handleInputChange(`${item.item_key}_pic`, e.target.value)}
+                            disabled={!selectedDate}
+                            placeholder="PIC"
+                            style={{ width: "100%", padding: "6px", fontSize: "12px" }}
+                          />
+                        </td>
+                        <td style={{ padding: "8px", border: "1px solid #0d47a1" }}>
+                          <input
+                            type="date"
+                            value={answers[`${item.item_key}_dueDate`] || ""}
+                            onChange={(e) => handleInputChange(`${item.item_key}_dueDate`, e.target.value)}
+                            disabled={!selectedDate}
+                            style={{ width: "100%", padding: "6px" }}
+                          />
+                        </td>
+                        <td style={{ padding: "8px", border: "1px solid #0d47a1" }}>
+                          <input
+                            type="text"
+                            value={answers[`${item.item_key}_verify`] || ""}
+                            onChange={(e) => handleInputChange(`${item.item_key}_verify`, e.target.value)}
+                            disabled={!selectedDate}
+                            placeholder="Verifikasi"
+                            style={{ width: "100%", padding: "6px", fontSize: "12px" }}
+                          />
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
 
           {/* Action Buttons */}
           <div style={{ 
@@ -909,7 +736,7 @@ export function EChecksheetInfJalanForm() {
             padding: "20px 0" 
           }}>
             <button
-              onClick={() => router.push("/status-ga/inf-jalan")}
+              onClick={() => router.push("/status-ga/panel")}
               style={{
                 padding: "12px 28px",
                 background: "#bdbdbd",
@@ -924,21 +751,21 @@ export function EChecksheetInfJalanForm() {
             </button>
             <button
               onClick={handleSave}
-              disabled={!selectedDate || isLoading || !areaId}
+              disabled={!selectedDate || isSaving || !areaId}
               style={{
                 padding: "12px 28px",
-                background: (selectedDate && !isLoading && areaId) 
+                background: (selectedDate && !isSaving && areaId) 
                   ? "linear-gradient(135deg, #1e88e5, #0d47a1)" 
                   : "#bdbdbd",
                 color: "white",
                 border: "none",
                 borderRadius: "8px",
                 fontWeight: "600",
-                cursor: (selectedDate && !isLoading && areaId) ? "pointer" : "not-allowed",
-                opacity: (selectedDate && !isLoading && areaId) ? 1 : 0.6
+                cursor: (selectedDate && !isSaving && areaId) ? "pointer" : "not-allowed",
+                opacity: (selectedDate && !isSaving && areaId) ? 1 : 0.6
               }}
             >
-              {isLoading ? "⏳ Menyimpan..." : "✓ Simpan Data"}
+              {isSaving ? "⏳ Menyimpan..." : "✓ Simpan Data"}
             </button>
           </div>
 

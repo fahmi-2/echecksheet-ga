@@ -25,6 +25,29 @@ export interface ChecklistData {
   };
 }
 
+export interface Area {
+  id: number;
+  no: number;
+  name: string;
+  location?: string;
+}
+
+/**
+ * Get area by ID
+ */
+export async function getAreaById(typeSlug: string, areaId: number): Promise<Area | null> {
+  const response = await fetch(`/api/ga/checksheet/${typeSlug}/areas`);
+  const data = await response.json();
+  
+  if (!data.success) {
+    throw new Error(data.message || 'Failed to fetch areas');
+  }
+  
+  // Cari area dengan ID yang sesuai
+  const area = data.data.find((a: any) => a.id === areaId);
+  return area || null;
+}
+
 /**
  * Get all areas by type slug
  */

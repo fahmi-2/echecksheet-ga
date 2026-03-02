@@ -1,19 +1,12 @@
-// app/status-ga/smoke-detector/GaSmokeDetectorContent.tsx
+// app/status-ga/selang-hydrant/GaSelangHydrantContent.tsx
 "use client";
 import { useState, useEffect, useRef } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
 import { Sidebar } from "@/components/Sidebar";
 import QrScanner from 'qr-scanner';
 import { ArrowLeft } from "lucide-react";
-// ✅ Import API helper yang reusable
-import {
-  getAreasByType,
-  getAvailableDates,
-  getChecklistByDate,
-  getItemsByType,
-  ChecklistItem
-} from "@/lib/api/checksheet";
+import { getAreasByType, getAvailableDates, getChecklistByDate } from "@/lib/api/checksheet";
 
 interface Area {
   id: number;
@@ -22,51 +15,31 @@ interface Area {
   location: string;
 }
 
-export function GaSmokeDetectorContent() {
+export function GaSelangHydrantContent({ openArea }: { openArea: string }) {
   const router = useRouter();
-  const searchParams = useSearchParams();
-  const { user, loading: authLoading, isInitialized } = useAuth();
+  const { user, loading } = useAuth();
   
-  // ✅ Gunakan useSearchParams untuk membaca parameter
-  const openAreaParam = searchParams.get('openArea') || '';
-  const TYPE_SLUG = 'smoke-detector';
+  // ✅ Hardcode type slug untuk page ini
+  const TYPE_SLUG = 'selang-hydrant';
   
-  // ✅ CRITICAL FIX: State untuk tracking auth verification
   const [isMounted, setIsMounted] = useState(false);
-  const [authVerified, setAuthVerified] = useState(false);
   const [showModal, setShowModal] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
+  const [showImageModal, setShowImageModal] = useState(false);
+  const [currentImageUrl, setCurrentImageUrl] = useState("");
   const [areas, setAreas] = useState<Area[]>([]);
   const [selectedArea, setSelectedArea] = useState<Area | null>(null);
   const [checksheetData, setChecksheetData] = useState<any | null>(null);
   const [selectedDateInModal, setSelectedDateInModal] = useState("");
   const [availableDates, setAvailableDates] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(false);
-  const [inspectionItems, setInspectionItems] = useState<ChecklistItem[]>([]);
-  const [areaStatuses, setAreaStatuses] = useState<Record<number, { statusLabel: string; statusColor: string; lastCheck: string }>>({});
-  const [isLoadingStatuses, setIsLoadingStatuses] = useState(false);
+  
+  // QR Scanner state
   const [isScanning, setIsScanning] = useState(false);
-  const [showImageModal, setShowImageModal] = useState(false);
-  const [currentImageUrl, setCurrentImageUrl] = useState("");
-  const [showImagePreviewModal, setShowImagePreviewModal] = useState(false);
-  const [currentPreviewImage, setCurrentPreviewImage] = useState("");
-  const videoRef = useRef(null);
+  const videoRef = useRef<HTMLVideoElement>(null);
   const qrScannerRef = useRef<QrScanner | null>(null);
 
-  // ✅ Load inspection items
-  useEffect(() => {
-    const loadItems = async () => {
-      try {
-        const items = await getItemsByType(TYPE_SLUG);
-        setInspectionItems(items);
-      } catch (error) {
-        console.error("Failed to load checklist items:", error);
-      }
-    };
-    loadItems();
-  }, []);
-
-  // ✅ Load areas
+  // ✅ Load areas dari API berdasarkan type
   useEffect(() => {
     const loadAreas = async () => {
       try {
@@ -79,105 +52,37 @@ export function GaSmokeDetectorContent() {
     loadAreas();
   }, []);
 
-  // ✅ Load status untuk semua area
-  useEffect(() => {
-    if (areas.length === 0 || isLoadingStatuses || !authVerified) return;
-    
-    const loadAllStatuses = async () => {
-      setIsLoadingStatuses(true);
-      
-      const statusMap: Record<number, { statusLabel: string; statusColor: string; lastCheck: string }> = {};
-
-      for (const area of areas) {
-        try {
-          const dates = await getAvailableDates(TYPE_SLUG, area.id);
-          
-          if (dates.length > 0) {
-            const latest = dates[0];
-            statusMap[area.id] = {
-              statusLabel: "Checked",
-              statusColor: "#43a047",
-              lastCheck: new Date(latest).toLocaleDateString("id-ID", { 
-                day: "numeric", 
-                month: "short" 
-              })
-            };
-          } else {
-            statusMap[area.id] = {
-              statusLabel: "No Data",
-              statusColor: "#757575",
-              lastCheck: "-"
-            };
-          }
-        } catch (error) {
-          console.error(`Error loading status for area ${area.id}:`, error);
-          statusMap[area.id] = {
-            statusLabel: "Error",
-            statusColor: "#f44336",
-            lastCheck: "-"
-          };
-        }
-      }
-
-      setAreaStatuses(statusMap);
-      setIsLoadingStatuses(false);
-    };
-
-    loadAllStatuses();
-  }, [areas, authVerified]);
-
   useEffect(() => {
     setIsMounted(true);
   }, []);
 
-  // ✅ CRITICAL FIX: Authentication verification dengan state tracking dan delay
   useEffect(() => {
-    if (!isMounted || !isInitialized || authLoading) {
-      console.log('⏳ Auth still loading or component not mounted');
-      setAuthVerified(false);
-      return;
+    if (loading) return;
+    if (!user || (user.role !== "inspector-ga")) {
+      router.push("/login-page");
     }
+  }, [user, loading, router]);
 
-    if (user && user.role === "inspector-ga") {
-      console.log('✅ Auth verified successfully');
-      setAuthVerified(true);
-      return;
-    }
-
-    // Beri waktu 1.5 detik sebelum redirect
-    const verificationTimeout = setTimeout(() => {
-      if (!user || user.role !== "inspector-ga") {
-        console.error('❌ Auth verification failed after delay:', { user, authLoading });
-        router.push("/login-page");
-      } else {
-        setAuthVerified(true);
-      }
-    }, 1500);
-
-    return () => clearTimeout(verificationTimeout);
-  }, [user, authLoading, isInitialized, router, isMounted]);
-
-  // ✅ Auto-open modal jika ada openArea param - HANYA SETELAH AUTH VERIFIED
   useEffect(() => {
-    if (!isMounted || !authVerified || !openAreaParam || areas.length === 0) return;
+    if (!isMounted || loading) return;
+    if (!openArea) return;
     
-    console.log('🔍 Searching for area to auto-open:', openAreaParam);
     const found = areas.find((item) => {
-      const parts = item.name.split(' \u0007 ');
-      return parts[0] === openAreaParam;
+      const parts = item.name.split(' • ');
+      return parts[0] === openArea;
     });
-
+    
     if (found) {
-      console.log('✅ Found area, opening detail:', found.name);
-      setTimeout(() => openDetail(found), 300);
+      setTimeout(() => openDetail(found), 50);
     }
-  }, [isMounted, authVerified, openAreaParam, areas]);
+  }, [isMounted, loading, openArea, areas]);
 
   // ✅ Open detail dengan load data dari API
   const openDetail = async (area: Area) => {
     setSelectedArea(area);
     setShowModal(true);
     setIsLoading(true);
+
     try {
       // Load available dates
       const dates = await getAvailableDates(TYPE_SLUG, area.id);
@@ -199,7 +104,6 @@ export function GaSmokeDetectorContent() {
       setChecksheetData(null);
       setAvailableDates([]);
       setSelectedDateInModal("");
-      alert("Gagal memuat data.");
     } finally {
       setIsLoading(false);
     }
@@ -215,15 +119,15 @@ export function GaSmokeDetectorContent() {
 
   // ✅ Load data ketika tanggal berubah
   useEffect(() => {
-    if (!selectedArea || !selectedDateInModal || !showModal || !authVerified) return;
-    
+    if (!selectedArea || !selectedDateInModal || !showModal) return;
+
     const loadData = async () => {
       setIsLoading(true);
       try {
         const data = await getChecklistByDate(TYPE_SLUG, selectedArea.id, selectedDateInModal);
         setChecksheetData(data);
       } catch (error) {
-        console.error("Error loading checklist:", error);
+        console.error("Error loading checklist ", error);
         setChecksheetData(null);
       } finally {
         setIsLoading(false);
@@ -231,16 +135,21 @@ export function GaSmokeDetectorContent() {
     };
 
     loadData();
-  }, [selectedDateInModal, selectedArea, showModal, authVerified]);
+  }, [selectedDateInModal, selectedArea, showModal]);
 
   // Filter data berdasarkan search
   const filteredData = areas.filter(item => {
-    const parts = item.name.split(' \u0007 ');
-    const location = parts[0] || '';
-    const zone = parts[1] || '';
+    const parts = item.name.split(' • ');
+    const lokasi = parts[0] || '';
+    const zona = parts[1] || '';
+    const jenisHydrant = parts[2] || '';
+    const pic = parts[3] || '';
+    
     return (
-      location.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      zone.toLowerCase().includes(searchTerm.toLowerCase())
+      lokasi.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      zona.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      jenisHydrant.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      pic.toLowerCase().includes(searchTerm.toLowerCase())
     );
   });
 
@@ -253,17 +162,6 @@ export function GaSmokeDetectorContent() {
   const closeImageModal = () => {
     setShowImageModal(false);
     setCurrentImageUrl("");
-  };
-
-  // ✅ Fungsi untuk membuka modal preview gambar
-  const openImagePreviewModal = (imageUrl: string) => {
-    setCurrentPreviewImage(imageUrl);
-    setShowImagePreviewModal(true);
-  };
-
-  const closeImagePreviewModal = () => {
-    setShowImagePreviewModal(false);
-    setCurrentPreviewImage("");
   };
 
   // QR Scanner functions
@@ -281,6 +179,7 @@ export function GaSmokeDetectorContent() {
 
   useEffect(() => {
     if (!isScanning || !videoRef.current) return;
+    
     const video = videoRef.current;
 
     const onScanSuccess = (result: string) => {
@@ -296,18 +195,18 @@ export function GaSmokeDetectorContent() {
 
         if (urlStr.startsWith('http')) {
           const url = new URL(urlStr);
-          if (url.pathname === '/e-checksheet-smoke-detector') {
+          if (url.pathname === '/e-checksheet-slg-hydrant') {
             router.push(urlStr);
             return;
           }
         }
 
-        if (urlStr.startsWith('/e-checksheet-smoke-detector?')) {
+        if (urlStr.startsWith('/e-checksheet-slg-hydrant?')) {
           router.push(urlStr);
           return;
         }
 
-        alert("Invalid QR code. Please scan a valid smoke detector inspection QR.");
+        alert("Invalid QR code. Please scan a valid selang hydrant inspection QR.");
       } catch (err) {
         alert("Invalid QR format.");
       }
@@ -332,33 +231,21 @@ export function GaSmokeDetectorContent() {
     };
   }, [isScanning, router]);
 
-  // ✅ CRITICAL FIX: Tampilkan loading screen selama auth belum verified
-  if (!isMounted || !isInitialized || !authVerified) {
+  if (!isMounted) return null;
+  if (loading) {
     return (
-      <div style={{
-        display: "flex",
-        justifyContent: "center",
-        alignItems: "center",
-        minHeight: "100vh",
-        background: "#f5f5f5"
-      }}>
-        <div style={{ textAlign: "center" }}>
-          <div style={{ fontSize: "48px", marginBottom: "16px" }}>⏳</div>
-          <p style={{ fontSize: "16px", color: "#666" }}>
-            {authLoading ? "Loading authentication..." : "Verifying session..."}
-          </p>
-          <p style={{ fontSize: "14px", color: "#999", marginTop: "8px" }}>
-            Please wait a moment
-          </p>
-        </div>
+      <div style={{ display: "flex", justifyContent: "center", alignItems: "center", minHeight: "100vh", background: "#f5f5f5" }}>
+        Loading...
       </div>
     );
   }
+  if (!user || (user.role !== "inspector-ga")) {
+    return null;
+  }
 
-  // ✅ Hanya render UI jika auth sudah verified
   return (
     <div style={{ minHeight: "100vh", background: "#f8f9fa" }}>
-      <Sidebar userName={user?.fullName} />
+      <Sidebar userName={user.fullName} />
       <div style={{
         paddingLeft: "96px",
         paddingRight: "20px",
@@ -369,42 +256,23 @@ export function GaSmokeDetectorContent() {
       }}>
         {/* Header */}
         <div style={{ marginBottom: "28px" }} className="header">
-          <button
+          <button 
             onClick={() => router.push("/status-ga")}
             className="btn-back"
-            aria-label="Kembali ke halaman utama"
           >
-            <ArrowLeft size={18} />
-            Kembali
+            <ArrowLeft size={18}/> Kembali
           </button>
-          
-          <div style={{
-            background: "#1976d2",
-            borderRadius: "8px",
-            padding: "20px 24px",
-            boxShadow: "0 2px 8px rgba(0,0,0,0.1)"
-          }}>
-            <h1 style={{ 
-              margin: "0 0 6px 0", 
-              color: "white", 
-              fontSize: "26px", 
-              fontWeight: "600", 
-              letterSpacing: "-0.5px" 
-            }}>
-              🚨 Smoke & Heat Detector Inspection
+          <div className="text-header">
+            <h1 style={{ margin: "0 0 6px 0", color: "white", fontSize: "26px", fontWeight: "600", letterSpacing: "-0.5px" }}>
+              🚒 Selang Hydrant Inspection Dashboard
             </h1>
-            <p style={{ 
-              margin: 0, 
-              color: "#e3f2fd", 
-              fontSize: "14px", 
-              fontWeight: "400" 
-            }}>
+            <p style={{ margin: 0, color: "#e3f2fd", fontSize: "14px", fontWeight: "400" }}>
               Bi-monthly inspection schedule and maintenance records
             </p>
           </div>
         </div>
 
-        {/* Search */}
+        {/* Search + QR Scan */}
         <div style={{
           background: "white",
           borderRadius: "8px",
@@ -417,7 +285,7 @@ export function GaSmokeDetectorContent() {
           <div style={{ position: "relative" }}>
             <input
               type="text"
-              placeholder="Cari lokasi atau zona..."
+              placeholder="Cari zona, jenis, lokasi, atau PIC..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               style={{
@@ -433,21 +301,6 @@ export function GaSmokeDetectorContent() {
           </div>
         </div>
 
-        {/* Loading Status Indicator */}
-        {isLoadingStatuses && (
-          <div style={{ 
-            padding: "12px 20px", 
-            background: "#fff3cd", 
-            borderRadius: "6px",
-            marginBottom: "16px",
-            color: "#856404",
-            fontSize: "13px",
-            textAlign: "center"
-          }}>
-            ⏳ Loading status data...
-          </div>
-        )}
-
         {/* Table */}
         <div style={{
           background: "white",
@@ -457,47 +310,82 @@ export function GaSmokeDetectorContent() {
           border: "1px solid #e0e0e0"
         }}>
           <div style={{ overflowX: "auto" }}>
-            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "14px", minWidth: "800px" }}>
+            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "14px", minWidth: "900px" }}>
               <thead>
                 <tr style={{ borderBottom: "2px solid #e0e0e0" }}>
                   <th style={{ padding: "14px 16px", textAlign: "center", background: "#fafafa", fontWeight: "600", color: "#424242", fontSize: "13px" }}>No</th>
+                  <th style={{ padding: "14px 16px", textAlign: "left", background: "#fafafa", fontWeight: "600", color: "#424242", fontSize: "13px" }}>Zona</th>
+                  <th style={{ padding: "14px 16px", textAlign: "left", background: "#fafafa", fontWeight: "600", color: "#424242", fontSize: "13px" }}>Jenis Hydrant</th>
                   <th style={{ padding: "14px 16px", textAlign: "left", background: "#fafafa", fontWeight: "600", color: "#424242", fontSize: "13px" }}>Lokasi</th>
-                  <th style={{ padding: "14px 16px", textAlign: "center", background: "#fafafa", fontWeight: "600", color: "#424242", fontSize: "13px" }}>Zona</th>
+                  <th style={{ padding: "14px 16px", textAlign: "center", background: "#fafafa", fontWeight: "600", color: "#424242", fontSize: "13px" }}>PIC</th>
                   <th style={{ padding: "14px 16px", textAlign: "center", background: "#fafafa", fontWeight: "600", color: "#424242", fontSize: "13px" }}>Status</th>
                   <th style={{ padding: "14px 16px", textAlign: "center", background: "#fafafa", fontWeight: "600", color: "#424242", fontSize: "13px" }}>Actions</th>
                 </tr>
               </thead>
               <tbody>
                 {filteredData.map((area, idx) => {
+                  // Extract data from name field
                   const parts = area.name.split(' \u0007 ');
-                  const location = parts[0] || '';
-                  const zone = parts[1] || '';
+                  const lokasi = parts[0] || '';
+                  const zona = parts[1] || '';
+                  const jenisHydrant = parts[2] || '';
+                  const pic = parts[3] || '';
                   
-                  const status = areaStatuses[area.id] || {
-                    statusLabel: "Loading...",
-                    statusColor: "#757575",
-                    lastCheck: "-"
+                  let statusLabel = "No Data";
+                  let statusColor = "#757575";
+                  let lastCheck = "-";
+
+                  // ✅ Cek status dari API
+                  const checkStatus = async () => {
+                    try {
+                      const dates = await getAvailableDates(TYPE_SLUG, area.id);
+                      
+                      if (dates.length > 0) {
+                        const latest = dates.sort().pop();
+                        lastCheck = new Date(latest!).toLocaleDateString("en-US", { day: "numeric", month: "short" });
+                        statusLabel = "Checked";
+                        statusColor = "#43a047";
+                      }
+                    } catch (error) {
+                      console.error("Error checking status:", error);
+                    }
                   };
+
+                  // Panggil checkStatus
+                  checkStatus();
 
                   return (
                     <tr key={area.id} style={{ borderBottom: idx === filteredData.length - 1 ? "none" : "1px solid #f0f0f0" }}>
                       <td style={{ padding: "14px 16px", textAlign: "center", fontWeight: "600", color: "#1976d2" }}>{area.no}</td>
-                      <td style={{ padding: "14px 16px", fontWeight: "500", color: "#424242" }}>{location}</td>
-                      <td style={{ padding: "14px 16px", textAlign: "center", fontWeight: "600", color: "#616161" }}>{zone}</td>
+                      <td style={{ padding: "14px 16px", fontWeight: "500", color: "#424242" }}>{zona}</td>
+                      <td style={{ padding: "14px 16px", color: "#666", fontSize: "13px" }}>
+                        <span style={{
+                          padding: "4px 8px",
+                          background: "#e3f2fd",
+                          color: "#0d47a1",
+                          borderRadius: "4px",
+                          fontSize: "11px",
+                          fontWeight: "600"
+                        }}>
+                          {jenisHydrant}
+                        </span>
+                      </td>
+                      <td style={{ padding: "14px 16px", color: "#666" }}>{lokasi}</td>
+                      <td style={{ padding: "14px 16px", textAlign: "center", fontWeight: "600", color: "#333" }}>{pic}</td>
                       <td style={{ padding: "14px 16px", textAlign: "center" }}>
                         <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "4px" }}>
                           <span style={{
                             padding: "4px 12px",
-                            background: status.statusColor,
+                            background: statusColor,
                             color: "white",
                             borderRadius: "12px",
                             fontSize: "11px",
                             fontWeight: "600",
                             display: "inline-block"
                           }}>
-                            {status.statusLabel}
+                            {statusLabel}
                           </span>
-                          <span style={{ fontSize: "11px", color: "#9e9e9e" }}>{status.lastCheck}</span>
+                          <span style={{ fontSize: "11px", color: "#9e9e9e" }}>{lastCheck}</span>
                         </div>
                       </td>
                       <td style={{ padding: "14px 16px" }}>
@@ -518,7 +406,7 @@ export function GaSmokeDetectorContent() {
                             View
                           </button>
                           <a
-                            href={`/e-checksheet-smoke-detector?areaId=${area.id}`}
+                            href={`/e-checksheet-slg-hydrant?lokasi=${encodeURIComponent(lokasi)}&zona=${encodeURIComponent(zona)}&jenisHydrant=${encodeURIComponent(jenisHydrant)}&pic=${encodeURIComponent(pic)}`}
                             style={{
                               padding: "7px 14px",
                               borderRadius: "5px",
@@ -542,7 +430,7 @@ export function GaSmokeDetectorContent() {
           </div>
         </div>
 
-        {/* Modal Detail dengan kolom DOKUMENTASI */}
+        {/* Modal Detail */}
         {showModal && selectedArea && (
           <div
             onClick={closeDetail}
@@ -583,19 +471,10 @@ export function GaSmokeDetectorContent() {
                 borderBottom: "1px solid #e0e0e0"
               }}>
                 <div>
-                  <h2 style={{ 
-                    margin: "0 0 4px 0", 
-                    color: "#212121", 
-                    fontSize: "20px", 
-                    fontWeight: "600" 
-                  }}>
+                  <h2 style={{ margin: "0 0 4px 0", color: "#212121", fontSize: "20px", fontWeight: "600" }}>
                     Inspection History - Unit #{selectedArea.no}
                   </h2>
-                  <p style={{ 
-                    margin: "0", 
-                    color: "#616161", 
-                    fontSize: "14px" 
-                  }}>
+                  <p style={{ margin: "0", color: "#616161", fontSize: "14px" }}>
                     {selectedArea.name}
                   </p>
                 </div>
@@ -619,23 +498,13 @@ export function GaSmokeDetectorContent() {
                 </button>
               </div>
 
-              <div style={{ 
-                padding: "16px 24px", 
-                background: "white", 
-                borderBottom: "1px solid #e0e0e0" 
-              }}>
-                <label style={{ 
-                  fontWeight: "500", 
-                  color: "#424242", 
-                  marginRight: "12px", 
-                  fontSize: "14px" 
-                }}>
+              <div style={{ padding: "16px 24px", background: "white", borderBottom: "1px solid #e0e0e0" }}>
+                <label style={{ fontWeight: "500", color: "#424242", marginRight: "12px", fontSize: "14px" }}>
                   Inspection Date:
                 </label>
                 <select
                   value={selectedDateInModal}
                   onChange={(e) => setSelectedDateInModal(e.target.value)}
-                  disabled={availableDates.length === 0}
                   style={{
                     color: "#212121",
                     padding: "7px 12px",
@@ -644,99 +513,52 @@ export function GaSmokeDetectorContent() {
                     fontSize: "14px",
                     fontWeight: "500",
                     minWidth: "160px",
-                    outline: "none",
-                    cursor: availableDates.length > 0 ? "pointer" : "not-allowed"
+                    outline: "none"
                   }}
                 >
-                  {availableDates.length === 0 ? (
-                    <option value="">No data available</option>
-                  ) : (
-                    <>
-                      <option value="">-- Select Date --</option>
-                      {availableDates.map(date => (
-                        <option key={date} value={date}>
-                          {new Date(date).toLocaleDateString("id-ID", { 
-                            day: "2-digit", 
-                            month: "short", 
-                            year: "numeric" 
-                          })}
-                        </option>
-                      ))}
-                    </>
-                  )}
+                  <option value="">Select date</option>
+                  {availableDates.map(date => (
+                    <option key={date} value={date}>
+                      {new Date(date).toLocaleDateString("en-US", { day: "2-digit", month: "short", year: "numeric" })}
+                    </option>
+                  ))}
                 </select>
               </div>
 
-              <div style={{ 
-                padding: "24px", 
-                overflowY: "auto", 
-                flex: 1, 
-                background: "#fafafa" 
-              }}>
+              <div style={{ padding: "24px", overflowY: "auto", flex: 1, background: "#fafafa" }}>
                 {!selectedDateInModal ? (
-                  <div style={{ 
-                    textAlign: "center", 
-                    padding: "60px 20px", 
-                    color: "#757575" 
-                  }}>
-                    <div style={{ 
-                      fontSize: "48px", 
-                      marginBottom: "12px", 
-                      opacity: 0.5 
-                    }}>
-                      📅
-                    </div>
-                    <p style={{ 
-                      fontSize: "15px", 
-                      fontWeight: "500", 
-                      margin: 0 
-                    }}>
-                      {availableDates.length === 0 
-                        ? "📭 No inspection data available for this unit" 
-                        : "👆 Please select an inspection date"}
-                    </p>
+                  <div style={{ textAlign: "center", padding: "60px 20px", color: "#757575" }}>
+                    <div style={{ fontSize: "48px", marginBottom: "12px", opacity: 0.5 }}>📅</div>
+                    <p style={{ fontSize: "15px", fontWeight: "500", margin: 0 }}>Please select an inspection date</p>
                   </div>
                 ) : (
                   <div style={{ overflowX: "auto" }}>
                     {(() => {
                       if (!checksheetData) {
-                        return (
-                          <div style={{ 
-                            textAlign: "center", 
-                            padding: "40px", 
-                            color: "#9e9e9e" 
-                          }}>
-                            ❌ No data found for this date
-                          </div>
-                        );
+                        return <div style={{ textAlign: "center", padding: "40px", color: "#9e9e9e" }}>No data found for this date</div>;
                       }
 
                       // Static inspection items untuk display
-                      const inspectionItemsList = [
-                        { key: "alarm_bell", label: "Alarm Bell" },
-                        { key: "indicator_lamp", label: "Indicator Lamp" },
-                        { key: "cleanliness", label: "Cleanliness" },
-                        { key: "overall_condition", label: "Overall Condition" },
+                      const inspectionItems = [
+                        { key: "pressureTank", label: "PRESSURE TANK (STD : 7 kg/cm2)" },
+                        { key: "hasilTekananDgPitot", label: "HASIL TEKANAN DG PITOT (STD : titik terjauh min. 4.5 kg/cm2)" },
+                        { key: "tekananEnginePump", label: "TEKANAN ENGINE PUMP" },
+                        { key: "fireHose", label: "FIRE HOSE / SELANG" },
+                        { key: "valve", label: "VALVE (TIDAK SERET)" },
+                        { key: "couplingNozzle", label: "COUPLING NOZZLE" },
+                        { key: "couplingHydrant", label: "COUPLING HYDRANT" },
+                        { key: "seal", label: "SEAL" },
                       ];
 
                       return (
                         <div>
-                          <table style={{ 
-                            width: "100%", 
-                            borderCollapse: "collapse", 
-                            fontSize: "12px", 
-                            minWidth: "1400px", 
-                            border: "1px solid #e0e0e0", 
-                            background: "white" 
-                          }}>
+                          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "12px", minWidth: "1200px", border: "1px solid #e0e0e0", background: "white" }}>
                             <thead>
                               <tr style={{ background: "#f5f5f5" }}>
                                 <th style={{ padding: "10px", border: "1px solid #e0e0e0", fontWeight: "600", color: "#424242", textAlign: "center", width: "50px" }}>No</th>
                                 <th style={{ padding: "10px", border: "1px solid #e0e0e0", fontWeight: "600", color: "#424242", textAlign: "left", minWidth: "250px" }}>ITEM</th>
                                 <th style={{ padding: "10px", border: "1px solid #e0e0e0", fontWeight: "600", color: "#424242", textAlign: "center", width: "100px" }}>HASIL</th>
                                 <th style={{ padding: "10px", border: "1px solid #e0e0e0", fontWeight: "600", color: "#424242", textAlign: "center", minWidth: "180px" }}>KETERANGAN N-OK</th>
-                                {/* ✅ KOLOM BARU: DOKUMENTASI */}
-                                <th style={{ padding: "10px", border: "1px solid #e0e0e0", fontWeight: "600", color: "#424242", textAlign: "center", minWidth: "200px" }}>DOKUMENTASI</th>
                                 <th style={{ padding: "10px", border: "1px solid #e0e0e0", fontWeight: "600", color: "#424242", textAlign: "center", minWidth: "180px" }}>TINDAKAN PERBAIKAN</th>
                                 <th style={{ padding: "10px", border: "1px solid #e0e0e0", fontWeight: "600", color: "#424242", textAlign: "center", width: "80px" }}>PIC</th>
                                 <th style={{ padding: "10px", border: "1px solid #e0e0e0", fontWeight: "600", color: "#424242", textAlign: "center", width: "100px" }}>DUE DATE</th>
@@ -744,11 +566,9 @@ export function GaSmokeDetectorContent() {
                               </tr>
                             </thead>
                             <tbody>
-                              {inspectionItemsList.map((item, index) => {
+                              {inspectionItems.map((item, index) => {
                                 const entry = checksheetData[item.key];
                                 const value = entry?.hasilPemeriksaan || "-";
-                                const images = entry?.images || [];
-
                                 return (
                                   <tr key={item.key}>
                                     <td style={{ padding: "8px", border: "1px solid #e0e0e0", textAlign: "center", fontWeight: "600" }}>{index + 1}</td>
@@ -767,70 +587,6 @@ export function GaSmokeDetectorContent() {
                                     <td style={{ padding: "8px", border: "1px solid #e0e0e0", lineHeight: "1.4", fontSize: "11px" }}>
                                       {entry?.keteranganTemuan || "-"}
                                     </td>
-                                    {/* ✅ KOLOM DOKUMENTASI dengan preview gambar */}
-                                    <td style={{ padding: "8px", border: "1px solid #e0e0e0", verticalAlign: "top" }}>
-                                      {images.length > 0 ? (
-                                        <div style={{ 
-                                          display: "flex", 
-                                          flexWrap: "wrap", 
-                                          gap: "6px",
-                                          justifyContent: "center",
-                                          maxHeight: "100px",
-                                          overflowY: "auto"
-                                        }}>
-                                          {images.map((imgUrl: string, imgIdx: number) => (
-                                            <div 
-                                              key={imgIdx} 
-                                              style={{ 
-                                                position: "relative",
-                                                width: "60px", 
-                                                height: "60px", 
-                                                overflow: "hidden", 
-                                                borderRadius: "4px", 
-                                                border: "1px solid #ddd",
-                                                cursor: "pointer"
-                                              }}
-                                              onClick={() => openImagePreviewModal(imgUrl)}
-                                            >
-                                              <img
-                                                src={imgUrl}
-                                                alt={`Dok ${index + 1}-${imgIdx + 1}`}
-                                                style={{
-                                                  width: "100%",
-                                                  height: "100%",
-                                                  objectFit: "cover"
-                                                }}
-                                              />
-                                              <div style={{
-                                                position: "absolute",
-                                                top: "2px",
-                                                right: "2px",
-                                                background: "rgba(0,0,0,0.6)",
-                                                color: "white",
-                                                borderRadius: "50%",
-                                                width: "18px",
-                                                height: "18px",
-                                                display: "flex",
-                                                alignItems: "center",
-                                                justifyContent: "center",
-                                                fontSize: "10px"
-                                              }}>
-                                                {imgIdx + 1}
-                                              </div>
-                                            </div>
-                                          ))}
-                                        </div>
-                                      ) : (
-                                        <div style={{ 
-                                          textAlign: "center", 
-                                          color: "#9e9e9e", 
-                                          fontSize: "11px",
-                                          padding: "8px 0"
-                                        }}>
-                                          -
-                                        </div>
-                                      )}
-                                    </td>
                                     <td style={{ padding: "8px", border: "1px solid #e0e0e0", lineHeight: "1.4", fontSize: "11px" }}>
                                       {entry?.tindakanPerbaikan || "-"}
                                     </td>
@@ -848,69 +604,37 @@ export function GaSmokeDetectorContent() {
                               })}
                             </tbody>
                           </table>
-
-                          {/* ✅ Modal Preview Gambar Besar */}
-                          {showImagePreviewModal && (
-                            <div
-                              onClick={closeImagePreviewModal}
-                              style={{
-                                position: "fixed",
-                                top: 0,
-                                left: 0,
-                                right: 0,
-                                bottom: 0,
-                                background: "rgba(0,0,0,0.9)",
-                                display: "flex",
-                                justifyContent: "center",
-                                alignItems: "center",
-                                zIndex: 3000,
-                                padding: "20px"
-                              }}
-                            >
-                              <div onClick={(e) => e.stopPropagation()} style={{ textAlign: "center" }}>
-                                <img
-                                  src={currentPreviewImage}
-                                  alt="Preview Dokumentasi"
-                                  style={{
-                                    maxHeight: "90vh",
-                                    maxWidth: "90vw",
-                                    objectFit: "contain",
-                                    borderRadius: "8px",
-                                    border: "3px solid white",
-                                    boxShadow: "0 4px 20px rgba(0,0,0,0.5)"
-                                  }}
-                                />
-                                <div style={{ 
-                                  marginTop: "16px", 
-                                  color: "white", 
-                                  fontSize: "14px",
-                                  fontWeight: "500"
-                                }}>
-                                  Click outside to close
-                                </div>
+                          
+                          {/* ✅ TAMPILKAN FOTO DOKUMENTASI DI SINI */}
+                          {checksheetData.pressureTank?.images && checksheetData.pressureTank.images.length > 0 && (
+                            <div style={{ marginTop: "24px" }}>
+                              <h3 style={{ margin: "0 0 12px 0", fontSize: "14px", fontWeight: "600", color: "#212121" }}>
+                                📸 Documentation Photos ({checksheetData.pressureTank.images.length})
+                              </h3>
+                              <div style={{ display: "flex", flexWrap: "wrap", gap: "12px", justifyContent: "flex-start" }}>
+                                {checksheetData.pressureTank.images.map((imgUrl: string, idx: number) => (
+                                  <div key={idx} style={{ width: "120px", height: "120px", overflow: "hidden", borderRadius: "6px", border: "1px solid #ddd" }}>
+                                    <img
+                                      src={imgUrl}
+                                      alt={`doc-${idx}`}
+                                      style={{
+                                        width: "100%",
+                                        height: "100%",
+                                        objectFit: "cover",
+                                        cursor: "pointer"
+                                      }}
+                                      onClick={() => window.open(imgUrl, '_blank')}
+                                    />
+                                  </div>
+                                ))}
                               </div>
                             </div>
                           )}
 
-                          <div style={{ 
-                            marginTop: "20px", 
-                            padding: "12px", 
-                            background: "#f9f9f9", 
-                            borderRadius: "6px", 
-                            border: "1px solid #e0e0e0" 
-                          }}>
-                            <p style={{ 
-                              margin: "0 0 4px 0", 
-                              fontSize: "11px", 
-                              color: "#757575" 
-                            }}>Inspector</p>
-                            <p style={{ 
-                              margin: "0", 
-                              fontSize: "13px", 
-                              fontWeight: "500", 
-                              color: "#424242" 
-                            }}>
-                              {checksheetData.alarm_bell?.inspector || "N/A"}
+                          <div style={{ marginTop: "20px", padding: "12px", background: "#f9f9f9", borderRadius: "6px", border: "1px solid #e0e0e0" }}>
+                            <p style={{ margin: "0 0 4px 0", fontSize: "11px", color: "#757575" }}>Inspector</p>
+                            <p style={{ margin: "0", fontSize: "13px", fontWeight: "500", color: "#424242" }}>
+                              {checksheetData.pressureTank?.inspector || "N/A"}
                             </p>
                           </div>
                         </div>
@@ -920,12 +644,7 @@ export function GaSmokeDetectorContent() {
                 )}
               </div>
 
-              <div style={{ 
-                padding: "16px 24px", 
-                background: "#f5f5f5", 
-                borderTop: "1px solid #e0e0e0", 
-                textAlign: "right" 
-              }}>
+              <div style={{ padding: "16px 24px", background: "#f5f5f5", borderTop: "1px solid #e0e0e0", textAlign: "right" }}>
                 <button 
                   onClick={closeDetail} 
                   style={{ 
@@ -980,12 +699,7 @@ export function GaSmokeDetectorContent() {
                 width: "100%",
               }}
             >
-              <h3 style={{ 
-                margin: "0 0 12px 0", 
-                color: "#212121" 
-              }}>
-                Scan Smoke Detector QR Code
-              </h3>
+              <h3 style={{ margin: "0 0 12px 0", color: "#212121" }}>Scan Selang Hydrant QR Code</h3>
               <video
                 ref={videoRef}
                 style={{
@@ -995,12 +709,8 @@ export function GaSmokeDetectorContent() {
                   background: "#000"
                 }}
               />
-              <p style={{ 
-                fontSize: "13px", 
-                color: "#666", 
-                marginTop: "12px" 
-              }}>
-                Point your camera at the QR code on the detector
+              <p style={{ fontSize: "13px", color: "#666", marginTop: "12px" }}>
+                Point your camera at the QR code on the selang hydrant
               </p>
               <button
                 onClick={() => {
@@ -1056,11 +766,7 @@ export function GaSmokeDetectorContent() {
                   border: "3px solid white"
                 }}
               />
-              <div style={{ 
-                marginTop: "16px", 
-                color: "white", 
-                fontSize: "14px" 
-              }}>
+              <div style={{ marginTop: "16px", color: "white", fontSize: "14px" }}>
                 Click outside to close
               </div>
             </div>
