@@ -1,81 +1,131 @@
 // app/e-checksheet-ins-apd/EChecksheetInsApdForm.tsx
 "use client";
-
 import { useState, useEffect } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
 import { Sidebar } from "@/components/Sidebar";
-// ✅ Import API helper
 import {
   getItemsByType,
   getChecklistByDate,
   saveChecklist,
   getAvailableDates,
+  getAreaById,
   ChecklistItem
 } from "@/lib/api/checksheet";
 
-export function EChecksheetInsApdForm({ areaId: initialAreaId }: { areaId: number }) {
+export function EChecksheetInsApdForm() {
   const router = useRouter();
-  const { user, loading } = useAuth();
+  const searchParams = useSearchParams();
+  const { user, loading: authLoading, isInitialized } = useAuth();
   
-  // ✅ Hardcode type slug untuk page ini
+  // ✅ Handle both 'areaId' and 'areald' (typo in URL)
+  const areaIdParam = searchParams.get('areaId') || searchParams.get('areald');
+  const areaNameParam = searchParams.get('areaName') || 'Area';
+  const areaType = searchParams.get('areaType') || 'Type';
+  
   const TYPE_SLUG = 'inspeksi-apd';
-
   const [isMounted, setIsMounted] = useState(false);
-  const [selectedDate, setSelectedDate] = useState<string>("");
-  const [areaId, setAreaId] = useState<number>(initialAreaId);
-  const [areaData, setAreaData] = useState<any>(null);
+  const [authVerified, setAuthVerified] = useState(false);
+  const [selectedDate, setSelectedDate] = useState("");
+  const [areaId, setAreaId] = useState<number | null>(null);
+  const [areaNumber, setAreaNumber] = useState<number | null>(null); // ✅ Nomor area dari database
+  const [allItems, setAllItems] = useState<ChecklistItem[]>([]);
   const [inspectionItems, setInspectionItems] = useState<ChecklistItem[]>([]);
   const [availableDates, setAvailableDates] = useState<string[]>([]);
   const [rows, setRows] = useState<any[]>([]);
   const [isSaving, setIsSaving] = useState(false);
+  const [isLoadingArea, setIsLoadingArea] = useState(false);
 
-  // ✅ Load area data dan inspection items dari API
+  // ✅ Load ALL items from API
   useEffect(() => {
-    const loadAreaAndItems = async () => {
+    const loadItems = async () => {
       try {
-        // Load area info
-        const areasRes = await fetch(`/api/ga/checksheet/${TYPE_SLUG}/areas`);
-        const areasData = await areasRes.json();
-        
-        if (areasData.success) {
-          const area = areasData.data.find((a: any) => a.id === initialAreaId);
-          if (area) {
-            setAreaData(area);
-          }
-        }
-
-        // Load inspection items
         const items = await getItemsByType(TYPE_SLUG);
-        console.log('Loaded inspection items:', items);
-        setInspectionItems(items);
-        
-        // Initialize rows from items
-        initializeRowsFromItems(items);
-        
-        // Load available dates
-        const dates = await getAvailableDates(TYPE_SLUG, initialAreaId);
-        setAvailableDates(dates);
+        setAllItems(items);
+        console.log('📋 Loaded', items.length, 'total items');
       } catch (error) {
-        console.error("Failed to load data:", error);
-        alert("Gagal memuat data. Silakan coba lagi.");
+        console.error("Failed to load checklist items:", error);
+        alert("Gagal memuat daftar item checklist.");
       }
     };
-    
-    if (isMounted) {
-      loadAreaAndItems();
-    }
-  }, [isMounted, initialAreaId]);
+    loadItems();
+  }, []);
 
-  // ✅ Initialize rows dari inspection items
+  // ✅ Load area data untuk mendapatkan nomor area
+  useEffect(() => {
+    if (!areaIdParam) {
+      console.warn('⚠️ areaIdParam is null or undefined');
+      return;
+    }
+
+    const loadArea = async () => {
+      try {
+        setIsLoadingArea(true);
+        const parsedAreaId = parseInt(areaIdParam);
+        setAreaId(parsedAreaId);
+
+        // ✅ Panggil API untuk mendapatkan data area termasuk nomor area
+        const area = await getAreaById(TYPE_SLUG, parsedAreaId);
+        
+        if (area) {
+          setAreaNumber(area.no);
+          console.log('✅ Loaded area:', area.name, 'with number:', area.no);
+        } else {
+          console.error('❌ Area not found for ID:', parsedAreaId);
+          alert('Area tidak ditemukan!');
+        }
+      } catch (error) {
+        console.error("Failed to load area data:", error);
+        alert("Gagal memuat data area.");
+      } finally {
+        setIsLoadingArea(false);
+      }
+    };
+
+    loadArea();
+  }, [areaIdParam]);
+
+  // ✅ Filter items based on area NUMBER (bukan areaId)
+  useEffect(() => {
+    if (!areaNumber || allItems.length === 0) {
+      console.log('⏳ Waiting for areaNumber or items...');
+      return;
+    }
+
+    console.log('🔍 Filtering items for area number:', areaNumber);
+
+    // ✅ Gunakan nomor area, bukan ID area
+    // Contoh: AREA01_PROSES01 untuk Area nomor 1
+    const expectedPrefix = `AREA${areaNumber.toString().padStart(2, '0')}_`;
+
+    const filtered = allItems.filter(item => 
+      item.item_key.startsWith(expectedPrefix)
+    );
+
+    console.log('✅ Filtered to', filtered.length, 'items for this area');
+
+    if (filtered.length === 0) {
+      console.warn('⚠️ No items found for area number:', areaNumber);
+      setInspectionItems([]);
+      setRows([]);
+      return;
+    }
+
+    setInspectionItems(filtered);
+    initializeRowsFromItems(filtered);
+  }, [areaNumber, allItems]);
+
+  // ✅ Initialize rows from inspection items
   const initializeRowsFromItems = (items: ChecklistItem[]) => {
     const newRows: any[] = [];
     
-    // Group items by proses
-    const prosesList = items.filter(item => item.item_group === 'PROSES');
-    
-    prosesList.forEach(prosesItem => {
-      // Add proses row
+    // ✅ Get all PROSES items for this area
+    const prosesItems = items.filter(item => item.item_group === 'PROSES');
+
+    console.log('Found', prosesItems.length, 'PROSES items');
+
+    prosesItems.forEach(prosesItem => {
+      // ✅ Add proses row (header row - grey background)
       newRows.push({
         type: "proses",
         item_key: prosesItem.item_key,
@@ -93,12 +143,12 @@ export function EChecksheetInsApdForm({ areaId: initialAreaId }: { areaId: numbe
         verify: ""
       });
       
-      // Find APD items for this proses
-      const apdItems = items.filter(item => 
-        item.item_group === prosesItem.item_key // APD items memiliki item_group = proses item_key
-      );
+      // ✅ Find APD items for this proses (item_group = item_key dari proses)
+      const apdItems = items.filter(item => item.item_group === prosesItem.item_key);
       
-      // Add APD rows
+      console.log('  -', prosesItem.item_check, ':', apdItems.length, 'APD items');
+      
+      // ✅ Add APD rows
       apdItems.forEach(apdItem => {
         newRows.push({
           type: "apd",
@@ -118,51 +168,73 @@ export function EChecksheetInsApdForm({ areaId: initialAreaId }: { areaId: numbe
         });
       });
     });
-    
+
+    console.log('✅ Initialized', newRows.length, 'rows');
     setRows(newRows);
   };
+
+  // ✅ Load available dates
+  useEffect(() => {
+    if (!areaIdParam || !isMounted || !authVerified) return;
+    
+    const loadAreaData = async () => {
+      try {
+        const parsedAreaId = parseInt(areaIdParam);
+        
+        const dates = await getAvailableDates(TYPE_SLUG, parsedAreaId);
+        setAvailableDates(dates);
+      } catch (error) {
+        console.error("Failed to load area data:", error);
+        alert("Gagal memuat data area.");
+      }
+    };
+
+    loadAreaData();
+  }, [areaIdParam, isMounted, authVerified]);
 
   useEffect(() => {
     setIsMounted(true);
   }, []);
 
+  // ✅ Authentication verification
   useEffect(() => {
-    if (!isMounted || loading) return;
-    if (!user || (user.role !== "inspector-ga")) {
-      router.push("/login-page");
+    if (!isMounted || !isInitialized || authLoading) {
+      setAuthVerified(false);
+      return;
     }
-  }, [user, loading, router, isMounted]);
+    if (user && user.role === "inspector-ga") {
+      setAuthVerified(true);
+      return;
+    }
 
-  if (!isMounted) return null;
+    const verificationTimeout = setTimeout(() => {
+      if (!user || user.role !== "inspector-ga") {
+        router.push("/login-page");
+      } else {
+        setAuthVerified(true);
+      }
+    }, 1500);
 
-  if (loading) {
-    return (
-      <div style={{ display: "flex", justifyContent: "center", alignItems: "center", minHeight: "100vh", background: "#f5f5f5" }}>
-        <p>Loading...</p>
-      </div>
-    );
-  }
+    return () => clearTimeout(verificationTimeout);
+  }, [user, authLoading, isInitialized, router, isMounted]);
 
-  if (!user || (user.role !== "inspector-ga")) {
-    return null;
-  }
-
-  // ✅ Load existing data dari API
+  // ✅ Load existing data
   const handleLoadExisting = async () => {
     if (!selectedDate) {
       alert("Please select a date first");
       return;
     }
-
+    if (!areaId) {
+      alert("Area tidak valid!");
+      return;
+    }
     try {
       const data = await getChecklistByDate(TYPE_SLUG, areaId, selectedDate);
       
       if (data && Object.keys(data).length > 0) {
-        // Populate rows with existing data
         const newRows = rows.map(row => {
           const itemData = data[row.item_key];
           if (itemData) {
-            // Parse notes untuk mendapatkan r1-r6 values
             let parsedNotes: any = {};
             try {
               if (itemData.notes) {
@@ -209,9 +281,16 @@ export function EChecksheetInsApdForm({ areaId: initialAreaId }: { areaId: numbe
       router.push("/login-page");
       return;
     }
-
     if (!selectedDate) {
       alert("Please select an inspection date");
+      return;
+    }
+    if (!areaId) {
+      alert("Area tidak valid!");
+      return;
+    }
+    if (rows.length === 0) {
+      alert("Tidak ada data untuk disimpan!");
       return;
     }
 
@@ -229,11 +308,9 @@ export function EChecksheetInsApdForm({ areaId: initialAreaId }: { areaId: numbe
     try {
       setIsSaving(true);
 
-      // Format data untuk API
       const checklistData: any = {};
       
       updatedRows.forEach((row) => {
-        // Store r1-r6 values in notes as JSON
         const notesData = {
           r1: row.r1 || "",
           r2: row.r2 || "",
@@ -257,7 +334,6 @@ export function EChecksheetInsApdForm({ areaId: initialAreaId }: { areaId: numbe
         };
       });
 
-      // Save ke API
       await saveChecklist(
         TYPE_SLUG,
         areaId,
@@ -267,11 +343,10 @@ export function EChecksheetInsApdForm({ areaId: initialAreaId }: { areaId: numbe
         user.fullName || "Unknown Inspector"
       );
 
-      alert(`Inspection data saved for ${new Date(selectedDate).toLocaleDateString("en-US")}`);
+      alert(`Inspection data saved for ${new Date(selectedDate).toLocaleDateString("id-ID")}`);
       
-      // Redirect ke status page setelah 500ms
       setTimeout(() => {
-        router.push(`/status-ga/inspeksi-apd`);
+        router.push(`/status-ga/inspeksi-apd?openArea=${encodeURIComponent(areaNameParam)}`);
       }, 500);
       
     } catch (error) {
@@ -290,52 +365,83 @@ export function EChecksheetInsApdForm({ areaId: initialAreaId }: { areaId: numbe
     });
   };
 
-  // Parse area name untuk display
-  const areaName = areaData?.name?.split(' \u0007 ')[0] || `Area ${areaId}`;
-  const areaType = areaData?.name?.split(' \u0007 ')[1] || "Produksi";
+  // Loading screen
+  if (!isMounted || !isInitialized || !authVerified) {
+    return (
+      <div style={{
+        display: "flex",
+        justifyContent: "center",
+        alignItems: "center",
+        minHeight: "100vh",
+        background: "#f5f5f5"
+      }}>
+        <div style={{ textAlign: "center" }}>
+          <div style={{ fontSize: "48px", marginBottom: "16px" }}>⏳</div>
+          <p style={{ fontSize: "16px", color: "#666" }}>
+            {authLoading ? "Loading authentication..." : "Verifying session..."}
+          </p>
+        </div>
+      </div>
+    );
+  }
 
+  // Main UI
   return (
     <div style={{ minHeight: "100vh", background: "#f7f9fc" }}>
-      <Sidebar userName={user.fullName} />
-      <div style={{ 
+      <Sidebar userName={user?.fullName} />
+      <div style={{
         paddingLeft: "95px",
         paddingRight: "25px",
-        paddingTop: "25px",
-        paddingBottom: "25px", 
-        maxWidth: "100%", 
-        margin: "0 auto" }}>        
+        paddingTop: "32px",
+        paddingBottom: "32px",
+        maxWidth: "100%",
+        margin: "0 auto"
+      }}>
+        {/* Header */}
         <div style={{ marginBottom: "28px" }}>
           <div style={{
             background: "#1976d2",
             borderRadius: "8px",
-            padding: "24px 28px",
+            padding: "20px 24px",
             boxShadow: "0 2px 8px rgba(0,0,0,0.1)"
           }}>
-            <h1 style={{ margin: "0 0 6px 0", color: "white", fontSize: "26px", fontWeight: "600", letterSpacing: "-0.5px" }}>
+            <h1 style={{
+              margin: "0 0 6px 0",
+              color: "white",
+              fontSize: "26px",
+              fontWeight: "600",
+              letterSpacing: "-0.5px"
+            }}>
               APD Inspection Form
             </h1>
-            <p style={{ margin: 0, color: "#e3f2fd", fontSize: "14px" }}>
-              Monthly APD compliance checklist for {areaName} ({areaType})
+            <p style={{
+              margin: 0,
+              color: "#e3f2fd",
+              fontSize: "14px"
+            }}>
+              Monthly APD compliance checklist for {areaNameParam} ({areaType})
             </p>
           </div>
         </div>
-        
+
+        {/* Info Area */}
         <div style={{
           background: "white",
           border: "1px solid #e0e0e0",
           borderRadius: "8px",
           padding: "20px 24px",
           boxShadow: "0 1px 3px rgba(0,0,0,0.08)",
+          marginTop: "20px",
           marginBottom: "24px"
         }}>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))", gap: "16px" }}>
             <div>
               <span style={{ fontSize: "13px", color: "#757575", display: "block", marginBottom: "4px" }}>Area ID</span>
-              <span style={{ fontSize: "15px", fontWeight: "500", color: "#212121" }}>{areaId}</span>
+              <span style={{ fontSize: "15px", fontWeight: "500", color: "#212121" }}>{areaIdParam}</span>
             </div>
-            <div> 
+            <div>
               <span style={{ fontSize: "13px", color: "#757575", display: "block", marginBottom: "4px" }}>Area Name</span>
-              <span style={{ fontSize: "15px", fontWeight: "500", color: "#212121" }}>{areaName}</span>
+              <span style={{ fontSize: "15px", fontWeight: "500", color: "#212121" }}>{areaNameParam}</span>
             </div>
             <div>
               <span style={{ fontSize: "13px", color: "#757575", display: "block", marginBottom: "4px" }}>Area Type</span>
@@ -343,7 +449,14 @@ export function EChecksheetInsApdForm({ areaId: initialAreaId }: { areaId: numbe
             </div>
             <div>
               <span style={{ fontSize: "13px", color: "#757575", display: "block", marginBottom: "4px" }}>Inspector</span>
-              <span style={{ fontSize: "15px", fontWeight: "500", color: "#212121" }}>{user.fullName}</span>
+              <span style={{ fontSize: "15px", fontWeight: "500", color: "#212121" }}>{user?.fullName}</span>
+            </div>
+            <div>
+              <span style={{ fontSize: "13px", color: "#757575", display: "block", marginBottom: "4px" }}>Total Items</span>
+              <span style={{ fontSize: "15px", fontWeight: "500", color: "#1976d2" }}>
+                {isLoadingArea ? "Loading..." : 
+                 `${rows.length} rows (${rows.filter(r => r.type === 'apd').length} APD items)`}
+              </span>
             </div>
           </div>
         </div>
@@ -359,10 +472,9 @@ export function EChecksheetInsApdForm({ areaId: initialAreaId }: { areaId: numbe
         }}>
           <div style={{ marginBottom: "16px" }}>
             <span style={{ fontWeight: "500", color: "#212121", fontSize: "15px" }}>Inspection Schedule</span>
-            <span style={{ fontSize: "13px", color: "#757575", marginLeft: "8px" }}>\u0007 Every month</span>
+            <span style={{ fontSize: "13px", color: "#757575", marginLeft: "8px" }}>○ Every month</span>
           </div>
 
-          {/* Input Tanggal Manual */}
           <div style={{ display: "flex", alignItems: "center", gap: "12px", flexWrap: "wrap", marginBottom: "12px" }}>
             <label style={{ fontWeight: "500", color: "#424242", fontSize: "14px" }}>Tanggal Inspeksi:</label>
             <input
@@ -382,7 +494,6 @@ export function EChecksheetInsApdForm({ areaId: initialAreaId }: { areaId: numbe
             />
           </div>
 
-          {/* Dropdown Riwayat Pengisian */}
           {availableDates.length > 0 && (
             <div style={{ display: "flex", alignItems: "center", gap: "12px", flexWrap: "wrap" }}>
               <label style={{ fontWeight: "500", color: "#424242", fontSize: "14px" }}>Riwayat Isian:</label>
@@ -409,7 +520,7 @@ export function EChecksheetInsApdForm({ areaId: initialAreaId }: { areaId: numbe
                   .sort((a, b) => new Date(b).getTime() - new Date(a).getTime())
                   .map((date) => (
                     <option key={date} value={date}>
-                      {new Date(date).toLocaleDateString("en-US", {
+                      {new Date(date).toLocaleDateString("id-ID", {
                         day: "2-digit",
                         month: "short",
                         year: "numeric"
@@ -438,205 +549,235 @@ export function EChecksheetInsApdForm({ areaId: initialAreaId }: { areaId: numbe
         </div>
 
         {/* Tabel APD */}
-        <div style={{
-          background: "white",
-          borderRadius: "8px",
-          boxShadow: "0 1px 3px rgba(0,0,0,0.08)",
-          overflow: "hidden",
-          border: "1px solid #e0e0e0",
-          marginBottom: "24px"
-        }}>
-          <div style={{ overflowX: "auto" }}>
-            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "12px", minWidth: "1600px" }}>
-              <thead>
-                <tr style={{ background: "#fafafa", borderBottom: "2px solid #ccc" }}>
-                  <th rowSpan={2} style={{ padding: "10px 8px", border: "1px solid #ddd", fontWeight: "600", textAlign: "center", width: "4%" }}>NO</th>
-                  <th style={{ padding: "10px 8px", border: "1px solid #ddd", fontWeight: "600", textAlign: "center", width: "12%" }}>PROSES</th>
-                  <th rowSpan={2} colSpan={6} style={{ padding: "8px", border: "1px solid #ddd", fontWeight: "600", textAlign: "center", width: "30%" }}>NO. MESIN/NIK</th>
-                  <th rowSpan={2} style={{ padding: "10px 8px", border: "1px solid #ddd", fontWeight: "600", textAlign: "center", width: "8%" }}>PROSENTASE OK</th>
-                  <th rowSpan={2} colSpan={4} style={{ padding: "10px 8px", border: "1px solid #ddd", fontWeight: "600", textAlign: "center", width: "16%" }}>PROBLEM</th>
-                  <th rowSpan={2} colSpan={4} style={{ padding: "10px 8px", border: "1px solid #ddd", fontWeight: "600", textAlign: "center", width: "16%" }}>TINDAKAN PERBAIKAN</th>
-                  <th rowSpan={2} style={{ padding: "10px 8px", border: "1px solid #ddd", fontWeight: "600", textAlign: "center", width: "8%" }}>PIC</th>
-                  <th rowSpan={2} style={{ padding: "10px 8px", border: "1px solid #ddd", fontWeight: "600", textAlign: "center", width: "8%" }}>VERIFY</th>
-                </tr>
-                <tr style={{ background: "#fafafa", borderBottom: "2px solid #ccc" }}>
-                  <th style={{ padding: "10px 8px", border: "1px solid #ddd", fontWeight: "600", textAlign: "center", width: "18%" }}>STANDART APD</th>
-                </tr>
-              </thead>
-              <tbody>
-                {rows.map((row, idx) => (
-                  <tr key={idx}>
-                    <td style={{ 
-                      padding: "8px", 
-                      border: "1px solid #ddd", 
-                      textAlign: "center", 
-                      fontWeight: "600",
-                      background: row.type === "proses" ? "#f5f5f5" : "white"
-                    }}>
-                      {idx + 1}
-                    </td>
-                    <td style={{ 
-                      padding: "8px", 
-                      border: "1px solid #ddd", 
-                      textAlign: "left", 
-                      fontWeight: row.type === "proses" ? "600" : "normal",
-                      background: row.type === "proses" ? "#f5f5f5" : "white"
-                    }}>
-                      <input
-                        value={row.proses}
-                        disabled
-                        style={{
-                          width: "100%",
-                          padding: "4px",
-                          fontSize: "12px",
-                          border: "none",
-                          background: "transparent",
-                          outline: "none",
-                          fontWeight: row.type === "proses" ? "600" : "normal"
-                        }}
-                      />
-                    </td>
-                    {[...Array(6)].map((_, i) => {
-                      const field = `r${i + 1}` as keyof typeof row;
-                      return (
-                        <td key={i} style={{ 
-                          padding: "6px", 
-                          border: "1px solid #ddd", 
-                          textAlign: "center",
-                          background: "white"
-                        }}>
-                          {row.type === "proses" ? (
-                            <input
-                              value={row[field]}
-                              onChange={(e) => updateRowField(idx, String(field), e.target.value)}
-                              disabled={!selectedDate}
-                              placeholder="NIK/Mesin"
-                              style={{
-                                width: "100%",
-                                padding: "4px",
-                                fontSize: "12px",
-                                border: "1px solid #ccc",
-                                borderRadius: "3px",
-                                background: "#f9f9f9"
-                              }}
-                            />
-                          ) : (
-                            <select
-                              value={row[field]}
-                              onChange={(e) => updateRowField(idx, String(field), e.target.value)}
-                              disabled={!selectedDate}
-                              style={{
-                                width: "100%",
-                                padding: "4px",
-                                fontSize: "12px",
-                                border: "1px solid #ccc",
-                                borderRadius: "3px"
-                              }}
-                            >
-                              <option value="">-</option>
-                              <option value="✓">✓</option>
-                              <option value="✗">✗</option>
-                            </select>
-                          )}
-                        </td>
-                      );
-                    })}
-                    <td style={{ 
-                      padding: "8px", 
-                      border: "1px solid #ddd", 
-                      textAlign: "center",
-                      background: "white"
-                    }}>
-                      {row.persentaseOk}
-                    </td>
-                    <td colSpan={4} style={{ 
-                      padding: "6px", 
-                      border: "1px solid #ddd",
-                      background: "white"
-                    }}>
-                      <textarea
-                        value={row.problem}
-                        onChange={(e) => updateRowField(idx, "problem", e.target.value)}
-                        disabled={!selectedDate}
-                        placeholder="Alasan tidak memakai APD..."
-                        rows={1}
-                        style={{
-                          width: "100%",
-                          padding: "4px",
-                          fontSize: "12px",
-                          resize: "vertical",
-                          border: "1px solid #ccc",
-                          borderRadius: "3px"
-                        }}
-                      />
-                    </td>
-                    <td colSpan={4} style={{ 
-                      padding: "6px", 
-                      border: "1px solid #ddd",
-                      background: "white"
-                    }}>
-                      <textarea
-                        value={row.tindakanPerbaikan}
-                        onChange={(e) => updateRowField(idx, "tindakanPerbaikan", e.target.value)}
-                        disabled={!selectedDate}
-                        placeholder="Tindakan perbaikan..."
-                        rows={1}
-                        style={{
-                          width: "100%",
-                          padding: "4px",
-                          fontSize: "12px",
-                          resize: "vertical",
-                          border: "1px solid #ccc",
-                          borderRadius: "3px"
-                        }}
-                      />
-                    </td>
-                    <td style={{ 
-                      padding: "6px", 
-                      border: "1px solid #ddd",
-                      background: "white"
-                    }}>
-                      <input
-                        type="text"
-                        value={row.pic}
-                        onChange={(e) => updateRowField(idx, "pic", e.target.value)}
-                        disabled={!selectedDate}
-                        placeholder="PIC"
-                        style={{
-                          width: "100%",
-                          padding: "4px",
-                          fontSize: "12px",
-                          border: "1px solid #ccc",
-                          borderRadius: "3px"
-                        }}
-                      />
-                    </td>
-                    <td style={{ 
-                      padding: "6px", 
-                      border: "1px solid #ddd",
-                      background: "white"
-                    }}>
-                      <input
-                        type="text"
-                        value={row.verify}
-                        onChange={(e) => updateRowField(idx, "verify", e.target.value)}
-                        disabled={!selectedDate}
-                        placeholder="Verify"
-                        style={{
-                          width: "100%",
-                          padding: "4px",
-                          fontSize: "12px",
-                          border: "1px solid #ccc",
-                          borderRadius: "3px"
-                        }}
-                      />
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+        {isLoadingArea ? (
+          <div style={{
+            background: "white",
+            borderRadius: "8px",
+            padding: "60px 20px",
+            textAlign: "center",
+            border: "1px solid #e0e0e0"
+          }}>
+            <div style={{ fontSize: "48px", marginBottom: "12px", opacity: 0.5 }}>⏳</div>
+            <p style={{ fontSize: "15px", fontWeight: "500", color: "#9e9e9e", margin: 0 }}>
+              Loading area data...
+            </p>
           </div>
-        </div>
+        ) : rows.length === 0 ? (
+          <div style={{
+            background: "white",
+            borderRadius: "8px",
+            padding: "60px 20px",
+            textAlign: "center",
+            border: "1px solid #e0e0e0"
+          }}>
+            <div style={{ fontSize: "48px", marginBottom: "12px", opacity: 0.5 }}>📋</div>
+            <p style={{ fontSize: "15px", fontWeight: "500", color: "#9e9e9e", margin: 0 }}>
+              {inspectionItems.length === 0 
+                ? 'No inspection items found for this area' 
+                : 'Loading inspection items...'}
+            </p>
+          </div>
+        ) : (
+          <div style={{
+            background: "white",
+            borderRadius: "8px",
+            boxShadow: "0 1px 3px rgba(0,0,0,0.08)",
+            overflow: "hidden",
+            border: "1px solid #e0e0e0",
+            marginBottom: "24px"
+          }}>
+            <div style={{ overflowX: "auto" }}>
+              <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "12px", minWidth: "1600px" }}>
+                <thead>
+                  <tr style={{ background: "#fafafa", borderBottom: "2px solid #ccc" }}>
+                    <th rowSpan={2} style={{ padding: "10px 8px", border: "1px solid #ddd", fontWeight: "600", textAlign: "center", width: "4%" }}>NO</th>
+                    <th style={{ padding: "10px 8px", border: "1px solid #ddd", fontWeight: "600", textAlign: "center", width: "12%" }}>PROSES</th>
+                    <th rowSpan={2} colSpan={6} style={{ padding: "8px", border: "1px solid #ddd", fontWeight: "600", textAlign: "center", width: "30%" }}>NO. MESIN/NIK</th>
+                    <th rowSpan={2} style={{ padding: "10px 8px", border: "1px solid #ddd", fontWeight: "600", textAlign: "center", width: "8%" }}>PROSENTASE OK</th>
+                    <th rowSpan={2} colSpan={4} style={{ padding: "10px 8px", border: "1px solid #ddd", fontWeight: "600", textAlign: "center", width: "16%" }}>PROBLEM</th>
+                    <th rowSpan={2} colSpan={4} style={{ padding: "10px 8px", border: "1px solid #ddd", fontWeight: "600", textAlign: "center", width: "16%" }}>TINDAKAN PERBAIKAN</th>
+                    <th rowSpan={2} style={{ padding: "10px 8px", border: "1px solid #ddd", fontWeight: "600", textAlign: "center", width: "8%" }}>PIC</th>
+                    <th rowSpan={2} style={{ padding: "10px 8px", border: "1px solid #ddd", fontWeight: "600", textAlign: "center", width: "8%" }}>VERIFY</th>
+                  </tr>
+                  <tr style={{ background: "#fafafa", borderBottom: "2px solid #ccc" }}>
+                    <th style={{ padding: "10px 8px", border: "1px solid #ddd", fontWeight: "600", textAlign: "center", width: "18%" }}>STANDART APD</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {rows.map((row, idx) => (
+                    <tr key={idx}>
+                      <td style={{ 
+                        padding: "8px", 
+                        border: "1px solid #ddd", 
+                        textAlign: "center", 
+                        fontWeight: "600",
+                        background: row.type === "proses" ? "#f5f5f5" : "white"
+                      }}>
+                        {idx + 1}
+                      </td>
+                      <td style={{ 
+                        padding: "8px", 
+                        border: "1px solid #ddd", 
+                        textAlign: "left", 
+                        fontWeight: row.type === "proses" ? "600" : "normal",
+                        background: row.type === "proses" ? "#f5f5f5" : "white"
+                      }}>
+                        <input
+                          value={row.proses}
+                          disabled
+                          style={{
+                            width: "100%",
+                            padding: "4px",
+                            fontSize: "12px",
+                            border: "none",
+                            background: "transparent",
+                            outline: "none",
+                            fontWeight: row.type === "proses" ? "600" : "normal"
+                          }}
+                        />
+                      </td>
+                      {[...Array(6)].map((_, i) => {
+                        const field = `r${i + 1}` as keyof typeof row;
+                        return (
+                          <td key={i} style={{ 
+                            padding: "6px", 
+                            border: "1px solid #ddd", 
+                            textAlign: "center",
+                            background: "white"
+                          }}>
+                            {row.type === "proses" ? (
+                              <input
+                                value={row[field]}
+                                onChange={(e) => updateRowField(idx, String(field), e.target.value)}
+                                disabled={!selectedDate}
+                                placeholder="NIK/Mesin"
+                                style={{
+                                  width: "100%",
+                                  padding: "4px",
+                                  fontSize: "12px",
+                                  border: "1px solid #ccc",
+                                  borderRadius: "3px",
+                                  background: "#f9f9f9"
+                                }}
+                              />
+                            ) : (
+                              <select
+                                value={row[field]}
+                                onChange={(e) => updateRowField(idx, String(field), e.target.value)}
+                                disabled={!selectedDate}
+                                style={{
+                                  width: "100%",
+                                  padding: "4px",
+                                  fontSize: "12px",
+                                  border: "1px solid #ccc",
+                                  borderRadius: "3px"
+                                }}
+                              >
+                                <option value="">-</option>
+                                <option value="✓">✓</option>
+                                <option value="✗">✗</option>
+                              </select>
+                            )}
+                          </td>
+                        );
+                      })}
+                      <td style={{ 
+                        padding: "8px", 
+                        border: "1px solid #ddd", 
+                        textAlign: "center",
+                        background: "white"
+                      }}>
+                        {row.persentaseOk}
+                      </td>
+                      <td colSpan={4} style={{ 
+                        padding: "6px", 
+                        border: "1px solid #ddd",
+                        background: "white"
+                      }}>
+                        <textarea
+                          value={row.problem}
+                          onChange={(e) => updateRowField(idx, "problem", e.target.value)}
+                          disabled={!selectedDate}
+                          placeholder="Alasan tidak memakai APD..."
+                          rows={1}
+                          style={{
+                            width: "100%",
+                            padding: "4px",
+                            fontSize: "12px",
+                            resize: "vertical",
+                            border: "1px solid #ccc",
+                            borderRadius: "3px"
+                          }}
+                        />
+                      </td>
+                      <td colSpan={4} style={{ 
+                        padding: "6px", 
+                        border: "1px solid #ddd",
+                        background: "white"
+                      }}>
+                        <textarea
+                          value={row.tindakanPerbaikan}
+                          onChange={(e) => updateRowField(idx, "tindakanPerbaikan", e.target.value)}
+                          disabled={!selectedDate}
+                          placeholder="Tindakan perbaikan..."
+                          rows={1}
+                          style={{
+                            width: "100%",
+                            padding: "4px",
+                            fontSize: "12px",
+                            resize: "vertical",
+                            border: "1px solid #ccc",
+                            borderRadius: "3px"
+                          }}
+                        />
+                      </td>
+                      <td style={{ 
+                        padding: "6px", 
+                        border: "1px solid #ddd",
+                        background: "white"
+                      }}>
+                        <input
+                          type="text"
+                          value={row.pic}
+                          onChange={(e) => updateRowField(idx, "pic", e.target.value)}
+                          disabled={!selectedDate}
+                          placeholder="PIC"
+                          style={{
+                            width: "100%",
+                            padding: "4px",
+                            fontSize: "12px",
+                            border: "1px solid #ccc",
+                            borderRadius: "3px"
+                          }}
+                        />
+                      </td>
+                      <td style={{ 
+                        padding: "6px", 
+                        border: "1px solid #ddd",
+                        background: "white"
+                      }}>
+                        <input
+                          type="text"
+                          value={row.verify}
+                          onChange={(e) => updateRowField(idx, "verify", e.target.value)}
+                          disabled={!selectedDate}
+                          placeholder="Verify"
+                          style={{
+                            width: "100%",
+                            padding: "4px",
+                            fontSize: "12px",
+                            border: "1px solid #ccc",
+                            borderRadius: "3px"
+                          }}
+                        />
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
 
         <div style={{ display: "flex", gap: "12px", justifyContent: "center", padding: "20px 0" }}>
           <button
@@ -656,17 +797,17 @@ export function EChecksheetInsApdForm({ areaId: initialAreaId }: { areaId: numbe
           </button>
           <button
             onClick={handleSave}
-            disabled={!selectedDate || isSaving}
+            disabled={!selectedDate || isSaving || rows.length === 0}
             style={{
               padding: "11px 28px",
-              background: (selectedDate && !isSaving) ? "#1976d2" : "#e0e0e0",
-              color: (selectedDate && !isSaving) ? "white" : "#9e9e9e",
+              background: (selectedDate && !isSaving && rows.length > 0) ? "#1976d2" : "#e0e0e0",
+              color: (selectedDate && !isSaving && rows.length > 0) ? "white" : "#9e9e9e",
               border: "none",
               borderRadius: "6px",
               fontWeight: "500",
               fontSize: "15px",
-              opacity: (selectedDate && !isSaving) ? 1 : 0.6,
-              cursor: (selectedDate && !isSaving) ? "pointer" : "not-allowed"
+              opacity: (selectedDate && !isSaving && rows.length > 0) ? 1 : 0.6,
+              cursor: (selectedDate && !isSaving && rows.length > 0) ? "pointer" : "not-allowed"
             }}
           >
             {isSaving ? "Menyimpan..." : "✓ Simpan Data"}

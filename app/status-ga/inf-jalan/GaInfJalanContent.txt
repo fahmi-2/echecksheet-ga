@@ -13,6 +13,7 @@ import {
   getItemsByType,
   ChecklistItem
 } from "@/lib/api/checksheet";
+import { ArrowLeft } from "lucide-react";
 
 interface Area {
   id: number;
@@ -210,13 +211,14 @@ export function GaInfJalanContent({ openArea }: { openArea: string }) {
       <Sidebar userName={user?.fullName} />
       <div style={{ paddingLeft: "96px", paddingRight: "20px", paddingTop: "24px", paddingBottom: "24px", maxWidth: "1400px", margin: "0 auto" }}>
         {/* Header */}
-        <div style={{ marginBottom: "24px" }}>
-          <div style={{
-            background: "linear-gradient(135deg, #0d47a1 0%, #1e88e5 100%)",
-            borderRadius: "12px",
-            padding: "20px 24px",
-            boxShadow: "0 4px 12px rgba(13, 71, 161, 0.15)"
-          }}>
+        <div style={{ marginBottom: "24px" }} className="header">
+          <button
+            onClick={() => router.push("/status-ga")}
+            className="btn-back"
+          >
+            <ArrowLeft size={18} /> Kembali
+          </button>
+          <div className="text-header">
             <h1 style={{ margin: "0 0 8px 0", color: "white", fontSize: "clamp(20px, 5vw, 28px)", fontWeight: "700", letterSpacing: "-0.5px" }}>
               🛣️ GA Infrastruktur Jalan
             </h1>

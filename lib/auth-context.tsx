@@ -26,6 +26,7 @@ interface AuthContextType {
   user: User | null;
   currentUser: User | null;
   loading: boolean;
+  isInitialized: boolean;
   signup: (
     data: {
       username: string;
@@ -51,56 +52,117 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const router = useRouter();
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
+  const [isInitialized, setIsInitialized] = useState(false);
+  const [hasExplicitLogout, setHasExplicitLogout] = useState(false);
 
-  // 🔄 Load dari localStorage saat pertama kali
+  // 🔄 Load dari localStorage saat pertama kali dengan proper initialization
   useEffect(() => {
-    try {
-      const savedCurrentUser = localStorage.getItem(CURRENT_USER_KEY);
-      const sessionToken = localStorage.getItem(SESSION_TOKEN_KEY);
+    const initAuth = async () => {
+      setLoading(true);
       
-      if (savedCurrentUser && sessionToken) {
-        const user = JSON.parse(savedCurrentUser);
-        if (["group-leader-qa", "inspector-qa", "inspector-ga", "eso", "admin"].includes(user.role)) {
-          setCurrentUser({
-            id: user.id || user.username,
-            username: user.username,
-            fullName: user.fullName,
-            nik: user.nik,
-            department: user.department,
-            role: user.role as Role,
-          });
-          console.log('✅ Restored session:', user.username, 'Role:', user.role);
+      try {
+        console.log('🔐 Initializing authentication...');
+        
+        const savedCurrentUser = localStorage.getItem(CURRENT_USER_KEY);
+        const sessionToken = localStorage.getItem(SESSION_TOKEN_KEY);
+        
+        // Jika tidak ada session, skip
+        if (!savedCurrentUser || !sessionToken) {
+          console.log('ℹ️ No saved session found');
+          setLoading(false);
+          setIsInitialized(true);
+          return;
         }
+        
+        try {
+          const user = JSON.parse(savedCurrentUser);
+          
+          if (["group-leader-qa", "inspector-qa", "inspector-ga", "eso", "admin"].includes(user.role)) {
+            const validUser: User = {
+              id: user.id || user.username,
+              username: user.username,
+              fullName: user.fullName,
+              nik: user.nik,
+              department: user.department,
+              role: user.role as Role,
+            };
+            
+            setCurrentUser(validUser);
+            console.log('✅ Session restored:', validUser.username, 'Role:', validUser.role);
+          } else {
+            console.warn('⚠️ Invalid role in saved session:', user.role);
+            // Jangan hapus SESSION_TOKEN saat ada error, let it be cleared saat explicit logout only
+            localStorage.removeItem(CURRENT_USER_KEY);
+            setCurrentUser(null);
+          }
+        } catch (parseError) {
+          console.error("❌ Failed to parse user data:", parseError);
+          // Hanya hapus CURRENT_USER yang corrupted, JANGAN hapus SESSION_TOKEN
+          localStorage.removeItem(CURRENT_USER_KEY);
+          setCurrentUser(null);
+        }
+      } catch (e) {
+        console.error("❌ Failed to restore session:", e);
+        localStorage.removeItem(CURRENT_USER_KEY);
+        localStorage.removeItem(SESSION_TOKEN_KEY);
+        setCurrentUser(null);
+      } finally {
+        setLoading(false);
+        setIsInitialized(true);
+        console.log('✅ Auth initialization complete');
       }
-    } catch (e) {
-      console.warn("⚠️ Gagal memuat data auth dari localStorage", e);
-      localStorage.removeItem(CURRENT_USER_KEY);
-      localStorage.removeItem(SESSION_TOKEN_KEY);
-    } finally {
-      setLoading(false);
-    }
+    };
+
+    initAuth();
   }, []);
 
-  // 🔄 Simpan currentUser ke localStorage
+  // 🔄 Simpan currentUser ke localStorage AMAN - HANYA saat sudah initialized
   useEffect(() => {
-    if (currentUser) {
-      localStorage.setItem(
-        CURRENT_USER_KEY,
-        JSON.stringify({
-          id: currentUser.id,
-          username: currentUser.username,
-          fullName: currentUser.fullName,
-          nik: currentUser.nik,
-          department: currentUser.department,
-          role: currentUser.role,
-        })
-      );
-      console.log('💾 Session saved for:', currentUser.username);
-    } else {
-      localStorage.removeItem(CURRENT_USER_KEY);
-      localStorage.removeItem(SESSION_TOKEN_KEY);
+    // Jangan touch localStorage sampling initialization sedang berjalan
+    if (!isInitialized) {
+      console.log('⏸️  Auth not initialized yet, skipping save...');
+      return;
     }
-  }, [currentUser]);
+
+    try {
+      if (currentUser) {
+        // Validate user object sebelum save
+        if (!currentUser.username || !currentUser.fullName) {
+          console.warn('⚠️ Invalid user object, skipping save:', currentUser);
+          return;
+        }
+        
+        localStorage.setItem(
+          CURRENT_USER_KEY,
+          JSON.stringify({
+            id: currentUser.id,
+            username: currentUser.username,
+            fullName: currentUser.fullName,
+            nik: currentUser.nik,
+            department: currentUser.department,
+            role: currentUser.role,
+          })
+        );
+        console.log('💾 User data saved:', currentUser.username);
+        // Reset logout flag ketika user valid
+        setHasExplicitLogout(false);
+      } else {
+        // HANYA hapus session token jika ini explicit logout
+        if (hasExplicitLogout) {
+          console.log('🔄 Explicit logout detected, clearing all auth data');
+          localStorage.removeItem(CURRENT_USER_KEY);
+          localStorage.removeItem(SESSION_TOKEN_KEY);
+        } else {
+          // User null tapi bukan logout - jangan hapus session token
+          console.log('⚠️ User data null, but keeping session token intact');
+          localStorage.removeItem(CURRENT_USER_KEY);
+        }
+      }
+    } catch (error) {
+      console.error('❌ Error saving to localStorage:', error);
+      // Jangan hapus jika ada error saat save, biarkan data lama tetap ada
+    }
+  }, [currentUser, isInitialized]);
 
   // ✅ SIGNUP - Kirim ke PostgreSQL API
   const signup = useCallback(
@@ -263,10 +325,34 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   );
 
   const logout = useCallback(() => {
+    console.log('👋 Logging out user...');
+    setHasExplicitLogout(true);
     setCurrentUser(null);
-    console.log('👋 Logout successful');
     router.push("/login-page");
   }, [router]);
+
+  // ✅ Tampilkan loading screen saat initialization
+  if (!isInitialized) {
+    return (
+      <div style={{ 
+        display: "flex", 
+        justifyContent: "center", 
+        alignItems: "center", 
+        minHeight: "100vh",
+        background: "#f5f5f5"
+      }}>
+        <div style={{ textAlign: "center" }}>
+          <div style={{ fontSize: "48px", marginBottom: "16px" }}>🔐</div>
+          <p style={{ fontSize: "16px", color: "#666", margin: "0" }}>
+            Initializing authentication...
+          </p>
+          <p style={{ fontSize: "14px", color: "#999", marginTop: "8px" }}>
+            Please wait a moment
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <AuthContext.Provider
@@ -274,6 +360,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         user: currentUser,
         currentUser,
         loading,
+        isInitialized,
         signup,
         login,
         logout,

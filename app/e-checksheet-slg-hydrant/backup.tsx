@@ -1,31 +1,38 @@
 // app/e-checksheet-slg-hydrant/EChecksheetSelangHydrantForm.tsx
 "use client";
 import { useState, useEffect, useRef } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
 import { Sidebar } from "@/components/Sidebar";
 import React from "react";
+// ✅ Import API helper yang reusable
 import {
   getItemsByType,
   getChecklistByDate,
   saveChecklist,
   getAvailableDates,
-  getAreasByType,
   ChecklistItem,
   ChecklistData
 } from "@/lib/api/checksheet";
 
-export function EChecksheetSelangHydrantForm() {
+export function EChecksheetSelangHydrantForm({
+  lokasi,
+  zona,
+  jenisHydrant,
+  picDefault,
+}: {
+  lokasi: string;
+  zona: string;
+  jenisHydrant: string;
+  picDefault: string;
+}) {
   const router = useRouter();
-  const searchParams = useSearchParams();
-  const { user, loading: authLoading, isInitialized } = useAuth();
+  const { user, loading } = useAuth();
   
-  const lokasi = searchParams.get('lokasi') || '';
-  const zona = searchParams.get('zona') || '';
-  const jenisHydrant = searchParams.get('jenisHydrant') || '';
-  const picDefault = searchParams.get('pic') || '';
+  // ✅ Hardcode type slug untuk page ini
   const TYPE_SLUG = 'selang-hydrant';
   
+  // ✅ SEMUA HOOKS DI ATAS — TANPA KONDISI
   const [isMounted, setIsMounted] = useState(false);
   const [selectedDate, setSelectedDate] = useState("");
   const [answers, setAnswers] = useState<Record<string, string>>({});
@@ -39,106 +46,91 @@ export function EChecksheetSelangHydrantForm() {
   const [availableDates, setAvailableDates] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [areaId, setAreaId] = useState<number | null>(null);
-  const videoRef = useRef(null);
-  const canvasRef = useRef(null);
+  
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+
+  // ✅ Load inspection items dari API berdasarkan type
+  useEffect(() => {
+    const loadItems = async () => {
+      try {
+        const items = await getItemsByType(TYPE_SLUG);
+        setInspectionItems(items);
+      } catch (error) {
+        console.error("Failed to load checklist items:", error);
+      }
+    };
+    loadItems();
+  }, []);
+
+  // ✅ Load areaId dan available dates
+  useEffect(() => {
+    if (!lokasi || !isMounted) return;
+    
+    const loadAreaData = async () => {
+      try {
+        // Construct area name sesuai format database: "LOKASI • ZONA • JENIS • PIC"
+        const areaName = `${lokasi} • ${zona} • ${jenisHydrant} • ${picDefault}`;
+        
+        const areasRes = await fetch(`/api/ga/checksheet/${TYPE_SLUG}/areas`);
+        const areasData = await areasRes.json();
+        
+        if (!areasData.success) {
+          throw new Error(areasData.message || 'Gagal mengambil data area');
+        }
+        
+        const area = areasData.data.find((a: any) => a.name === areaName);
+        if (area) {
+          setAreaId(area.id);
+          const dates = await getAvailableDates(TYPE_SLUG, area.id);
+          setAvailableDates(dates);
+        } else {
+          console.warn(`Area not found: ${areaName}`);
+          // Coba cari berdasarkan lokasi saja jika format tidak sesuai
+          const fallbackArea = areasData.data.find((a: any) => 
+            a.name.startsWith(lokasi)
+          );
+          if (fallbackArea) {
+            setAreaId(fallbackArea.id);
+            const dates = await getAvailableDates(TYPE_SLUG, fallbackArea.id);
+            setAvailableDates(dates);
+          }
+        }
+      } catch (error) {
+        console.error("Failed to load area data:", error);
+      }
+    };
+    
+    loadAreaData();
+  }, [lokasi, zona, jenisHydrant, picDefault, isMounted]);
 
   useEffect(() => {
     setIsMounted(true);
   }, []);
 
-  // ✅ FIXED: Auth check dengan guard clause yang lebih ketat
   useEffect(() => {
-    // Jangan jalankan sampai mount dan init selesai
-    if (!isMounted || !isInitialized) return;
-    
-    // Jangan jalankan saat auth masih loading
-    if (authLoading) return;
-
-    // Cek apakah user ada dan memiliki role yang sesuai
-    if (!user) {
-      console.log('⏳ Waiting for user data...');
-      return;
+    if (!isMounted || loading) return;
+    if (!user || (user.role !== "inspector-ga")) {
+      router.push("/login-page");
     }
+  }, [user, loading, router, isMounted]);
 
-    if (user.role !== "inspector-ga") {
-      console.warn('⚠️ Unauthorized - wrong role:', user.role);
-      router.replace("/login-page");
-      return;
-    }
-
-    console.log('✅ Access granted:', user.fullName, 'Role:', user.role);
-  }, [user, authLoading, isInitialized, router, isMounted]);
-
-  // ✅ Load inspection items
-  useEffect(() => {
-    if (!user) return;
-    
-    const loadItems = async () => {
-      try {
-        const items = await getItemsByType(TYPE_SLUG);
-        console.log('✅ Loaded inspection items:', items.length);
-        setInspectionItems(items);
-      } catch (error) {
-        console.error("❌ Failed to load checklist items:", error);
-        alert("Gagal memuat daftar item checklist.");
-      }
-    };
-    loadItems();
-  }, [user]);
-
-  // ✅ Load areaId dan available dates
-  useEffect(() => {
-    if (!lokasi || !user) return;
-    
-    const loadAreaData = async () => {
-      try {
-        const areaName = `${lokasi} \u0007 ${zona} \u0007 ${jenisHydrant} \u0007 ${picDefault}`;
-        
-        const areas = await getAreasByType(TYPE_SLUG);
-        const area = areas.find((a: any) => a.name === areaName);
-        
-        if (area) {
-          console.log('✅ Found area:', area.id);
-          setAreaId(area.id);
-          const dates = await getAvailableDates(TYPE_SLUG, area.id);
-          setAvailableDates(dates);
-        } else {
-          const fallbackArea = areas.find((a: any) => a.name.startsWith(lokasi));
-          if (fallbackArea) {
-            console.log('✅ Found fallback area:', fallbackArea.id);
-            setAreaId(fallbackArea.id);
-            const dates = await getAvailableDates(TYPE_SLUG, fallbackArea.id);
-            setAvailableDates(dates);
-          } else {
-            console.warn('⚠️ Area not found:', lokasi);
-            alert(`Area "${lokasi}" tidak ditemukan.`);
-          }
-        }
-      } catch (error) {
-        console.error("❌ Failed to load area data:", error);
-        alert("Gagal memuat data area.");
-      }
-    };
-
-    loadAreaData();
-  }, [lokasi, zona, jenisHydrant, picDefault, user]);
-
-  // ✅ Camera useEffect
+  // ✅ useEffect untuk kamera
   useEffect(() => {
     if (!showCameraModal) return;
-
+    
     const startCamera = async () => {
       try {
         const stream = await navigator.mediaDevices.getUserMedia({
-          video: { facingMode: "environment" }
+          video: true,
         });
 
         setCameraStream(stream);
         if (videoRef.current) {
-          (videoRef.current as any).srcObject = stream;
+          videoRef.current.srcObject = stream;
         }
       } catch (err) {
-        console.error("❌ Gagal membuka kamera:", err);
+        console.error("Gagal membuka kamera:", err);
         alert("Tidak bisa mengakses kamera. Pastikan izin kamera diaktifkan.");
         setShowCameraModal(false);
       }
@@ -153,12 +145,13 @@ export function EChecksheetSelangHydrantForm() {
     };
   }, [showCameraModal]);
 
-  // ✅ Load existing data
+  // ✅ Load existing data dari API
   const handleLoadExisting = async () => {
     if (!selectedDate) {
       alert("Pilih tanggal terlebih dahulu!");
       return;
     }
+
     if (!areaId) {
       alert("Area tidak valid!");
       return;
@@ -166,8 +159,6 @@ export function EChecksheetSelangHydrantForm() {
 
     try {
       setIsLoading(true);
-      console.log('📥 Loading existing data for date:', selectedDate);
-      
       const data = await getChecklistByDate(TYPE_SLUG, areaId, selectedDate);
       
       if (data) {
@@ -175,14 +166,14 @@ export function EChecksheetSelangHydrantForm() {
         const loadedImages: { key: string; url: string }[] = [];
 
         Object.entries(data).forEach(([itemKey, entry]) => {
-          existingData[`${itemKey}_hasil`] = entry.hasilPemeriksaan || "";
+          existingData[`${itemKey}_hasil`] = entry.hasilPemeriksaan;
           existingData[`${itemKey}_keterangan`] = entry.keteranganTemuan || "";
           existingData[`${itemKey}_tindakan`] = entry.tindakanPerbaikan || "";
           existingData[`${itemKey}_pic`] = entry.pic || "";
           existingData[`${itemKey}_dueDate`] = entry.dueDate || "";
           existingData[`${itemKey}_verify`] = entry.verify || "";
 
-          if (entry.images && Array.isArray(entry.images)) {
+          if (entry.images && entry.images.length > 0) {
             entry.images.forEach((url: string) => {
               loadedImages.push({ key: itemKey, url });
             });
@@ -191,17 +182,15 @@ export function EChecksheetSelangHydrantForm() {
 
         setAnswers(existingData);
         setImages(loadedImages);
-        console.log('✅ Data loaded successfully');
-        alert("✅ Data berhasil dimuat!");
+        alert("Data berhasil dimuat!");
       } else {
-        console.log('⚠️ No data found for this date');
-        alert("⚠️ Tidak ada data untuk tanggal ini.");
+        alert("Tidak ada data untuk tanggal ini.");
         setAnswers({});
         setImages([]);
       }
     } catch (error) {
-      console.error("❌ Error loading checklist data:", error);
-      alert("Gagal memuat data.");
+      console.error("Error loading checklist data:", error);
+      alert("Gagal memuat data. Silakan coba lagi.");
     } finally {
       setIsLoading(false);
     }
@@ -214,15 +203,18 @@ export function EChecksheetSelangHydrantForm() {
       router.push("/login-page");
       return;
     }
+
     if (!selectedDate) {
       alert("Pilih tanggal pemeriksaan terlebih dahulu!");
       return;
     }
+
     if (!areaId) {
       alert("Area tidak valid!");
       return;
     }
 
+    // Validasi semua item sudah diisi
     const allFieldsFilled = inspectionItems.every((item) => 
       answers[`${item.item_key}_hasil`]
     );
@@ -234,8 +226,8 @@ export function EChecksheetSelangHydrantForm() {
 
     try {
       setIsLoading(true);
-      console.log('💾 Saving checklist data...');
 
+      // Format data untuk API
       const checklistData: ChecklistData = {};
       
       inspectionItems.forEach((item) => {
@@ -255,6 +247,7 @@ export function EChecksheetSelangHydrantForm() {
         };
       });
 
+      // Save ke API
       await saveChecklist(
         TYPE_SLUG,
         areaId,
@@ -264,13 +257,13 @@ export function EChecksheetSelangHydrantForm() {
         user.fullName || "Unknown Inspector"
       );
 
-      console.log('✅ Data saved successfully');
-      alert(`✅ Data berhasil disimpan untuk tanggal ${new Date(selectedDate).toLocaleDateString("id-ID")}`);
+      alert(`Data berhasil disimpan untuk tanggal ${new Date(selectedDate).toLocaleDateString("id-ID")}`);
       
+      // Redirect ke status page
       router.push(`/status-ga/selang-hydrant?openArea=${encodeURIComponent(lokasi)}`);
     } catch (error) {
-      console.error("❌ Error saving checklist data:", error);
-      alert("Gagal menyimpan data.");
+      console.error("Error saving checklist data:", error);
+      alert("Gagal menyimpan data. Silakan coba lagi.");
     } finally {
       setIsLoading(false);
     }
@@ -283,7 +276,6 @@ export function EChecksheetSelangHydrantForm() {
   const handleImageUpload = (event: React.ChangeEvent<HTMLInputElement>, itemKey: string) => {
     const files = event.target.files;
     if (!files) return;
-    
     Array.from(files).forEach(file => {
       const reader = new FileReader();
       reader.onloadend = () => {
@@ -314,8 +306,8 @@ export function EChecksheetSelangHydrantForm() {
 
   const captureImage = () => {
     if (!videoRef.current || !canvasRef.current) return;
-    const video = videoRef.current as any;
-    const canvas = canvasRef.current as any;
+    const video = videoRef.current;
+    const canvas = canvasRef.current;
     const context = canvas.getContext('2d');
 
     if (!context) return;
@@ -327,84 +319,23 @@ export function EChecksheetSelangHydrantForm() {
     const imageUrl = canvas.toDataURL('image/jpeg', 0.8);
     setImages(prev => [...prev, { key: currentItemKey, url: imageUrl }]);
     setShowCameraModal(false);
-
     if (cameraStream) {
       cameraStream.getTracks().forEach(track => track.stop());
     }
   };
 
-  const getMaxDate = () => {
-    const today = new Date();
-    today.setHours(23, 59, 59, 999);
-    return today.toISOString().split('T')[0];
-  };
-
-  // ✅ Show loading during mount/init/auth
-  if (!isMounted || !isInitialized || authLoading) {
+  if (!isMounted) return null;
+  if (loading) {
     return (
-      <div style={{
-        display: "flex",
-        justifyContent: "center",
-        alignItems: "center",
-        minHeight: "100vh",
-        background: "#f5f5f5"
-      }}>
-        <div style={{ textAlign: "center" }}>
-          <div style={{ fontSize: "48px", marginBottom: "16px" }}>⏳</div>
-          <p style={{ fontSize: "16px", color: "#666", margin: "0" }}>
-            Loading...
-          </p>
-          <p style={{ fontSize: "14px", color: "#999", marginTop: "8px" }}>
-            Please wait
-          </p>
-        </div>
+      <div style={{ display: "flex", justifyContent: "center", alignItems: "center", minHeight: "100vh", background: "#f5f5f5" }}>
+        Loading...
       </div>
     );
   }
-
-  // ✅ Guard: Don't render form if user not authorized
-  if (!user) {
-    return (
-      <div style={{
-        display: "flex",
-        justifyContent: "center",
-        alignItems: "center",
-        minHeight: "100vh",
-        background: "#f5f5f5"
-      }}>
-        <div style={{ textAlign: "center" }}>
-          <div style={{ fontSize: "48px", marginBottom: "16px" }}>🔒</div>
-          <p style={{ fontSize: "16px", color: "#666", margin: "0" }}>
-            Redirecting to login...
-          </p>
-        </div>
-      </div>
-    );
+  if (!user || (user.role !== "inspector-ga")) {
+    return null;
   }
 
-  if (user.role !== "inspector-ga") {
-    return (
-      <div style={{
-        display: "flex",
-        justifyContent: "center",
-        alignItems: "center",
-        minHeight: "100vh",
-        background: "#f5f5f5"
-      }}>
-        <div style={{ textAlign: "center" }}>
-          <div style={{ fontSize: "48px", marginBottom: "16px" }}>❌</div>
-          <p style={{ fontSize: "16px", color: "#666", margin: "0" }}>
-            Access Denied
-          </p>
-          <p style={{ fontSize: "13px", color: "#999", marginTop: "8px" }}>
-            Wrong role for this page
-          </p>
-        </div>
-      </div>
-    );
-  }
-
-  // ✅ Render normal UI (user is guaranteed to be authorized at this point)
   return (
     <div style={{ minHeight: "100vh", background: "#f8f9fa" }}>
       <Sidebar userName={user.fullName} />
@@ -424,19 +355,10 @@ export function EChecksheetSelangHydrantForm() {
             padding: "20px 24px",
             boxShadow: "0 4px 12px rgba(13, 71, 161, 0.15)"
           }}>
-            <h1 style={{
-              margin: "0 0 8px 0",
-              color: "white",
-              fontSize: "clamp(20px, 5vw, 28px)",
-              fontWeight: "700"
-            }}>
+            <h1 style={{ margin: "0 0 8px 0", color: "white", fontSize: "clamp(20px, 5vw, 28px)", fontWeight: "700" }}>
               Check Sheet Selang & Hydrant
             </h1>
-            <p style={{
-              margin: 0,
-              color: "rgba(255,255,255,0.9)",
-              fontSize: "14px"
-            }}>
+            <p style={{ margin: 0, color: "rgba(255,255,255,0.9)", fontSize: "14px" }}>
               Inspeksi 2 Bulan Sekali – Fire Hydrant System
             </p>
           </div>
@@ -451,26 +373,12 @@ export function EChecksheetSelangHydrantForm() {
           boxShadow: "0 2px 6px rgba(0,0,0,0.05)",
           marginBottom: "20px"
         }}>
-          <div style={{ 
-            display: "grid", 
-            gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", 
-            gap: "12px" 
-          }}>
-            <div style={{ color: "black" }}>
-              <strong>Zona:</strong> {zona}
-            </div>
-            <div style={{ color: "black" }}>
-              <strong>Jenis Hydrant:</strong> {jenisHydrant}
-            </div>
-            <div style={{ color: "black" }}>
-              <strong>Lokasi:</strong> {lokasi}
-            </div>
-            <div style={{ color: "black" }}>
-              <strong>PIC Default:</strong> {picDefault}
-            </div>
-            <div style={{ color: "black" }}>
-              <strong>Inspector:</strong> {user.fullName}
-            </div>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: "12px" }}>
+            <div><strong>Zona:</strong> {zona}</div>
+            <div><strong>Jenis Hydrant:</strong> {jenisHydrant}</div>
+            <div><strong>Lokasi:</strong> {lokasi}</div>
+            <div><strong>PIC Default:</strong> {picDefault}</div>
+            <div><strong>Inspector:</strong> {user.fullName}</div>
           </div>
         </div>
 
@@ -484,35 +392,18 @@ export function EChecksheetSelangHydrantForm() {
           marginBottom: "20px"
         }}>
           <div style={{ marginBottom: "12px" }}>
-            <strong style={{ 
-              color: "#0d47a1",
-              fontSize: "15px"
-            }}>
-              📅 Jadwal Inspeksi: Setiap 2 Bulan (Jan, Mar, Mei, Jul, Sep, Nov)
-            </strong>
+            <strong style={{ color: "#0d47a1" }}>📅 Jadwal Inspeksi: Setiap 2 Bulan (Jan, Mar, Mei, Jul, Sep, Nov)</strong>
           </div>
 
-          <div style={{ 
-            display: "flex", 
-            alignItems: "center", 
-            gap: "12px", 
-            flexWrap: "wrap", 
-            marginBottom: "12px" 
-          }}>
-            <label style={{ 
-              fontWeight: "700", 
-              color: "#0d47a1",
-              fontSize: "14px"
-            }}>
-              Tanggal Inspeksi:
-            </label>
+          <div style={{ display: "flex", alignItems: "center", gap: "12px", flexWrap: "wrap", marginBottom: "12px" }}>
+            <label style={{ fontWeight: "700", color: "#0d47a1" }}>Tanggal Inspeksi:</label>
             <input
               type="date"
               value={selectedDate}
               onChange={(e) => setSelectedDate(e.target.value)}
-              max={getMaxDate()}
+              max={new Date().toISOString().split('T')[0]}
               style={{
-                color: "#0d47a1",
+                color: "black",
                 padding: "8px 12px",
                 border: "2px solid #1e88e5",
                 borderRadius: "6px",
@@ -523,19 +414,8 @@ export function EChecksheetSelangHydrantForm() {
           </div>
 
           {availableDates.length > 0 && (
-            <div style={{ 
-              display: "flex", 
-              alignItems: "center", 
-              gap: "12px", 
-              flexWrap: "wrap" 
-            }}>
-              <label style={{ 
-                fontWeight: "700", 
-                color: "#0d47a1",
-                fontSize: "14px"
-              }}>
-                Riwayat Isian:
-              </label>
+            <div style={{ display: "flex", alignItems: "center", gap: "12px", flexWrap: "wrap" }}>
+              <label style={{ fontWeight: "700", color: "#0d47a1" }}>Riwayat Isian:</label>
               <select
                 value=""
                 onChange={(e) => {
@@ -545,7 +425,7 @@ export function EChecksheetSelangHydrantForm() {
                   }
                 }}
                 style={{
-                  color: "#0d47a1",
+                  color: "black",
                   padding: "8px 12px",
                   border: "2px solid #1e88e5",
                   borderRadius: "6px",
@@ -556,11 +436,7 @@ export function EChecksheetSelangHydrantForm() {
                 <option value="">— Pilih tanggal lama —</option>
                 {availableDates.map(date => (
                   <option key={date} value={date}>
-                    {new Date(date).toLocaleDateString("id-ID", {
-                      day: "2-digit",
-                      month: "short",
-                      year: "numeric"
-                    })}
+                    {new Date(date).toLocaleDateString("id-ID", { day: "2-digit", month: "short", year: "numeric" })}
                   </option>
                 ))}
               </select>
@@ -569,12 +445,11 @@ export function EChecksheetSelangHydrantForm() {
                 disabled={!selectedDate || isLoading}
                 style={{
                   padding: "8px 16px",
-                  background: (selectedDate && !isLoading) ? "#ff9800" : "#bdbdbd",
+                  background: selectedDate ? "#ff9800" : "#bdbdbd",
                   color: "white",
                   border: "none",
                   borderRadius: "6px",
-                  cursor: (selectedDate && !isLoading) ? "pointer" : "not-allowed",
-                  fontWeight: "600"
+                  cursor: selectedDate ? "pointer" : "not-allowed"
                 }}
               >
                 {isLoading ? "Memuat..." : "Muat Data"}
@@ -585,16 +460,8 @@ export function EChecksheetSelangHydrantForm() {
 
         {/* Checksheet Table */}
         {inspectionItems.length === 0 ? (
-          <div style={{ 
-            textAlign: "center", 
-            padding: "40px", 
-            background: "white",
-            borderRadius: "12px",
-            border: "2px dashed #ccc"
-          }}>
-            <p style={{ color: "#999", fontSize: "16px", margin: 0 }}>
-              ⏳ Loading checklist items...
-            </p>
+          <div style={{ textAlign: "center", padding: "40px", color: "#999" }}>
+            Loading checklist items...
           </div>
         ) : (
           <div style={{
@@ -651,16 +518,15 @@ export function EChecksheetSelangHydrantForm() {
                         <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
                           <button
                             onClick={() => openCamera(item.item_key)}
-                            disabled={!selectedDate}
                             style={{
                               padding: "4px 8px",
-                              background: selectedDate ? "#1e88e5" : "#bdbdbd",
+                              background: "#1e88e5",
                               color: "white",
                               borderRadius: "4px",
                               fontSize: "11px",
-                              cursor: selectedDate ? "pointer" : "not-allowed",
+                              cursor: "pointer",
                               textAlign: "center",
-                              border: "none"
+                              whiteSpace: "nowrap"
                             }}
                           >
                             📷 Kamera
@@ -669,12 +535,13 @@ export function EChecksheetSelangHydrantForm() {
                             htmlFor={`file-${item.item_key}`}
                             style={{
                               padding: "4px 8px",
-                              background: selectedDate ? "#4caf50" : "#bdbdbd",
+                              background: "#4caf50",
                               color: "white",
                               borderRadius: "4px",
                               fontSize: "11px",
-                              cursor: selectedDate ? "pointer" : "not-allowed",
-                              textAlign: "center"
+                              cursor: "pointer",
+                              textAlign: "center",
+                              whiteSpace: "nowrap"
                             }}
                           >
                             🖼️ File
@@ -684,13 +551,12 @@ export function EChecksheetSelangHydrantForm() {
                             type="file"
                             accept="image/*"
                             multiple
-                            disabled={!selectedDate}
-                            onChange={(e) => handleImageUpload(e, item.item_key)}
+                            onChange={(e) => handleImageUpload(e as any, item.item_key)}
                             style={{ display: "none" }}
                           />
                           <div style={{ display: "flex", flexWrap: "wrap", gap: "4px", marginTop: "4px" }}>
                             {images.filter(img => img.key === item.item_key).map((img, idx) => (
-                              <div key={idx} style={{ position: "relative", width: "60px", height: "60px", borderRadius: "4px", overflow: "hidden" }}>
+                              <div key={idx} style={{ position: "relative", width: "60px", height: "60px", borderRadius: "4px", overflow: "hidden", cursor: "pointer" }}>
                                 <img
                                   src={img.url}
                                   alt={`Dokumentasi ${item.item_key} ${idx + 1}`}
@@ -699,7 +565,7 @@ export function EChecksheetSelangHydrantForm() {
                                     width: "100%",
                                     height: "100%",
                                     objectFit: "cover",
-                                    cursor: "pointer"
+                                    borderRadius: "4px"
                                   }}
                                 />
                                 <button
@@ -711,17 +577,15 @@ export function EChecksheetSelangHydrantForm() {
                                     position: "absolute",
                                     top: "2px",
                                     right: "2px",
-                                    background: "rgba(0,0,0,0.6)",
+                                    background: "rgba(0,0,0,0.5)",
                                     color: "white",
                                     border: "none",
                                     borderRadius: "50%",
-                                    width: "18px",
-                                    height: "18px",
-                                    fontSize: "12px",
+                                    width: "16px",
+                                    height: "16px",
+                                    fontSize: "10px",
                                     cursor: "pointer",
-                                    display: "flex",
-                                    alignItems: "center",
-                                    justifyContent: "center"
+                                    padding: "0"
                                   }}
                                 >
                                   ×
@@ -779,12 +643,7 @@ export function EChecksheetSelangHydrantForm() {
         )}
 
         {/* Action Buttons */}
-        <div style={{ 
-          display: "flex", 
-          gap: "12px", 
-          justifyContent: "center", 
-          padding: "20px 0" 
-        }}>
+        <div style={{ display: "flex", gap: "12px", justifyContent: "center", padding: "20px 0" }}>
           <button
             onClick={() => router.push("/status-ga/selang-hydrant")}
             style={{
@@ -793,169 +652,286 @@ export function EChecksheetSelangHydrantForm() {
               color: "white",
               border: "none",
               borderRadius: "8px",
-              fontWeight: "600",
-              cursor: "pointer"
+              fontWeight: "600"
             }}
           >
             ← Kembali
           </button>
           <button
             onClick={handleSave}
-            disabled={!selectedDate || isLoading || !areaId}
+            disabled={!selectedDate || isLoading}
             style={{
               padding: "12px 28px",
-              background: (selectedDate && !isLoading && areaId) 
-                ? "linear-gradient(135deg, #1e88e5, #0d47a1)" 
-                : "#bdbdbd",
+              background: selectedDate ? "linear-gradient(135deg, #1e88e5, #0d47a1)" : "#bdbdbd",
               color: "white",
               border: "none",
               borderRadius: "8px",
               fontWeight: "600",
-              cursor: (selectedDate && !isLoading && areaId) ? "pointer" : "not-allowed",
-              opacity: (selectedDate && !isLoading && areaId) ? 1 : 0.6
+              opacity: selectedDate ? 1 : 0.6
             }}
           >
-            {isLoading ? "⏳ Menyimpan..." : "✓ Simpan Data"}
+            {isLoading ? "Menyimpan..." : "✓ Simpan Data"}
           </button>
         </div>
 
-        {/* Modal Gambar */}
-        {showImageModal && (
-          <div
-            onClick={closeImageModal}
-            style={{
-              position: "fixed",
-              top: 0,
-              left: 0,
-              right: 0,
-              bottom: 0,
-              background: "rgba(0,0,0,0.8)",
-              display: "flex",
-              justifyContent: "center",
-              alignItems: "center",
-              zIndex: 2000,
-              padding: "20px"
-            }}
-          >
-            <div onClick={(e) => e.stopPropagation()} style={{ textAlign: "center" }}>
-              <img
-                src={currentImage}
-                alt="Dokumentasi"
-                style={{
-                  maxHeight: "90vh",
-                  maxWidth: "90vw",
-                  objectFit: "contain",
-                  borderRadius: "8px",
-                  border: "3px solid white",
-                }}
-              />
-              <div style={{ 
-                marginTop: "16px", 
-                color: "white", 
-                fontSize: "14px" 
-              }}>
-                Click outside to close
-              </div>
-            </div>
-          </div>
-        )}
+        {/* Keterangan Cara Pengecekan */}
+        <div style={{
+          background: "#f9fbfd",
+          border: "1px solid #cfd8dc",
+          borderRadius: "12px",
+          padding: "20px",
+          marginTop: "24px",
+          fontSize: "13px",
+          lineHeight: "1.6",
+          color: "#37474f",
+          boxShadow: "0 2px 6px rgba(0,0,0,0.05)",
+          overflowX: "auto"
+        }}>
+          <h3 style={{
+            margin: "0 0 16px 0",
+            color: "#0d47a1",
+            fontSize: "16px",
+            fontWeight: "700",
+            letterSpacing: "0.3px",
+            display: "flex",
+            alignItems: "center",
+            gap: "8px"
+          }}>
+            📋 KETERANGAN CARA PENGECEKAN
+          </h3>
 
-        {/* Modal Kamera */}
-        {showCameraModal && (
+          <div style={{ overflowX: "auto" }}>
+            <table style={{
+              width: "100%",
+              borderCollapse: "collapse",
+              fontSize: "12px",
+              border: "1px solid #b3e5fc",
+              borderRadius: "8px",
+              backgroundColor: "white",
+              boxShadow: "0 1px 4px rgba(0,0,0,0.05)"
+            }}>
+              <thead>
+                <tr style={{
+                  backgroundColor: "#e3f2fd",
+                  borderBottom: "2px solid #1e88e5",
+                  textAlign: "left"
+                }}>
+                  <th style={{
+                    padding: "10px 12px",
+                    fontWeight: "700",
+                    color: "#0d47a1",
+                    borderRight: "1px solid #bbdefb"
+                  }}>ITEM PENGECEKAN</th>
+                  <th style={{
+                    padding: "10px 12px",
+                    fontWeight: "700",
+                    color: "#0d47a1"
+                  }}>CARA PENGECEKAN</th>
+                </tr>
+              </thead>
+              <tbody>
+                {[
+                  {
+                    item: "Pressure Tank",
+                    ok: "Tekanan pump room sesuai dengan standar",
+                    ng: "Tekanan disetting lebih rendah dari standar / pompa tidak layak",
+                    cara: "Lihat kondisi selang saat pengecekan, pastikan selang tidak ada kebocoran"
+                  },
+                  {
+                    item: "Hasil Tekanan dg Pitot",
+                    ok: "Hasil tekanan sesuai standar yaitu titik terjauh min. 4.5 kg/cm²",
+                    ng: "Hasil tekanan di bawah standar (kurang dari 4.5 kg/cm²)",
+                    cara: "Gunakan pitot tube pada titik terjauh, catat tekanan dan bandingkan dengan standar"
+                  },
+                  {
+                    item: "Fire Hose / Selang (2)",
+                    ok: "Tidak bocor / tidak pecah",
+                    ng: "Bocor / pecah",
+                    cara: "Lihat kondisi selang saat pengecekan, pastikan selang tidak ada kebocoran atau retak"
+                  },
+                  {
+                    item: "Valve",
+                    ok: "Tidak seret / mudah dibuka",
+                    ng: "Seret / tidak bisa dibuka",
+                    cara: "Pastikan hydrant valve mudah dibuka dan ditutup tanpa hambatan"
+                  },
+                  {
+                    item: "Coupling Nozzle",
+                    ok: "Pir tidak rusak / bisa normal kembali saat ditekan",
+                    ng: "Pir rusak / tidak bisa kembali ke posisi awal saat ditekan",
+                    cara: "Pastikan pir nozzle elastis atau mudah ditekan dan kembali seperti semula, tidak berkarat"
+                  },
+                  {
+                    item: "Coupling Hydrant",
+                    ok: "Pir tidak rusak / bisa normal kembali saat ditekan",
+                    ng: "Pir rusak / tidak bisa kembali ke posisi awal saat ditekan",
+                    cara: "Pastikan pir coupling elastis, tidak berkarat, dan dapat dikunci dengan baik"
+                  },
+                  {
+                    item: "Seal",
+                    ok: "Tidak retak & patah, tidak ada kebocoran",
+                    ng: "Retak, patah dan ada kebocoran",
+                    cara: "Pastikan seal tidak ada kebocoran dan cek apakah ada seal yang retak atau patah"
+                  }
+                ].map((item, index) => (
+                  <tr key={index} style={{
+                    borderBottom: "1px solid #e0e0e0",
+                    backgroundColor: index % 2 === 0 ? "#ffffff" : "#fafafa"
+                  }}>
+                    <td style={{
+                      padding: "10px 12px",
+                      verticalAlign: "top",
+                      borderRight: "1px solid #e0e0e0",
+                      fontWeight: "600"
+                    }}>
+                      {item.item}
+                      <br />
+                      <span style={{ fontSize: "11px", color: "#1e88e5", display: "block", marginTop: "4px" }}>
+                        ✓ {item.ok}
+                      </span>
+                      <span style={{ fontSize: "11px", color: "#d32f2f", display: "block", marginTop: "4px" }}>
+                        ✘ {item.ng}
+                      </span>
+                    </td>
+                    <td style={{
+                      padding: "10px 12px",
+                      verticalAlign: "top"
+                    }}>
+                      {item.cara}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      {/* Modal Gambar */}
+      {showImageModal && (
+        <div
+          onClick={closeImageModal}
+          style={{
+            position: "fixed",
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            background: "rgba(0,0,0,0.8)",
+            display: "flex",
+            justifyContent: "center",
+            alignItems: "center",
+            zIndex: 2000,
+            padding: "20px"
+          }}
+        >
           <div
-            onClick={() => {
-              setShowCameraModal(false);
-              if (cameraStream) {
-                cameraStream.getTracks().forEach(track => track.stop());
-              }
-            }}
+            onClick={(e) => e.stopPropagation()}
             style={{
-              position: "fixed",
-              top: 0,
-              left: 0,
-              right: 0,
-              bottom: 0,
-              background: "rgba(0,0,0,0.8)",
-              display: "flex",
-              justifyContent: "center",
-              alignItems: "center",
-              zIndex: 2000,
+              textAlign: "center"
             }}
           >
-            <div
-              onClick={(e) => e.stopPropagation()}
+            <img
+              src={currentImage}
+              alt="Dokumentasi"
               style={{
-                background: "white",
-                borderRadius: "8px",
-                padding: "16px 20px",
-                textAlign: "center",
+                maxHeight: "90vh",
                 maxWidth: "90vw",
-                width: "100%",
+                objectFit: "contain",
+                borderRadius: "8px",
+                border: "3px solid white",
               }}
-            >
-              <h3 style={{ 
-                margin: "0 0 12px 0", 
-                color: "#212121" 
-              }}>
-                📸 Ambil Foto
-              </h3>
-              <video
-                ref={videoRef}
-                autoPlay
-                playsInline
+            />
+            <div style={{ marginTop: "16px", color: "white", fontSize: "14px" }}>Click outside to close</div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Kamera */}
+      {showCameraModal && (
+        <div
+          onClick={() => {
+            setShowCameraModal(false);
+            if (cameraStream) {
+              cameraStream.getTracks().forEach(track => track.stop());
+            }
+          }}
+          style={{
+            position: "fixed",
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            background: "rgba(0,0,0,0.8)",
+            display: "flex",
+            justifyContent: "center",
+            alignItems: "center",
+            zIndex: 2000,
+          }}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              background: "white",
+              borderRadius: "8px",
+              padding: "16px 20px",
+              textAlign: "center",
+              maxWidth: "90vw",
+              width: "100%",
+            }}
+          >
+            <h3 style={{ margin: "0 0 12px 0", color: "#212121" }}>Ambil Foto</h3>
+            <video
+              ref={videoRef as any}
+              autoPlay
+              playsInline
+              style={{
+                width: "100%",
+                maxHeight: "60vh",
+                borderRadius: "6px",
+                background: "#000",
+                transform: "scaleX(-1)"
+              }}
+            />
+            <canvas ref={canvasRef as any} style={{ display: "none" }} />
+            <div style={{ marginTop: "16px", display: "flex", gap: "12px", justifyContent: "center" }}>
+              <button
+                onClick={captureImage}
                 style={{
-                  width: "100%",
-                  maxHeight: "60vh",
+                  padding: "10px 20px",
+                  background: "#4caf50",
+                  color: "white",
+                  border: "none",
                   borderRadius: "6px",
-                  background: "#000",
-                  transform: "scaleX(-1)"
+                  fontWeight: "600",
+                  cursor: "pointer"
                 }}
-              />
-              <canvas ref={canvasRef} style={{ display: "none" }} />
-              <div style={{ 
-                marginTop: "16px", 
-                display: "flex", 
-                gap: "12px", 
-                justifyContent: "center" 
-              }}>
-                <button
-                  onClick={captureImage}
-                  style={{
-                    padding: "10px 20px",
-                    background: "#4caf50",
-                    color: "white",
-                    border: "none",
-                    borderRadius: "6px",
-                    fontWeight: "600",
-                    cursor: "pointer"
-                  }}
-                >
-                  📸 Ambil Foto
-                </button>
-                <button
-                  onClick={() => {
-                    setShowCameraModal(false);
-                    if (cameraStream) {
-                      cameraStream.getTracks().forEach(track => track.stop());
-                    }
-                  }}
-                  style={{
-                    padding: "10px 20px",
-                    background: "#757575",
-                    color: "white",
-                    border: "none",
-                    borderRadius: "6px",
-                    fontWeight: "600",
-                    cursor: "pointer"
-                  }}
-                >
-                  Batal
-                </button>
-              </div>
+              >
+                📸 Ambil Foto
+              </button>
+              <button
+                onClick={() => {
+                  setShowCameraModal(false);
+                  if (cameraStream) {
+                    cameraStream.getTracks().forEach(track => track.stop());
+                  }
+                }}
+                style={{
+                  padding: "10px 20px",
+                  background: "#757575",
+                  color: "white",
+                  border: "none",
+                  borderRadius: "6px",
+                  fontWeight: "600",
+                  cursor: "pointer"
+                }}
+              >
+                Batal
+              </button>
             </div>
           </div>
-        )}
-      </div>
+        </div>
+      )}
     </div>
   );
 }

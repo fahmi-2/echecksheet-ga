@@ -31,12 +31,12 @@ export async function getServerSession(authOptions?: any, request?: NextRequest)
         const [username, password] = decoded;
 
         // Verify user in database
-        const [users] = await pool.execute(
+        const result = await pool.query(
           'SELECT id, username, full_name, nik, department, role FROM users WHERE username = ? AND is_active = 1',
           [username]
         );
 
-        const userArray = users as any[];
+        const userArray = result.rows as any[];
         if (userArray.length > 0) {
           const user = userArray[0];
           return {

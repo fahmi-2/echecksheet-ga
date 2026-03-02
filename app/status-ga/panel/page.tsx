@@ -1,19 +1,9 @@
 // app/status-ga/panel/page.tsx
 'use client';
-
-import { Suspense, use } from 'react';
+import { Suspense } from 'react';
 import { GaPanelContent } from './GaPanelContent';
 
-export default function GAPanelPage({
-  searchParams,
-}: {
-  searchParams: Promise<{
-    openPanel?: string;
-  }>;
-}) {
-  const params = use(searchParams);
-  const openPanel = params?.openPanel || '';
-
+export default function GAPanelPage() {
   return (
     <Suspense fallback={
       <div style={{
@@ -27,7 +17,7 @@ export default function GAPanelPage({
         Loading Panel Inspection Dashboard...
       </div>
     }>
-      <GaPanelContent openPanel={openPanel} />
+      <GaPanelContent />
     </Suspense>
   );
 }

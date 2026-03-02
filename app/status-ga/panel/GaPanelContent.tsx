@@ -1,11 +1,11 @@
 // app/status-ga/panel/GaPanelContent.tsx
 "use client";
-
 import { useState, useEffect } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
 import { Sidebar } from "@/components/Sidebar";
 import { ArrowLeft } from "lucide-react";
+// ✅ Import API helper yang reusable
 import {
   getAreasByType,
   getAvailableDates,
@@ -21,27 +21,40 @@ interface Area {
   location: string;
 }
 
-export function GaPanelContent({ openPanel }: { openPanel: string }) {
+export function GaPanelContent() {
   const router = useRouter();
-  const { user, loading } = useAuth();
+  const searchParams = useSearchParams();
+  const { user, loading: authLoading, isInitialized } = useAuth();
   
+  // ✅ Gunakan useSearchParams untuk membaca parameter
+  const openPanelParam = searchParams.get('openPanel') || '';
   const TYPE_SLUG = 'panel';
-
+  
+  // ✅ CRITICAL FIX: State untuk tracking auth verification
   const [isMounted, setIsMounted] = useState(false);
+  const [authVerified, setAuthVerified] = useState(false);
   const [showModal, setShowModal] = useState(false);
   const [areas, setAreas] = useState<Area[]>([]);
   const [selectedArea, setSelectedArea] = useState<Area | null>(null);
   const [availableDates, setAvailableDates] = useState<string[]>([]);
-  const [selectedDate, setSelectedDate] = useState<string>("");
+  const [selectedDate, setSelectedDate] = useState("");
   const [checksheetData, setChecksheetData] = useState<any>(null);
   const [inspectionItems, setInspectionItems] = useState<ChecklistItem[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [areaStatuses, setAreaStatuses] = useState<Record<number, { statusLabel: string; statusColor: string; lastCheck: string }>>({});
+  const [isLoadingStatuses, setIsLoadingStatuses] = useState(false);
+  
+  // ✅ Modal gambar
+  const [showImageModal, setShowImageModal] = useState(false);
+  const [currentImageUrl, setCurrentImageUrl] = useState("");
+  const [showImagePreviewModal, setShowImagePreviewModal] = useState(false);
+  const [currentPreviewImage, setCurrentPreviewImage] = useState("");
 
+  // ✅ Load inspection items dari API
   useEffect(() => {
     const loadItems = async () => {
       try {
         const items = await getItemsByType(TYPE_SLUG);
-        console.log('Loaded inspection items:', items);
         setInspectionItems(items);
       } catch (error) {
         console.error("Failed to load checklist items:", error);
@@ -50,11 +63,11 @@ export function GaPanelContent({ openPanel }: { openPanel: string }) {
     loadItems();
   }, []);
 
+  // ✅ Load areas dari API berdasarkan type
   useEffect(() => {
     const loadAreas = async () => {
       try {
         const data = await getAreasByType(TYPE_SLUG);
-        console.log('Loaded areas:', data);
         setAreas(data);
       } catch (error) {
         console.error("Failed to load areas:", error);
@@ -63,111 +76,130 @@ export function GaPanelContent({ openPanel }: { openPanel: string }) {
     loadAreas();
   }, []);
 
+  // ✅ Load status untuk semua area
+  useEffect(() => {
+    if (areas.length === 0 || isLoadingStatuses || !authVerified) return;
+    
+    const loadAllStatuses = async () => {
+      setIsLoadingStatuses(true);
+      
+      const statusMap: Record<number, { statusLabel: string; statusColor: string; lastCheck: string }> = {};
+
+      for (const area of areas) {
+        try {
+          const dates = await getAvailableDates(TYPE_SLUG, area.id);
+          
+          if (dates.length > 0) {
+            const latest = dates[0];
+            statusMap[area.id] = {
+              statusLabel: "Checked",
+              statusColor: "#43a047",
+              lastCheck: new Date(latest).toLocaleDateString("id-ID", { 
+                day: "numeric", 
+                month: "short" 
+              })
+            };
+          } else {
+            statusMap[area.id] = {
+              statusLabel: "No Data",
+              statusColor: "#757575",
+              lastCheck: "-"
+            };
+          }
+        } catch (error) {
+          console.error(`Error loading status for area ${area.id}:`, error);
+          statusMap[area.id] = {
+            statusLabel: "Error",
+            statusColor: "#f44336",
+            lastCheck: "-"
+          };
+        }
+      }
+
+      setAreaStatuses(statusMap);
+      setIsLoadingStatuses(false);
+    };
+
+    loadAllStatuses();
+  }, [areas, authVerified]);
+
   useEffect(() => {
     setIsMounted(true);
   }, []);
 
+  // ✅ CRITICAL FIX: Authentication verification dengan state tracking dan delay
   useEffect(() => {
-    if (loading) return;
-    if (!user || (user.role !== "inspector-ga")) {
-      router.push("/login-page");
+    if (!isMounted || !isInitialized || authLoading) {
+      console.log('⏳ Auth still loading or component not mounted');
+      setAuthVerified(false);
+      return;
     }
-  }, [user, loading, router]);
 
+    if (user && user.role === "inspector-ga") {
+      console.log('✅ Auth verified successfully');
+      setAuthVerified(true);
+      return;
+    }
+
+    // Beri waktu 1.5 detik sebelum redirect
+    const verificationTimeout = setTimeout(() => {
+      if (!user || user.role !== "inspector-ga") {
+        console.error('❌ Auth verification failed after delay:', { user, authLoading });
+        router.push("/login-page");
+      } else {
+        setAuthVerified(true);
+      }
+    }, 1500);
+
+    return () => clearTimeout(verificationTimeout);
+  }, [user, authLoading, isInitialized, router, isMounted]);
+
+  // ✅ Auto-open modal jika ada openPanel param - HANYA SETELAH AUTH VERIFIED
   useEffect(() => {
-    if (!isMounted || loading) return;
-    if (!openPanel) return;
-    const found = areas.find((p) => {
-      const parts = p.name.split(' \u0007 ');
-      return parts[0] === openPanel;
+    if (!isMounted || !authVerified || !openPanelParam || areas.length === 0) return;
+    console.log('🔍 Searching for area to auto-open:', openPanelParam);
+    
+    const found = areas.find((item) => {
+      const parts = item.name.split(' \u0007 ');
+      return parts[0] === openPanelParam;
     });
+
     if (found) {
-      setTimeout(() => openDetail(found), 50);
+      console.log('✅ Found area, opening detail:', found.name);
+      setTimeout(() => openDetail(found), 300);
     }
-  }, [isMounted, loading, openPanel, areas]);
+  }, [isMounted, authVerified, openPanelParam, areas]);
 
-  const formatDate = (dateString: string): string => {
-    if (!dateString) return "-";
-    const d = new Date(dateString);
-    if (isNaN(d.getTime())) return "-";
-    return d.toLocaleDateString("id-ID");
-  };
-
-  const openDetail = async (panel: Area) => {
-    setSelectedArea(panel);
+  // ✅ Open detail dengan load data dari API - FIX UTAMA
+  const openDetail = async (area: Area) => {
+    setSelectedArea(area);
     setShowModal(true);
     setIsLoading(true);
-
     try {
-      console.log('Opening detail for panel:', panel);
-      const dates = await getAvailableDates(TYPE_SLUG, panel.id);
-      console.log('Available dates:', dates);
+      // Load available dates
+      const dates = await getAvailableDates(TYPE_SLUG, area.id);
       setAvailableDates(dates);
       
       if (dates.length > 0) {
-        const latestDate = dates.sort((a, b) => new Date(b).getTime() - new Date(a).getTime())[0];
+        const latestDate = dates[0];
         setSelectedDate(latestDate);
-        await loadDateData(panel.id, latestDate);
+
+        // Load checklist data untuk tanggal terbaru - TANPA TRANSFORMASI SALAH
+        const data = await getChecklistByDate(TYPE_SLUG, area.id, latestDate);
+        console.log('✅ Raw data from API:', data);
+        setChecksheetData(data); // LANGSUNG SET DATA DARI API
       } else {
         setChecksheetData(null);
+        setSelectedDate("");
       }
     } catch (error) {
       console.error("Error loading detail:", error);
       setChecksheetData(null);
       setAvailableDates([]);
+      setSelectedDate("");
+      alert("Gagal memuat data.");
     } finally {
       setIsLoading(false);
-    }
-  };
-
-  const loadDateData = async (areaId: number, date: string) => {
-    setIsLoading(true);
-    try {
-      console.log('Loading data for areaId:', areaId, 'date:', date);
-      const data = await getChecklistByDate(TYPE_SLUG, areaId, date);
-      console.log('Received data:', data);
-      
-      if (data && Object.keys(data).length > 0) {
-        const transformedData = {
-          _savedAt: date,
-          tempC: data.temp_c?.hasilPemeriksaan || "",
-          tempCableConnect: data.temp_cable_connect?.hasilPemeriksaan || "",
-          tempCable: data.temp_cable?.hasilPemeriksaan || "",
-          bau: data.bau?.hasilPemeriksaan || "",
-          suara: data.suara?.hasilPemeriksaan || "",
-          sistemGrounding: data.sistem_grounding?.hasilPemeriksaan || "",
-          kondisiKabelIsolasi: data.kondisi_kabel_isolasi?.hasilPemeriksaan || "",
-          indikatorPanel: data.indikator_panel?.hasilPemeriksaan || "",
-          elcb: data.elcb?.hasilPemeriksaan || "",
-          safetyWarning: data.safety_warning?.hasilPemeriksaan || "",
-          kondisiSambunganR: data.sambungan_r?.hasilPemeriksaan || "",
-          kondisiSambunganS: data.sambungan_s?.hasilPemeriksaan || "",
-          kondisiSambunganT: data.sambungan_t?.hasilPemeriksaan || "",
-          boxPanel: data.box_panel?.hasilPemeriksaan || "",
-          s5: data.s5?.hasilPemeriksaan || "",
-          keteranganNg1: data.lain_lain?.hasilPemeriksaan || "",
-          signature: data.signature?.hasilPemeriksaan || "",
-          inspector: data.temp_c?.inspector || data.bau?.inspector || ""
-        };
-        
-        console.log('Transformed data:', transformedData);
-        setChecksheetData([transformedData]);
-      } else {
-        console.log('No data found');
-        setChecksheetData(null);
-      }
-    } catch (error) {
-      console.error("Error loading date data:", error);
-      setChecksheetData(null);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const handleDateChange = async (newDate: string) => {
-    setSelectedDate(newDate);
-    if (selectedArea && newDate) {
-      await loadDateData(selectedArea.id, newDate);
     }
   };
 
@@ -179,68 +211,218 @@ export function GaPanelContent({ openPanel }: { openPanel: string }) {
     setShowModal(false);
   };
 
-  const renderStatusBadge = (value: string) => {
-    if (!value || value === "-" || value === "") {
-      return <span className="status-badge status-empty">-</span>;
+  // ✅ Load data ketika tanggal berubah - FIX UTAMA
+  const handleDateChange = async (newDate: string) => {
+    setSelectedDate(newDate);
+    if (selectedArea && newDate) {
+      setIsLoading(true);
+      try {
+        // Load data langsung dari API tanpa transformasi
+        const data = await getChecklistByDate(TYPE_SLUG, selectedArea.id, newDate);
+        console.log('✅ Data for selected date:', data);
+        setChecksheetData(data);
+      } catch (error) {
+        console.error("Error loading checklist:", error);
+        setChecksheetData(null);
+      } finally {
+        setIsLoading(false);
+      }
     }
-    if (value === "O") {
-      return <span className="status-badge status-ok">O</span>;
-    }
-    if (value === "X") {
-      return <span className="status-badge status-ng">X</span>;
-    }
-    return <span className="status-badge status-text">{value}</span>;
   };
 
-  if (!isMounted) return null;
-  if (loading) {
+  // ✅ Fungsi buka modal gambar
+  const openImageModal = (url: string) => {
+    setCurrentImageUrl(url);
+    setShowImageModal(true);
+  };
+
+  const closeImageModal = () => {
+    setShowImageModal(false);
+    setCurrentImageUrl("");
+  };
+
+  // ✅ Fungsi untuk membuka modal preview gambar
+  const openImagePreviewModal = (imageUrl: string) => {
+    setCurrentPreviewImage(imageUrl);
+    setShowImagePreviewModal(true);
+  };
+
+  const closeImagePreviewModal = () => {
+    setShowImagePreviewModal(false);
+    setCurrentPreviewImage("");
+  };
+
+  // ✅ CRITICAL FIX: Tampilkan loading screen selama auth belum verified
+  if (!isMounted || !isInitialized || !authVerified) {
     return (
-      <div style={{ display: "flex", justifyContent: "center", alignItems: "center", minHeight: "100vh", background: "#f5f5f5" }}>
-        <p>Loading...</p>
+      <div style={{
+        display: "flex",
+        justifyContent: "center",
+        alignItems: "center",
+        minHeight: "100vh",
+        background: "#f5f5f5"
+      }}>
+        <div style={{ textAlign: "center" }}>
+          <div style={{ fontSize: "48px", marginBottom: "16px" }}>⏳</div>
+          <p style={{ fontSize: "16px", color: "#666" }}>
+            {authLoading ? "Loading authentication..." : "Verifying session..."}
+          </p>
+          <p style={{ fontSize: "14px", color: "#999", marginTop: "8px" }}>
+            Please wait a moment
+          </p>
+        </div>
       </div>
     );
   }
-  if (!user || (user.role !== "inspector-ga")) return null;
 
+  // ✅ Hanya render UI jika auth sudah verified
   return (
-    <>
-      <div className="app-page">
-        <Sidebar userName={user?.fullName} />
-        <div className="page-content">
-          <div style={{marginBottom: "28px"}} className="header">
-            <button onClick={() => router.push("/status-ga")} className="btn-back">
-              <ArrowLeft size={18} /> Kembali
-            </button>
-            <div className="text-header">
-              <h1>GA Panel Inspection</h1>
-              <p>Manajemen Data Inspeksi Kelayakan Panel Listrik</p>
-            </div>
+    <div style={{ minHeight: "100vh", background: "#f8f9fa" }}>
+      <Sidebar userName={user?.fullName} />
+      <div style={{
+        paddingLeft: "96px",
+        paddingRight: "20px",
+        paddingTop: "24px",
+        paddingBottom: "24px",
+        maxWidth: "1400px",
+        margin: "0 auto"
+      }}>
+        {/* Header */}
+        <div style={{ marginBottom: "28px" }} className="header">
+          <button
+            onClick={() => router.push("/status-ga")}
+            className="btn-back"
+            aria-label="Kembali ke halaman utama"
+          >
+            <ArrowLeft size={18} />
+            Kembali
+          </button>
+          
+          <div style={{
+            background: "#1976d2",
+            borderRadius: "8px",
+            padding: "20px 24px",
+            boxShadow: "0 2px 8px rgba(0,0,0,0.1)"
+          }}>
+            <h1 style={{ 
+              margin: "0 0 6px 0", 
+              color: "white", 
+              fontSize: "26px", 
+              fontWeight: "600", 
+              letterSpacing: "-0.5px" 
+            }}>
+              📋 GA Panel Inspection Dashboard
+            </h1>
+            <p style={{ 
+              margin: 0, 
+              color: "#e3f2fd", 
+              fontSize: "14px", 
+              fontWeight: "400" 
+            }}>
+              Manajemen Data Inspeksi Kelayakan Panel Listrik
+            </p>
           </div>
+        </div>
 
-          <div className="table-container">
-            <table className="status-table">
+        {/* Loading Status Indicator */}
+        {isLoadingStatuses && (
+          <div style={{ 
+            padding: "12px 20px", 
+            background: "#fff3cd", 
+            borderRadius: "6px",
+            marginBottom: "16px",
+            color: "#856404",
+            fontSize: "13px",
+            textAlign: "center"
+          }}>
+            ⏳ Loading status data...
+          </div>
+        )}
+
+        {/* Table */}
+        <div style={{
+          background: "white",
+          borderRadius: "8px",
+          boxShadow: "0 1px 4px rgba(0,0,0,0.08)",
+          overflow: "hidden",
+          border: "1px solid #e0e0e0"
+        }}>
+          <div style={{ overflowX: "auto" }}>
+            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "14px", minWidth: "700px" }}>
               <thead>
-                <tr>
-                  <th className="col-no">No</th>
-                  <th className="col-nama-panel">Nama Panel</th>
-                  <th className="col-area">Area</th>
-                  <th className="col-action">Aksi</th>
+                <tr style={{ borderBottom: "2px solid #e0e0e0" }}>
+                  <th style={{ padding: "14px 16px", textAlign: "center", background: "#fafafa", fontWeight: "600", color: "#424242", fontSize: "13px" }}>No</th>
+                  <th style={{ padding: "14px 16px", textAlign: "left", background: "#fafafa", fontWeight: "600", color: "#424242", fontSize: "13px" }}>Nama Panel</th>
+                  <th style={{ padding: "14px 16px", textAlign: "left", background: "#fafafa", fontWeight: "600", color: "#424242", fontSize: "13px" }}>Area</th>
+                  <th style={{ padding: "14px 16px", textAlign: "center", background: "#fafafa", fontWeight: "600", color: "#424242", fontSize: "13px" }}>Status</th>
+                  <th style={{ padding: "14px 16px", textAlign: "center", background: "#fafafa", fontWeight: "600", color: "#424242", fontSize: "13px" }}>Actions</th>
                 </tr>
               </thead>
               <tbody>
-                {areas.map((panel) => {
-                  const parts = panel.name.split(' \u0007 ');
+                {areas.map((area, idx) => {
+                  const parts = area.name.split(' \u0007 ');
                   const panelName = parts[0] || '';
                   const areaName = parts[1] || '';
+                  
+                  const status = areaStatuses[area.id] || {
+                    statusLabel: "Loading...",
+                    statusColor: "#757575",
+                    lastCheck: "-"
+                  };
+
                   return (
-                    <tr key={panel.id}>
-                      <td className="col-no">{panel.no}</td>
-                      <td className="col-nama-panel">{panelName}</td>
-                      <td className="col-area">{areaName}</td>
-                      <td className="col-action">
-                        <div className="action-cell">
-                          <button onClick={() => openDetail(panel)} className="btn-detail">DETAIL</button>
-                          <a href={`/e-checksheet-panel?panelName=${encodeURIComponent(panelName)}&area=${encodeURIComponent(areaName)}&date=${new Date().toISOString().split("T")[0]}`} className="btn-check">CHECK</a>
+                    <tr key={area.id} style={{ borderBottom: idx === areas.length - 1 ? "none" : "1px solid #f0f0f0" }}>
+                      <td style={{ padding: "14px 16px", textAlign: "center", fontWeight: "600", color: "#1976d2" }}>{area.no}</td>
+                      <td style={{ padding: "14px 16px", fontWeight: "500", color: "#424242" }}>{panelName}</td>
+                      <td style={{ padding: "14px 16px", color: "#666", fontSize: "13px" }}>{areaName}</td>
+                      <td style={{ padding: "14px 16px", textAlign: "center" }}>
+                        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "4px" }}>
+                          <span style={{
+                            padding: "4px 12px",
+                            background: status.statusColor,
+                            color: "white",
+                            borderRadius: "12px",
+                            fontSize: "11px",
+                            fontWeight: "600",
+                            display: "inline-block"
+                          }}>
+                            {status.statusLabel}
+                          </span>
+                          <span style={{ fontSize: "11px", color: "#9e9e9e" }}>{status.lastCheck}</span>
+                        </div>
+                      </td>
+                      <td style={{ padding: "14px 16px" }}>
+                        <div style={{ display: "flex", gap: "8px", justifyContent: "center" }}>
+                          <button
+                            onClick={() => openDetail(area)}
+                            style={{
+                              padding: "7px 14px",
+                              borderRadius: "5px",
+                              fontSize: "13px",
+                              fontWeight: "500",
+                              background: "#1976d2",
+                              color: "white",
+                              border: "none",
+                              cursor: "pointer"
+                            }}
+                          >
+                            View
+                          </button>
+                          <a
+                            href={`/e-checksheet-panel?panelName=${encodeURIComponent(panelName)}&area=${encodeURIComponent(areaName)}`}
+                            style={{
+                              padding: "7px 14px",
+                              borderRadius: "5px",
+                              fontSize: "13px",
+                              fontWeight: "500",
+                              background: "#43a047",
+                              color: "white",
+                              textDecoration: "none",
+                              display: "inline-block"
+                            }}
+                          >
+                            Inspect
+                          </a>
                         </div>
                       </td>
                     </tr>
@@ -249,71 +431,516 @@ export function GaPanelContent({ openPanel }: { openPanel: string }) {
               </tbody>
             </table>
           </div>
+        </div>
 
-          {isMounted && showModal && selectedArea && (
-            <div className="modal-overlay" onClick={closeDetail}>
-              <div className="modal-content" onClick={(e) => e.stopPropagation()}>
-                <div className="modal-header">
-                  <div className="modal-title-section">
-                    <h2>Detail Panel</h2>
-                    <p className="modal-subtitle">{selectedArea.name.split(' \u0007 ')[0]}</p>
-                  </div>
-                  <button onClick={closeDetail} className="btn-close">×</button>
+        {/* Modal Detail dengan kolom DOKUMENTASI - FIX UTAMA */}
+        {showModal && selectedArea && (
+          <div
+            onClick={closeDetail}
+            style={{
+              position: "fixed",
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              background: "rgba(0,0,0,0.5)",
+              display: "flex",
+              justifyContent: "center",
+              alignItems: "center",
+              zIndex: 1000,
+              padding: "20px"
+            }}
+          >
+            <div
+              onClick={(e) => e.stopPropagation()}
+              style={{
+                background: "white",
+                borderRadius: "8px",
+                width: "95%",
+                maxWidth: "1400px",
+                maxHeight: "90vh",
+                overflow: "hidden",
+                boxShadow: "0 8px 32px rgba(0,0,0,0.2)",
+                display: "flex",
+                flexDirection: "column"
+              }}
+            >
+              <div style={{
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                padding: "20px 24px",
+                background: "#f5f5f5",
+                borderBottom: "1px solid #e0e0e0"
+              }}>
+                <div>
+                  <h2 style={{ 
+                    margin: "0 0 4px 0", 
+                    color: "#212121", 
+                    fontSize: "20px", 
+                    fontWeight: "600" 
+                  }}>
+                    Inspection History - {selectedArea.name.split(' \u0007 ')[0]}
+                  </h2>
+                  <p style={{ 
+                    margin: "0", 
+                    color: "#616161", 
+                    fontSize: "14px" 
+                  }}>
+                    {selectedArea.name.split(' \u0007 ')[1]}
+                  </p>
                 </div>
-                <div style={{padding: "16px 24px", background: "white", borderBottom: "1px solid #e0e0e0"}}>
-                  <label style={{fontWeight: "500", color: "#424242", marginRight: "12px", fontSize: "14px"}}>Tanggal Pemeriksaan:</label>
-                  <select value={selectedDate} onChange={(e) => handleDateChange(e.target.value)} style={{color: "#212121", padding: "7px 12px", border: "1px solid #d0d0d0", borderRadius: "5px", fontSize: "14px", fontWeight: "500", minWidth: "160px", outline: "none"}}>
-                    <option value="">-- Pilih Tanggal --</option>
-                    {availableDates.map(date => (
-                      <option key={date} value={date}>{new Date(date).toLocaleDateString("id-ID", {day: "2-digit", month: "short", year: "numeric"})}</option>
-                    ))}
-                  </select>
-                </div>
-                <div className="modal-body">
-                  {isLoading ? (
-                    <div className="empty-state"><p>Memuat data...</p></div>
-                  ) : !checksheetData || checksheetData.length === 0 ? (
-                    <div className="empty-state"><p>Belum ada data pengecekan</p></div>
-                  ) : !selectedDate ? (
-                    <div className="empty-state"><p>Pilih tanggal untuk melihat detail pemeriksaan</p></div>
+                <button 
+                  onClick={closeDetail} 
+                  style={{ 
+                    background: "transparent", 
+                    border: "none", 
+                    fontSize: "28px", 
+                    cursor: "pointer", 
+                    color: "#757575",
+                    padding: "0",
+                    width: "32px",
+                    height: "32px",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center"
+                  }}
+                >
+                  ×
+                </button>
+              </div>
+
+              <div style={{ 
+                padding: "16px 24px", 
+                background: "white", 
+                borderBottom: "1px solid #e0e0e0" 
+              }}>
+                <label style={{ 
+                  fontWeight: "500", 
+                  color: "#424242", 
+                  marginRight: "12px", 
+                  fontSize: "14px" 
+                }}>
+                  Inspection Date:
+                </label>
+                <select
+                  value={selectedDate}
+                  onChange={(e) => handleDateChange(e.target.value)}
+                  disabled={availableDates.length === 0}
+                  style={{
+                    color: "#212121",
+                    padding: "7px 12px",
+                    border: "1px solid #d0d0d0",
+                    borderRadius: "5px",
+                    fontSize: "14px",
+                    fontWeight: "500",
+                    minWidth: "160px",
+                    outline: "none",
+                    cursor: availableDates.length > 0 ? "pointer" : "not-allowed"
+                  }}
+                >
+                  {availableDates.length === 0 ? (
+                    <option value="">No data available</option>
                   ) : (
-                    <div className="detail-table-container">
-                      {checksheetData.map((entry: any, idx: number) => (
-                        <div key={idx} className="table-section">
-                          <div className="table-section-header">
-                            <h3>Pemeriksaan</h3>
-                            <span className="table-section-date">{formatDate(entry._savedAt || "")}</span>
-                          </div>
-                          <table className="detail-table">
-                            <tbody>
-                              <tr><td className="label">Temp (°C)</td><td className="value">{renderStatusBadge(entry.tempC)}</td><td className="label">Temp Cable Connect</td><td className="value">{renderStatusBadge(entry.tempCableConnect)}</td></tr>
-                              <tr><td className="label">Temp Cable</td><td className="value">{renderStatusBadge(entry.tempCable)}</td><td className="label">Bau</td><td className="value">{renderStatusBadge(entry.bau)}</td></tr>
-                              <tr><td className="label">Suara</td><td className="value">{renderStatusBadge(entry.suara)}</td><td className="label">Grounding</td><td className="value">{renderStatusBadge(entry.sistemGrounding)}</td></tr>
-                              <tr><td className="label">Kabel & Isolasi</td><td className="value">{renderStatusBadge(entry.kondisiKabelIsolasi)}</td><td className="label">Indikator Panel</td><td className="value">{renderStatusBadge(entry.indikatorPanel)}</td></tr>
-                              <tr><td className="label">ELCB</td><td className="value">{renderStatusBadge(entry.elcb)}</td><td className="label">Safety Warning</td><td className="value">{renderStatusBadge(entry.safetyWarning)}</td></tr>
-                              <tr><td className="label">Sambungan R</td><td className="value">{renderStatusBadge(entry.kondisiSambunganR)}</td><td className="label">Sambungan S</td><td className="value">{renderStatusBadge(entry.kondisiSambunganS)}</td></tr>
-                              <tr><td className="label">Sambungan T</td><td className="value">{renderStatusBadge(entry.kondisiSambunganT)}</td><td className="label">Box Panel</td><td className="value">{renderStatusBadge(entry.boxPanel)}</td></tr>
-                              <tr><td className="label">5S</td><td className="value">{renderStatusBadge(entry.s5)}</td><td className="label">Keterangan</td><td className="value">{renderStatusBadge(entry.keteranganNg1)}</td></tr>
-                              {entry.signature && <tr><td className="label">Tanda Tangan/NIK</td><td className="value" colSpan={3}>{entry.signature}</td></tr>}
-                              {entry.inspector && <tr><td className="label">Inspector</td><td className="value" colSpan={3}>{entry.inspector}</td></tr>}
-                            </tbody>
-                          </table>
-                        </div>
+                    <>
+                      <option value="">-- Select Date --</option>
+                      {availableDates.map(date => (
+                        <option key={date} value={date}>
+                          {new Date(date).toLocaleDateString("id-ID", { 
+                            day: "2-digit", 
+                            month: "short", 
+                            year: "numeric" 
+                          })}
+                        </option>
                       ))}
-                    </div>
+                    </>
                   )}
-                </div>
-                <div className="modal-footer">
-                  <button onClick={closeDetail} className="btn-cancel">Tutup</button>
-                </div>
+                </select>
+              </div>
+
+              <div style={{ 
+                padding: "24px", 
+                overflowY: "auto", 
+                flex: 1, 
+                background: "#fafafa" 
+              }}>
+                {!selectedDate ? (
+                  <div style={{ 
+                    textAlign: "center", 
+                    padding: "60px 20px", 
+                    color: "#757575" 
+                  }}>
+                    <div style={{ 
+                      fontSize: "48px", 
+                      marginBottom: "12px", 
+                      opacity: 0.5 
+                    }}>
+                      📅
+                    </div>
+                    <p style={{ 
+                      fontSize: "15px", 
+                      fontWeight: "500", 
+                      margin: 0 
+                    }}>
+                      {availableDates.length === 0 
+                        ? "📭 No inspection data available for this panel" 
+                        : "👆 Please select an inspection date"}
+                    </p>
+                  </div>
+                ) : isLoading ? (
+                  <div style={{ textAlign: "center", padding: "40px", color: "#999" }}>
+                    ⏳ Loading data...
+                  </div>
+                ) : !checksheetData ? (
+                  <div style={{ textAlign: "center", padding: "40px", color: "#999" }}>
+                    ❌ No data found for this date
+                  </div>
+                ) : (
+                  <div style={{ overflowX: "auto" }}>
+                    <table style={{ 
+                      width: "100%", 
+                      borderCollapse: "collapse", 
+                      fontSize: "12px", 
+                      minWidth: "1200px", 
+                      border: "1px solid #e0e0e0", 
+                      background: "white" 
+                    }}>
+                      <thead>
+                        <tr style={{ background: "#f5f5f5" }}>
+                          <th style={{ padding: "10px", border: "1px solid #e0e0e0", fontWeight: "600", color: "#424242", textAlign: "center", width: "50px" }}>No</th>
+                          <th style={{ padding: "10px", border: "1px solid #e0e0e0", fontWeight: "600", color: "#424242", textAlign: "left", minWidth: "200px" }}>ITEM</th>
+                          <th style={{ padding: "10px", border: "1px solid #e0e0e0", fontWeight: "600", color: "#424242", textAlign: "center", width: "100px" }}>HASIL</th>
+                          <th style={{ padding: "10px", border: "1px solid #e0e0e0", fontWeight: "600", color: "#424242", textAlign: "center", minWidth: "180px" }}>KETERANGAN</th>
+                          <th style={{ padding: "10px", border: "1px solid #e0e0e0", fontWeight: "600", color: "#424242", textAlign: "center", minWidth: "200px" }}>DOKUMENTASI</th>
+                          <th style={{ padding: "10px", border: "1px solid #e0e0e0", fontWeight: "600", color: "#424242", textAlign: "center", minWidth: "180px" }}>TINDAKAN PERBAIKAN</th>
+                          <th style={{ padding: "10px", border: "1px solid #e0e0e0", fontWeight: "600", color: "#424242", textAlign: "center", width: "80px" }}>PIC</th>
+                          <th style={{ padding: "10px", border: "1px solid #e0e0e0", fontWeight: "600", color: "#424242", textAlign: "center", width: "100px" }}>DUE DATE</th>
+                          <th style={{ padding: "10px", border: "1px solid #e0e0e0", fontWeight: "600", color: "#424242", textAlign: "center", width: "80px" }}>VERIFY</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {inspectionItems.map((item, index) => {
+                          // ✅ AMBIL DATA LANGSUNG DARI API TANPA TRANSFORMASI
+                          const entry = checksheetData[item.item_key];
+                          const value = entry?.hasilPemeriksaan || "-";
+                          const images = entry?.images || [];
+                          
+                          // ✅ TENTUKAN WARNA BERDASARKAN NILAI "O" ATAU "X" (BUKAN "OK"/"NG")
+                          let bgColor = "#fff";
+                          let textColor = "#999";
+                          let displayValue = value;
+                          
+                          // Untuk item dropdown (bukan suhu/sambungan)
+                          const isDropdownItem = ![
+                            'temp_c', 
+                            'temp_cable_connect', 
+                            'temp_cable',
+                            'sambungan_r',
+                            'sambungan_s',
+                            'sambungan_t'
+                          ].includes(item.item_key);
+                          
+                          if (isDropdownItem) {
+                            if (value === "O") {
+                              bgColor = "#c8e6c9"; // Hijau muda
+                              textColor = "#2e7d32"; // Hijau tua
+                              displayValue = "✓ O";
+                            } else if (value === "X") {
+                              bgColor = "#ffcdd2"; // Merah muda
+                              textColor = "#c62828"; // Merah tua
+                              displayValue = "✗ X";
+                            } else {
+                              bgColor = "#f5f5f5"; // Abu-abu
+                              textColor = "#999";
+                              displayValue = "-";
+                            }
+                          } else {
+                            // Untuk item suhu/sambungan, tampilkan nilai asli
+                            displayValue = value === "-" ? "-" : `${value}°C`;
+                            bgColor = "#f9f9f9";
+                            textColor = "#333";
+                          }
+
+                          return (
+                            <tr key={item.id || index}>
+                              <td style={{ 
+                                padding: "8px", 
+                                border: "1px solid #e0e0e0", 
+                                textAlign: "center", 
+                                fontWeight: "600",
+                                background: "white"
+                              }}>{item.no}</td>
+                              <td style={{ 
+                                padding: "8px", 
+                                border: "1px solid #e0e0e0", 
+                                lineHeight: "1.4",
+                                background: "white"
+                              }}>{item.item_check}</td>
+                              <td style={{
+                                padding: "8px",
+                                border: "1px solid #e0e0e0",
+                                textAlign: "center",
+                                fontWeight: "700",
+                                background: bgColor,
+                                color: textColor,
+                                fontSize: "11px"
+                              }}>
+                                {displayValue}
+                              </td>
+                              <td style={{ 
+                                padding: "8px", 
+                                border: "1px solid #e0e0e0", 
+                                lineHeight: "1.4", 
+                                fontSize: "11px",
+                                background: "white"
+                              }}>
+                                {entry?.keteranganTemuan || "-"}
+                              </td>
+                              <td style={{ 
+                                padding: "8px", 
+                                border: "1px solid #e0e0e0", 
+                                verticalAlign: "top",
+                                background: "white"
+                              }}>
+                                {images.length > 0 ? (
+                                  <div style={{ 
+                                    display: "flex", 
+                                    flexWrap: "wrap", 
+                                    gap: "6px",
+                                    justifyContent: "center",
+                                    maxHeight: "100px",
+                                    overflowY: "auto"
+                                  }}>
+                                    {images.map((imgUrl: string, imgIdx: number) => (
+                                      <div 
+                                        key={imgIdx} 
+                                        style={{ 
+                                          position: "relative",
+                                          width: "60px", 
+                                          height: "60px", 
+                                          overflow: "hidden", 
+                                          borderRadius: "4px", 
+                                          border: "1px solid #ddd",
+                                          cursor: "pointer"
+                                        }}
+                                        onClick={() => openImagePreviewModal(imgUrl)}
+                                      >
+                                        <img
+                                          src={imgUrl}
+                                          alt={`Dok ${index + 1}-${imgIdx + 1}`}
+                                          style={{
+                                            width: "100%",
+                                            height: "100%",
+                                            objectFit: "cover"
+                                          }}
+                                        />
+                                        <div style={{
+                                          position: "absolute",
+                                          top: "2px",
+                                          right: "2px",
+                                          background: "rgba(0,0,0,0.6)",
+                                          color: "white",
+                                          borderRadius: "50%",
+                                          width: "18px",
+                                          height: "18px",
+                                          display: "flex",
+                                          alignItems: "center",
+                                          justifyContent: "center",
+                                          fontSize: "10px"
+                                        }}>
+                                          {imgIdx + 1}
+                                        </div>
+                                      </div>
+                                    ))}
+                                  </div>
+                                ) : (
+                                  <div style={{ 
+                                    textAlign: "center", 
+                                    color: "#9e9e9e", 
+                                    fontSize: "11px",
+                                    padding: "8px 0"
+                                  }}>
+                                    -
+                                  </div>
+                                )}
+                              </td>
+                              <td style={{ 
+                                padding: "8px", 
+                                border: "1px solid #e0e0e0", 
+                                lineHeight: "1.4", 
+                                fontSize: "11px",
+                                background: "white"
+                              }}>
+                                {entry?.tindakanPerbaikan || "-"}
+                              </td>
+                              <td style={{ 
+                                padding: "8px", 
+                                border: "1px solid #e0e0e0", 
+                                textAlign: "center", 
+                                fontSize: "11px",
+                                background: "white"
+                              }}>
+                                {entry?.pic || "-"}
+                              </td>
+                              <td style={{ 
+                                padding: "8px", 
+                                border: "1px solid #e0e0e0", 
+                                textAlign: "center", 
+                                fontSize: "11px",
+                                background: "white"
+                              }}>
+                                {entry?.dueDate ? new Date(entry.dueDate).toLocaleDateString("en-US", { day: "2-digit", month: "short" }) : "-"}
+                              </td>
+                              <td style={{ 
+                                padding: "8px", 
+                                border: "1px solid #e0e0e0", 
+                                textAlign: "center", 
+                                fontSize: "11px",
+                                background: "white"
+                              }}>
+                                {entry?.verify || "-"}
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+
+                    {/* ✅ Modal Preview Gambar Besar */}
+                    {showImagePreviewModal && (
+                      <div
+                        onClick={closeImagePreviewModal}
+                        style={{
+                          position: "fixed",
+                          top: 0,
+                          left: 0,
+                          right: 0,
+                          bottom: 0,
+                          background: "rgba(0,0,0,0.9)",
+                          display: "flex",
+                          justifyContent: "center",
+                          alignItems: "center",
+                          zIndex: 3000,
+                          padding: "20px"
+                        }}
+                      >
+                        <div onClick={(e) => e.stopPropagation()} style={{ textAlign: "center" }}>
+                          <img
+                            src={currentPreviewImage}
+                            alt="Preview Dokumentasi"
+                            style={{
+                              maxHeight: "90vh",
+                              maxWidth: "90vw",
+                              objectFit: "contain",
+                              borderRadius: "8px",
+                              border: "3px solid white",
+                              boxShadow: "0 4px 20px rgba(0,0,0,0.5)"
+                            }}
+                          />
+                          <div style={{ 
+                            marginTop: "16px", 
+                            color: "white", 
+                            fontSize: "14px",
+                            fontWeight: "500"
+                          }}>
+                            Click outside to close
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    <div style={{ 
+                      marginTop: "20px", 
+                      padding: "12px", 
+                      background: "#f9f9f9", 
+                      borderRadius: "6px", 
+                      border: "1px solid #e0e0e0" 
+                    }}>
+                      <p style={{ 
+                        margin: "0 0 4px 0", 
+                        fontSize: "11px", 
+                        color: "#757575" 
+                      }}>Inspector</p>
+                      <p style={{ 
+                        margin: "0", 
+                        fontSize: "13px", 
+                        fontWeight: "500", 
+                        color: "#424242" 
+                      }}>
+                        {checksheetData[inspectionItems[0]?.item_key]?.inspector || "N/A"}
+                      </p>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              <div style={{ 
+                padding: "16px 24px", 
+                background: "#f5f5f5", 
+                borderTop: "1px solid #e0e0e0", 
+                textAlign: "right" 
+              }}>
+                <button 
+                  onClick={closeDetail} 
+                  style={{ 
+                    padding: "9px 20px", 
+                    background: "#757575", 
+                    color: "white", 
+                    border: "none", 
+                    borderRadius: "5px", 
+                    fontWeight: "500",
+                    cursor: "pointer",
+                    fontSize: "14px"
+                  }}
+                >
+                  Close
+                </button>
               </div>
             </div>
-          )}
-        </div>
+          </div>
+        )}
+
+        {/* Modal Popup Gambar Dokumentasi */}
+        {showImageModal && (
+          <div
+            onClick={closeImageModal}
+            style={{
+              position: "fixed",
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              background: "rgba(0,0,0,0.8)",
+              display: "flex",
+              justifyContent: "center",
+              alignItems: "center",
+              zIndex: 2000,
+              padding: "20px"
+            }}
+          >
+            <div onClick={(e) => e.stopPropagation()} style={{ textAlign: "center" }}>
+              <img
+                src={currentImageUrl}
+                alt="Dokumentasi"
+                style={{
+                  maxHeight: "90vh",
+                  maxWidth: "90vw",
+                  objectFit: "contain",
+                  borderRadius: "8px",
+                  border: "3px solid white"
+                }}
+              />
+              <div style={{ 
+                marginTop: "16px", 
+                color: "white", 
+                fontSize: "14px" 
+              }}>
+                Click outside to close
+              </div>
+            </div>
+          </div>
+        )}
       </div>
-      <style jsx>{`
-        .app-page{min-height:100vh;background:#f8f9fa}.page-content{padding:32px 24px;max-width:1400px;margin:0 auto}.table-container{background:white;border-radius:12px;box-shadow:0 2px 8px rgba(0,0,0,.06);overflow:hidden;border:1px solid #e8e8e8}.status-table{width:100%;border-collapse:collapse;font-size:14px}.status-table th,.status-table td{padding:12px 16px;text-align:left;border-bottom:1px solid #f0f0f0;vertical-align:middle}.status-table th{background:#f5f7fa;font-weight:600;color:#0d47a1;font-size:13px;text-transform:uppercase;letter-spacing:.5px}.status-table tbody tr{transition:background-color .2s ease}.status-table tbody tr:hover{background-color:#fafbfc}.col-no{width:50px;text-align:center;font-weight:600;color:#333}.col-nama-panel{min-width:200px;font-weight:500;color:#1e88e5}.col-area{min-width:180px;color:#666;font-size:13px}.col-action{width:220px}.action-cell{display:flex;gap:8px}.btn-detail,.btn-check{display:inline-flex;align-items:center;justify-content:center;padding:6px 14px;border-radius:6px;font-size:12px;font-weight:600;text-decoration:none;cursor:pointer;border:none;transition:all .3s ease;white-space:nowrap;text-transform:uppercase;letter-spacing:.5px}.btn-detail{background:#1e88e5;color:white}.btn-detail:hover{background:#0d47a1;box-shadow:0 2px 8px rgba(13,71,161,.3);transform:translateY(-1px)}.btn-check{background:#4caf50;color:white}.btn-check:hover{background:#388e3c;box-shadow:0 2px 8px rgba(76,175,80,.3);transform:translateY(-1px)}.modal-overlay{position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.5);display:flex;justify-content:center;align-items:center;z-index:1000;padding:20px}.modal-content{background:white;border-radius:12px;width:95%;max-width:1000px;max-height:90vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,.3);display:flex;flex-direction:column}.modal-header{display:flex;justify-content:space-between;align-items:flex-start;padding:24px 28px;background:linear-gradient(135deg,#f5f7fa 0%,#e8ecf1 100%);border-bottom:2px solid #e8e8e8;flex-shrink:0}.modal-title-section h2{margin:0 0 4px 0;color:#0d47a1;font-size:20px;font-weight:700}.modal-subtitle{margin:0;color:#1e88e5;font-size:14px;font-weight:500}.btn-close{background:none;border:none;font-size:28px;cursor:pointer;color:#999;padding:0;width:32px;height:32px;display:flex;align-items:center;justify-content:center;transition:all .3s ease;flex-shrink:0}.btn-close:hover{color:#d32f2f;background:rgba(211,47,47,.1);border-radius:6px}.modal-body{padding:28px;overflow-y:auto;flex:1}.detail-table-container{display:flex;flex-direction:column;gap:20px}.table-section{background:white;border:1px solid #e8e8e8;border-radius:10px;overflow:hidden;box-shadow:0 2px 6px rgba(0,0,0,.05)}.table-section-header{display:flex;justify-content:space-between;align-items:center;padding:16px 20px;background:#f5f9ff;border-bottom:1px solid #e8e8e8}.table-section-header h3{margin:0;color:#0d47a1;font-size:16px;font-weight:600}.table-section-date{color:#666;font-size:13px;font-weight:500}.detail-table{width:100%;border-collapse:collapse;font-size:14px}.detail-table tbody tr{border-bottom:1px solid #f0f0f0;transition:background-color .2s ease}.detail-table tbody tr:hover{background-color:#fafbfc}.detail-table td{padding:12px 16px;vertical-align:middle}.detail-table td.label{font-weight:600;color:#1e88e5;font-size:12px;text-transform:uppercase;letter-spacing:.3px;width:25%;background:#f9fbfd}.detail-table td.value{color:#333;font-weight:500;width:25%;word-break:break-word}.status-badge{display:inline-flex;align-items:center;justify-content:center;padding:4px 12px;border-radius:6px;font-weight:700;font-size:14px;min-width:40px}.status-badge.status-ok{background:#4caf50;color:white}.status-badge.status-ng{background:#f44336;color:white}.status-badge.status-empty{background:#e0e0e0;color:#757575}.status-badge.status-text{background:#2196f3;color:white}.empty-state{text-align:center;padding:40px 20px;color:#999;font-size:14px}.modal-footer{display:flex;justify-content:flex-end;padding:20px 28px;background:#f5f7fa;border-top:1px solid #e8e8e8;gap:12px;flex-shrink:0}.btn-cancel{padding:8px 20px;background:#bdbdbd;color:white;border:none;border-radius:6px;cursor:pointer;font-size:13px;font-weight:600;transition:all .3s ease;text-transform:uppercase;letter-spacing:.5px}.btn-cancel:hover{background:#757575;transform:translateY(-1px);box-shadow:0 2px 8px rgba(0,0,0,.15)}
-      `}</style>
-    </>
+    </div>
   );
 }
