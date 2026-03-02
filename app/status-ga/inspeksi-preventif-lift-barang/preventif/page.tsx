@@ -560,10 +560,18 @@ export default function PreventiveLiftBarangPage() {
       </div>
 
       <style jsx>{`
+        .app-page {
+          display: flex;
+          min-height: 100vh;
+          width: 100%;
+        }
+
         .page-content {
-          max-width: 1200px;
-          margin: 0 auto;
+          flex: 1;
+          width: calc(100% - 280px);
+          margin-left: 280px;
           padding: 24px;
+          overflow-x: hidden;
         }
         .header-section {
           display: flex;
@@ -696,6 +704,184 @@ export default function PreventiveLiftBarangPage() {
           cursor: pointer;
           font-size: 0.85rem;
           color: #666;
+        }
+
+        @media (max-width: 1200px) {
+          .page-content {
+            margin-left: 80px;
+            padding: 20px 12px;
+          }
+        }
+
+        @media (max-width: 768px) {
+          .page-content {
+            margin-left: 25px;
+            margin-right: 15px;
+            padding: 16px 12px;
+          }
+
+          h1 {
+            font-size: 20px !important;
+            margin-bottom: 8px !important;
+          }
+
+          .subtitle {
+            font-size: 13px !important;
+          }
+
+          .preventive-table {
+            font-size: 11px !important;
+            min-width: 700px;
+            overflow-x: auto;
+            -webkit-overflow-scrolling: touch;
+          }
+
+          .preventive-table th,
+          .preventive-table td {
+            padding: 8px 6px !important;
+            border: 1px solid #ddd !important;
+            font-size: 11px;
+          }
+
+          .radio-group {
+            gap: 8px;
+          }
+
+          .text-area {
+            font-size: 12px !important;
+            min-height: 50px !important;
+            padding: 6px !important;
+          }
+
+          .text-area.full {
+            min-height: 80px;
+          }
+
+          input[type="file"] {
+            font-size: 11px !important;
+          }
+
+          .uploaded-image {
+            max-width: 60px;
+            max-height: 60px;
+          }
+
+          .actions {
+            flex-direction: column;
+            gap: 8px;
+          }
+
+          .btn-primary,
+          .btn-secondary {
+            width: 100%;
+            min-height: 36px;
+            font-size: 12px;
+            padding: 10px 12px;
+          }
+
+          .header-section {
+            flex-direction: column;
+            align-items: stretch;
+            gap: 8px;
+          }
+
+          .btn-back,
+          .btn-history {
+            width: 100%;
+          }
+        }
+
+        @media (max-width: 480px) {
+          .page-content {
+            margin-left: 15px;
+            margin-right: 12px;
+            padding: 12px 8px;
+          }
+
+          h1 {
+            font-size: 18px !important;
+            margin-bottom: 6px !important;
+          }
+
+          .subtitle {
+            font-size: 12px !important;
+            margin-bottom: 16px !important;
+          }
+
+          p {
+            font-size: 11px !important;
+          }
+
+          .preventive-table {
+            font-size: 9px !important;
+            min-width: 600px;
+            overflow-x: auto;
+            -webkit-overflow-scrolling: touch;
+          }
+
+          .preventive-table th,
+          .preventive-table td {
+            padding: 6px 4px !important;
+            border: 1px solid #ddd !important;
+            font-size: 9px;
+          }
+
+          .radio-group {
+            flex-direction: column;
+            gap: 6px;
+          }
+
+          .text-area {
+            font-size: 12px !important;
+            min-height: 45px !important;
+            padding: 4px !important;
+          }
+
+          .text-area.full {
+            min-height: 70px;
+          }
+
+          input[type="file"] {
+            font-size: 10px !important;
+          }
+
+          .uploaded-image {
+            max-width: 50px;
+            max-height: 50px;
+          }
+
+          .actions {
+            flex-direction: column;
+            gap: 6px;
+          }
+
+          .btn-primary,
+          .btn-secondary {
+            width: 100%;
+            min-height: 40px;
+            font-size: 11px;
+            padding: 10px 12px;
+          }
+
+          .header-section {
+            flex-direction: column;
+            align-items: stretch;
+            gap: 8px;
+          }
+
+          .btn-back,
+          .btn-history {
+            width: 100%;
+            text-align: center;
+          }
+
+          .additional-section {
+            margin: 16px 0;
+          }
+
+          .additional-section h2 {
+            font-size: 14px;
+          }
         }
       `}</style>
     </div>

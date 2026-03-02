@@ -313,6 +313,145 @@ export function GaPanelContent({ openPanel }: { openPanel: string }) {
       </div>
       <style jsx>{`
         .app-page{min-height:100vh;background:#f8f9fa}.page-content{padding:32px 24px;max-width:1400px;margin:0 auto}.table-container{background:white;border-radius:12px;box-shadow:0 2px 8px rgba(0,0,0,.06);overflow:hidden;border:1px solid #e8e8e8}.status-table{width:100%;border-collapse:collapse;font-size:14px}.status-table th,.status-table td{padding:12px 16px;text-align:left;border-bottom:1px solid #f0f0f0;vertical-align:middle}.status-table th{background:#f5f7fa;font-weight:600;color:#0d47a1;font-size:13px;text-transform:uppercase;letter-spacing:.5px}.status-table tbody tr{transition:background-color .2s ease}.status-table tbody tr:hover{background-color:#fafbfc}.col-no{width:50px;text-align:center;font-weight:600;color:#333}.col-nama-panel{min-width:200px;font-weight:500;color:#1e88e5}.col-area{min-width:180px;color:#666;font-size:13px}.col-action{width:220px}.action-cell{display:flex;gap:8px}.btn-detail,.btn-check{display:inline-flex;align-items:center;justify-content:center;padding:6px 14px;border-radius:6px;font-size:12px;font-weight:600;text-decoration:none;cursor:pointer;border:none;transition:all .3s ease;white-space:nowrap;text-transform:uppercase;letter-spacing:.5px}.btn-detail{background:#1e88e5;color:white}.btn-detail:hover{background:#0d47a1;box-shadow:0 2px 8px rgba(13,71,161,.3);transform:translateY(-1px)}.btn-check{background:#4caf50;color:white}.btn-check:hover{background:#388e3c;box-shadow:0 2px 8px rgba(76,175,80,.3);transform:translateY(-1px)}.modal-overlay{position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.5);display:flex;justify-content:center;align-items:center;z-index:1000;padding:20px}.modal-content{background:white;border-radius:12px;width:95%;max-width:1000px;max-height:90vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,.3);display:flex;flex-direction:column}.modal-header{display:flex;justify-content:space-between;align-items:flex-start;padding:24px 28px;background:linear-gradient(135deg,#f5f7fa 0%,#e8ecf1 100%);border-bottom:2px solid #e8e8e8;flex-shrink:0}.modal-title-section h2{margin:0 0 4px 0;color:#0d47a1;font-size:20px;font-weight:700}.modal-subtitle{margin:0;color:#1e88e5;font-size:14px;font-weight:500}.btn-close{background:none;border:none;font-size:28px;cursor:pointer;color:#999;padding:0;width:32px;height:32px;display:flex;align-items:center;justify-content:center;transition:all .3s ease;flex-shrink:0}.btn-close:hover{color:#d32f2f;background:rgba(211,47,47,.1);border-radius:6px}.modal-body{padding:28px;overflow-y:auto;flex:1}.detail-table-container{display:flex;flex-direction:column;gap:20px}.table-section{background:white;border:1px solid #e8e8e8;border-radius:10px;overflow:hidden;box-shadow:0 2px 6px rgba(0,0,0,.05)}.table-section-header{display:flex;justify-content:space-between;align-items:center;padding:16px 20px;background:#f5f9ff;border-bottom:1px solid #e8e8e8}.table-section-header h3{margin:0;color:#0d47a1;font-size:16px;font-weight:600}.table-section-date{color:#666;font-size:13px;font-weight:500}.detail-table{width:100%;border-collapse:collapse;font-size:14px}.detail-table tbody tr{border-bottom:1px solid #f0f0f0;transition:background-color .2s ease}.detail-table tbody tr:hover{background-color:#fafbfc}.detail-table td{padding:12px 16px;vertical-align:middle}.detail-table td.label{font-weight:600;color:#1e88e5;font-size:12px;text-transform:uppercase;letter-spacing:.3px;width:25%;background:#f9fbfd}.detail-table td.value{color:#333;font-weight:500;width:25%;word-break:break-word}.status-badge{display:inline-flex;align-items:center;justify-content:center;padding:4px 12px;border-radius:6px;font-weight:700;font-size:14px;min-width:40px}.status-badge.status-ok{background:#4caf50;color:white}.status-badge.status-ng{background:#f44336;color:white}.status-badge.status-empty{background:#e0e0e0;color:#757575}.status-badge.status-text{background:#2196f3;color:white}.empty-state{text-align:center;padding:40px 20px;color:#999;font-size:14px}.modal-footer{display:flex;justify-content:flex-end;padding:20px 28px;background:#f5f7fa;border-top:1px solid #e8e8e8;gap:12px;flex-shrink:0}.btn-cancel{padding:8px 20px;background:#bdbdbd;color:white;border:none;border-radius:6px;cursor:pointer;font-size:13px;font-weight:600;transition:all .3s ease;text-transform:uppercase;letter-spacing:.5px}.btn-cancel:hover{background:#757575;transform:translateY(-1px);box-shadow:0 2px 8px rgba(0,0,0,.15)}
+
+        /* Mobile Responsive Styles */
+        @media (max-width: 1200px) {
+          .page-content {
+            padding: 24px 16px !important;
+          }
+          .col-nama-panel {
+            min-width: 150px !important;
+          }
+          .col-area {
+            min-width: 120px !important;
+          }
+        }
+
+        @media (max-width: 768px) {
+          .page-content {
+            padding: 16px 12px !important;
+          }
+          .status-table {
+            font-size: 12px !important;
+            min-width: 600px;
+            overflow-x: auto;
+            -webkit-overflow-scrolling: touch;
+          }
+          .status-table th,
+          .status-table td {
+            padding: 8px 6px !important;
+          }
+          .col-no {
+            width: 40px !important;
+          }
+          .col-nama-panel {
+            min-width: 120px !important;
+          }
+          .col-area {
+            min-width: 100px !important;
+          }
+          .col-action {
+            width: 150px !important;
+          }
+          .action-cell {
+            flex-direction: column !important;
+            gap: 4px !important;
+          }
+          .btn-detail,
+          .btn-check {
+            padding: 4px 10px !important;
+            font-size: 11px !important;
+            min-height: 34px !important;
+            width: 100% !important;
+          }
+          .modal-header {
+            padding: 16px 20px !important;
+          }
+          .modal-body {
+            padding: 16px !important;
+          }
+          .modal-footer {
+            padding: 16px 20px !important;
+          }
+          .detail-table {
+            font-size: 12px !important;
+          }
+          .detail-table td {
+            padding: 8px 10px !important;
+          }
+        }
+
+        @media (max-width: 480px) {
+          .page-content {
+            padding: 12px 8px !important;
+          }
+          .status-table {
+            font-size: 10px !important;
+            min-width: 500px;
+          }
+          .status-table th,
+          .status-table td {
+            padding: 6px 4px !important;
+          }
+          .col-no {
+            width: 35px !important;
+          }
+          .col-nama-panel {
+            min-width: 100px !important;
+          }
+          .col-area {
+            min-width: 80px !important;
+          }
+          .col-action {
+            width: 120px !important;
+          }
+          .action-cell {
+            flex-direction: column !important;
+            gap: 3px !important;
+          }
+          .btn-detail,
+          .btn-check {
+            padding: 3px 8px !important;
+            font-size: 10px !important;
+            min-height: 32px !important;
+            width: 100% !important;
+          }
+          .modal-content {
+            width: 100% !important;
+            max-width: 100% !important;
+            max-height: 95vh !important;
+            margin: 0 !important;
+            border-radius: 8px !important;
+          }
+          .modal-header {
+            padding: 12px 16px !important;
+          }
+          .modal-title-section h2 {
+            font-size: 16px !important;
+          }
+          .modal-body {
+            padding: 12px !important;
+          }
+          .modal-footer {
+            padding: 12px 16px !important;
+          }
+          .detail-table {
+            font-size: 10px !important;
+          }
+          .detail-table td {
+            padding: 6px 8px !important;
+          }
+          .detail-table td.label {
+            width: 40% !important;
+          }
+          .detail-table td.value {
+            width: 60% !important;
+          }
+          .status-badge {
+            padding: 2px 8px !important;
+            font-size: 11px !important;
+          }
+        }
       `}</style>
     </>
   );

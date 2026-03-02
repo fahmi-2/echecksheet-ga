@@ -1,6 +1,5 @@
 // app/status-ga/fire-alarm/[zona]/page.tsx
 "use client";
-
 import { useState, useEffect, use } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
@@ -80,6 +79,7 @@ export default function FireAlarmChecklist({ params }: { params: Promise<{ zona:
   const [showPreview, setShowPreview] = useState(false);
   const [hasNg, setHasNg] = useState(false);
   const [tempPhotoPreviews, setTempPhotoPreviews] = useState<Record<number, string>>({});
+  const [expandedItem, setExpandedItem] = useState<number | null>(null);
 
   // Redirect jika bukan inspector-ga
   useEffect(() => {
@@ -121,13 +121,12 @@ export default function FireAlarmChecklist({ params }: { params: Promise<{ zona:
     const file = e.target.files?.[0];
     if (!file) return;
 
-    // Validasi file
     if (!['image/jpeg', 'image/jpg', 'image/png', 'image/webp'].includes(file.type)) {
       alert('Format file tidak didukung. Gunakan JPEG, PNG, atau WEBP');
       return;
     }
 
-    if (file.size > 5 * 1024 * 1024) { // 5MB
+    if (file.size > 5 * 1024 * 1024) {
       alert('Ukuran file terlalu besar. Maksimal 5MB');
       return;
     }
@@ -135,14 +134,12 @@ export default function FireAlarmChecklist({ params }: { params: Promise<{ zona:
     try {
       setLoading(true);
       
-      // ✅ Tampilkan preview langsung dari file
       const reader = new FileReader();
       reader.onloadend = () => {
         setTempPhotoPreviews(prev => ({ ...prev, [index]: reader.result as string }));
       };
       reader.readAsDataURL(file);
 
-      // Upload ke API
       const formData = new FormData();
       formData.append('file', file);
       formData.append('zona', zona);
@@ -156,19 +153,14 @@ export default function FireAlarmChecklist({ params }: { params: Promise<{ zona:
       const result = await response.json();
 
       if (response.ok && result.success) {
-        // ✅ Update item dengan path file dari server
         handleInputChange(index, "foto", result.data.path);
-        
-        // ✅ Hapus temporary preview
         setTempPhotoPreviews(prev => {
           const newPreviews = { ...prev };
           delete newPreviews[index];
           return newPreviews;
         });
-        
         alert('✅ Foto berhasil diupload!');
       } else {
-        // ❌ Jika gagal upload, hapus temporary preview
         setTempPhotoPreviews(prev => {
           const newPreviews = { ...prev };
           delete newPreviews[index];
@@ -178,7 +170,6 @@ export default function FireAlarmChecklist({ params }: { params: Promise<{ zona:
       }
     } catch (error) {
       console.error('Upload error:', error);
-      // Hapus temporary preview jika error
       setTempPhotoPreviews(prev => {
         const newPreviews = { ...prev };
         delete newPreviews[index];
@@ -187,22 +178,12 @@ export default function FireAlarmChecklist({ params }: { params: Promise<{ zona:
       alert('❌ Terjadi kesalahan saat upload foto');
     } finally {
       setLoading(false);
-      // Reset input file
       e.target.value = '';
     }
   };
 
   const handleRemoveImage = (index: number) => {
-    // Hapus foto dari database jika sudah tersimpan
-    const fotoPath = items[index].foto;
-    if (fotoPath && !fotoPath.startsWith('data:')) {
-      console.log('Foto akan dihapus saat submit:', fotoPath);
-    }
-    
-    // Hapus foto path
     handleInputChange(index, "foto", "");
-    
-    // Hapus temporary preview jika ada
     setTempPhotoPreviews(prev => {
       const newPreviews = { ...prev };
       delete newPreviews[index];
@@ -236,16 +217,12 @@ export default function FireAlarmChecklist({ params }: { params: Promise<{ zona:
     setShowPreview(true);
   };
 
-  const handleCancelPreview = () => {
-    setShowPreview(false);
-  };
+  const handleCancelPreview = () => setShowPreview(false);
 
-  // 🔥 SIMPAN KE API
   const handleSave = async () => {
     try {
       setLoading(true);
 
-      // Siapkan data untuk submit
       const submitData = {
         date,
         zona,
@@ -263,7 +240,7 @@ export default function FireAlarmChecklist({ params }: { params: Promise<{ zona:
           kondisiNok: item.kondisiNok || "",
           tindakanPerbaikan: item.tindakanPerbaikan || "",
           pic: item.pic,
-          foto: item.foto || null // Path file atau null
+          foto: item.foto || null
         }))
       };
 
@@ -277,8 +254,6 @@ export default function FireAlarmChecklist({ params }: { params: Promise<{ zona:
 
       if (response.ok && result.success) {
         alert("✅ Data berhasil disimpan!");
-        
-        // Redirect ke riwayat
         router.push(`/status-ga/fire-alarm/riwayat/${zona}`);
       } else {
         alert("❌ Gagal menyimpan data: " + (result.message || 'Error tidak diketahui'));
@@ -349,6 +324,10 @@ export default function FireAlarmChecklist({ params }: { params: Promise<{ zona:
     return titles[zona] || zona.toUpperCase();
   };
 
+  const toggleExpandItem = (index: number) => {
+    setExpandedItem(expandedItem === index ? null : index);
+  };
+
   if (!user) return null;
 
   return (
@@ -362,10 +341,11 @@ export default function FireAlarmChecklist({ params }: { params: Promise<{ zona:
             className="btn-back"
           >
             <ArrowLeft size={18} />
-            <span>Kembali</span>
+            <span className="btn-back-text">Kembali</span>
           </button>
           <h1 className="page-title">🔔 Inspeksi Fire Alarm - {getZoneTitle()}</h1>
         </div>
+
         <p className="subtitle">
           📅{" "}
           <span className="date-text">
@@ -387,160 +367,326 @@ export default function FireAlarmChecklist({ params }: { params: Promise<{ zona:
 
         {!showPreview ? (
           <div className="card-container">
-            <table className="checklist-table">
-              <thead>
-                <tr>
-                  <th>No</th>
-                  <th>Zona</th>
-                  <th>Lokasi</th>
-                  <th>Alarm Bell</th>
-                  <th>Indicator Lamp</th>
-                  <th>Manual Call Point</th>
-                  <th>ID Zona</th>
-                  <th>Kebersihan</th>
-                  <th>Kondisi N-OK</th>
-                  <th>Tindakan Perbaikan</th>
-                  <th>PIC</th>
-                  <th>Foto</th> 
-                </tr>
-              </thead>
-              <tbody>
-                {items.map((item, index) => (
-                  <tr key={index}>
-                    <td className="info-cell">{item.no}</td>
-                    <td className="info-cell">{item.zona}</td>
-                    <td className="info-cell">{item.lokasi}</td>
-                    <td>
-                      <select
-                        value={item.alarmBell}
-                        onChange={(e) => handleInputChange(index, "alarmBell", e.target.value)}
-                        className="status-select"
-                        disabled={loading}
-                      >
-                        <option value="">Pilih</option>
-                        <option value="OK">OK</option>
-                        <option value="NG">NG</option>
-                      </select>
-                    </td>
-                    <td>
-                      <select
-                        value={item.indicatorLamp}
-                        onChange={(e) => handleInputChange(index, "indicatorLamp", e.target.value)}
-                        className="status-select"
-                        disabled={loading}
-                      >
-                        <option value="">Pilih</option>
-                        <option value="OK">OK</option>
-                        <option value="NG">NG</option>
-                      </select>
-                    </td>
-                    <td>
-                      <select
-                        value={item.manualCallPoint}
-                        onChange={(e) => handleInputChange(index, "manualCallPoint", e.target.value)}
-                        className="status-select"
-                        disabled={loading}
-                      >
-                        <option value="">Pilih</option>
-                        <option value="OK">OK</option>
-                        <option value="NG">NG</option>
-                      </select>
-                    </td>
-                    <td>
-                      <select
-                        value={item.idZona}
-                        onChange={(e) => handleInputChange(index, "idZona", e.target.value)}
-                        className="status-select"
-                        disabled={loading}
-                      >
-                        <option value="">Pilih</option>
-                        <option value="OK">OK</option>
-                        <option value="NG">NG</option>
-                      </select>
-                    </td>
-                    <td>
-                      <select
-                        value={item.kebersihan}
-                        onChange={(e) => handleInputChange(index, "kebersihan", e.target.value)}
-                        className="status-select"
-                        disabled={loading}
-                      >
-                        <option value="">Pilih</option>
-                        <option value="OK">OK</option>
-                        <option value="NG">NG</option>
-                      </select>
-                    </td>
-                    <td>
-                      <input
-                        type="text"
-                        value={item.kondisiNok}
-                        onChange={(e) => handleInputChange(index, "kondisiNok", e.target.value)}
-                        placeholder="Catatan..."
-                        className="notes-input"
-                        disabled={loading}
-                      />
-                    </td>
-                    <td>
-                      <input
-                        type="text"
-                        value={item.tindakanPerbaikan}
-                        onChange={(e) => handleInputChange(index, "tindakanPerbaikan", e.target.value)}
-                        placeholder="Tindakan perbaikan..."
-                        className="notes-input"
-                        disabled={loading}
-                      />
-                    </td>
-                    <td>
-                      <div className="info-cell">{item.pic}</div>
-                    </td>
-                    <td>
-                      <div className="image-upload">
-                        {/* ✅ Tampilkan foto yang sudah diupload ATAU temporary preview */}
-                        {(items[index].foto || tempPhotoPreviews[index]) ? (
-                          <div className="image-preview">
-                            <img 
-                              src={
-                                tempPhotoPreviews[index] || 
-                                (items[index].foto.startsWith('data:') 
-                                  ? items[index].foto 
-                                  : `${process.env.NEXT_PUBLIC_BASE_URL || ''}${items[index].foto}`)
-                              } 
-                              alt="Preview" 
-                              className="uploaded-image" 
-                            />
-                            <button
-                              type="button"
-                              onClick={() => handleRemoveImage(index)}
-                              className="remove-btn"
-                              disabled={loading}
-                            >
-                              ✕
-                            </button>
-                            {/* ✅ Loading indicator saat upload */}
-                            {loading && (
-                              <div className="upload-loading">
-                                <div className="spinner-small"></div>
-                              </div>
-                            )}
-                          </div>
-                        ) : (
-                          <label className="file-label">
-                            📷 Unggah
-                            <input
-                              type="file"
-                              accept="image/*"
-                              onChange={(e) => handleImageUpload(e, index)}
-                              className="file-input"
-                              disabled={loading}
-                            />
-                          </label>
-                        )}
-                      </div>
-                    </td>
+            {/* ✅ DESKTOP: Table View */}
+            <div className="desktop-view">
+              <table className="checklist-table">
+                <thead>
+                  <tr>
+                    <th>No</th>
+                    <th>Zona</th>
+                    <th>Lokasi</th>
+                    <th>Alarm Bell</th>
+                    <th>Indicator Lamp</th>
+                    <th>Manual Call Point</th>
+                    <th>ID Zona</th>
+                    <th>Kebersihan</th>
+                    <th>Kondisi N-OK</th>
+                    <th>Tindakan Perbaikan</th>
+                    <th>PIC</th>
+                    <th>Foto</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {items.map((item, index) => (
+                    <tr key={index}>
+                      <td className="info-cell">{item.no}</td>
+                      <td className="info-cell">{item.zona}</td>
+                      <td className="info-cell">{item.lokasi}</td>
+                      <td>
+                        <select
+                          value={item.alarmBell}
+                          onChange={(e) => handleInputChange(index, "alarmBell", e.target.value)}
+                          className="status-select"
+                          disabled={loading}
+                        >
+                          <option value="">Pilih</option>
+                          <option value="OK">OK</option>
+                          <option value="NG">NG</option>
+                        </select>
+                      </td>
+                      <td>
+                        <select
+                          value={item.indicatorLamp}
+                          onChange={(e) => handleInputChange(index, "indicatorLamp", e.target.value)}
+                          className="status-select"
+                          disabled={loading}
+                        >
+                          <option value="">Pilih</option>
+                          <option value="OK">OK</option>
+                          <option value="NG">NG</option>
+                        </select>
+                      </td>
+                      <td>
+                        <select
+                          value={item.manualCallPoint}
+                          onChange={(e) => handleInputChange(index, "manualCallPoint", e.target.value)}
+                          className="status-select"
+                          disabled={loading}
+                        >
+                          <option value="">Pilih</option>
+                          <option value="OK">OK</option>
+                          <option value="NG">NG</option>
+                        </select>
+                      </td>
+                      <td>
+                        <select
+                          value={item.idZona}
+                          onChange={(e) => handleInputChange(index, "idZona", e.target.value)}
+                          className="status-select"
+                          disabled={loading}
+                        >
+                          <option value="">Pilih</option>
+                          <option value="OK">OK</option>
+                          <option value="NG">NG</option>
+                        </select>
+                      </td>
+                      <td>
+                        <select
+                          value={item.kebersihan}
+                          onChange={(e) => handleInputChange(index, "kebersihan", e.target.value)}
+                          className="status-select"
+                          disabled={loading}
+                        >
+                          <option value="">Pilih</option>
+                          <option value="OK">OK</option>
+                          <option value="NG">NG</option>
+                        </select>
+                      </td>
+                      <td>
+                        <input
+                          type="text"
+                          value={item.kondisiNok}
+                          onChange={(e) => handleInputChange(index, "kondisiNok", e.target.value)}
+                          placeholder="Catatan..."
+                          className="notes-input"
+                          disabled={loading}
+                        />
+                      </td>
+                      <td>
+                        <input
+                          type="text"
+                          value={item.tindakanPerbaikan}
+                          onChange={(e) => handleInputChange(index, "tindakanPerbaikan", e.target.value)}
+                          placeholder="Tindakan..."
+                          className="notes-input"
+                          disabled={loading}
+                        />
+                      </td>
+                      <td>
+                        <div className="info-cell">{item.pic}</div>
+                      </td>
+                      <td>
+                        <div className="image-upload">
+                          {(items[index].foto || tempPhotoPreviews[index]) ? (
+                            <div className="image-preview">
+                              <img
+                                src={
+                                  tempPhotoPreviews[index] ||
+                                  (items[index].foto.startsWith('data:')
+                                    ? items[index].foto
+                                    : `${process.env.NEXT_PUBLIC_BASE_URL || ''}${items[index].foto}`)
+                                }
+                                alt="Preview"
+                                className="uploaded-image"
+                              />
+                              <button
+                                type="button"
+                                onClick={() => handleRemoveImage(index)}
+                                className="remove-btn"
+                                disabled={loading}
+                              >
+                                ✕
+                              </button>
+                              {loading && (
+                                <div className="upload-loading">
+                                  <div className="spinner-small"></div>
+                                </div>
+                              )}
+                            </div>
+                          ) : (
+                            <label className="file-label">
+                              📷 Unggah
+                              <input
+                                type="file"
+                                accept="image/*"
+                                onChange={(e) => handleImageUpload(e, index)}
+                                className="file-input"
+                                disabled={loading}
+                              />
+                            </label>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            {/* ✅ MOBILE: Card View */}
+            <div className="mobile-view">
+              {items.map((item, index) => (
+                <div key={index} className="checklist-card">
+                  <div className="card-header" onClick={() => toggleExpandItem(index)}>
+                    <div className="card-no">{item.no}</div>
+                    <div className="card-info">
+                      <div className="card-zona">{item.zona}</div>
+                      <div className="card-lokasi">{item.lokasi}</div>
+                    </div>
+                    <div className={`expand-icon ${expandedItem === index ? 'expanded' : ''}`}>
+                      ▼
+                    </div>
+                  </div>
+                  
+                  {expandedItem === index && (
+                    <div className="card-body">
+                      <div className="form-group">
+                        <label>Alarm Bell</label>
+                        <select
+                          value={item.alarmBell}
+                          onChange={(e) => handleInputChange(index, "alarmBell", e.target.value)}
+                          className="status-select"
+                          disabled={loading}
+                        >
+                          <option value="">Pilih</option>
+                          <option value="OK">OK</option>
+                          <option value="NG">NG</option>
+                        </select>
+                      </div>
+                      
+                      <div className="form-group">
+                        <label>Indicator Lamp</label>
+                        <select
+                          value={item.indicatorLamp}
+                          onChange={(e) => handleInputChange(index, "indicatorLamp", e.target.value)}
+                          className="status-select"
+                          disabled={loading}
+                        >
+                          <option value="">Pilih</option>
+                          <option value="OK">OK</option>
+                          <option value="NG">NG</option>
+                        </select>
+                      </div>
+                      
+                      <div className="form-group">
+                        <label>Manual Call Point</label>
+                        <select
+                          value={item.manualCallPoint}
+                          onChange={(e) => handleInputChange(index, "manualCallPoint", e.target.value)}
+                          className="status-select"
+                          disabled={loading}
+                        >
+                          <option value="">Pilih</option>
+                          <option value="OK">OK</option>
+                          <option value="NG">NG</option>
+                        </select>
+                      </div>
+                      
+                      <div className="form-group">
+                        <label>ID Zona</label>
+                        <select
+                          value={item.idZona}
+                          onChange={(e) => handleInputChange(index, "idZona", e.target.value)}
+                          className="status-select"
+                          disabled={loading}
+                        >
+                          <option value="">Pilih</option>
+                          <option value="OK">OK</option>
+                          <option value="NG">NG</option>
+                        </select>
+                      </div>
+                      
+                      <div className="form-group">
+                        <label>Kebersihan</label>
+                        <select
+                          value={item.kebersihan}
+                          onChange={(e) => handleInputChange(index, "kebersihan", e.target.value)}
+                          className="status-select"
+                          disabled={loading}
+                        >
+                          <option value="">Pilih</option>
+                          <option value="OK">OK</option>
+                          <option value="NG">NG</option>
+                        </select>
+                      </div>
+                      
+                      <div className="form-group">
+                        <label>Kondisi N-OK</label>
+                        <input
+                          type="text"
+                          value={item.kondisiNok}
+                          onChange={(e) => handleInputChange(index, "kondisiNok", e.target.value)}
+                          placeholder="Catatan..."
+                          className="notes-input"
+                          disabled={loading}
+                        />
+                      </div>
+                      
+                      <div className="form-group">
+                        <label>Tindakan Perbaikan</label>
+                        <input
+                          type="text"
+                          value={item.tindakanPerbaikan}
+                          onChange={(e) => handleInputChange(index, "tindakanPerbaikan", e.target.value)}
+                          placeholder="Tindakan..."
+                          className="notes-input"
+                          disabled={loading}
+                        />
+                      </div>
+                      
+                      <div className="form-group">
+                        <label>PIC</label>
+                        <div className="info-cell">{item.pic}</div>
+                      </div>
+                      
+                      <div className="form-group">
+                        <label>Foto</label>
+                        <div className="image-upload">
+                          {(items[index].foto || tempPhotoPreviews[index]) ? (
+                            <div className="image-preview">
+                              <img
+                                src={
+                                  tempPhotoPreviews[index] ||
+                                  (items[index].foto.startsWith('data:')
+                                    ? items[index].foto
+                                    : `${process.env.NEXT_PUBLIC_BASE_URL || ''}${items[index].foto}`)
+                                }
+                                alt="Preview"
+                                className="uploaded-image"
+                              />
+                              <button
+                                type="button"
+                                onClick={() => handleRemoveImage(index)}
+                                className="remove-btn"
+                                disabled={loading}
+                              >
+                                ✕
+                              </button>
+                              {loading && (
+                                <div className="upload-loading">
+                                  <div className="spinner-small"></div>
+                                </div>
+                              )}
+                            </div>
+                          ) : (
+                            <label className="file-label file-label-large">
+                              📷 Unggah Foto
+                              <input
+                                type="file"
+                                accept="image/*"
+                                onChange={(e) => handleImageUpload(e, index)}
+                                className="file-input"
+                                disabled={loading}
+                              />
+                            </label>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
 
             <div className="form-actions">
               <button
@@ -550,8 +696,8 @@ export default function FireAlarmChecklist({ params }: { params: Promise<{ zona:
               >
                 Batal
               </button>
-              <button 
-                onClick={handleShowPreview} 
+              <button
+                onClick={handleShowPreview}
                 className="btn-submit"
                 disabled={loading}
               >
@@ -562,64 +708,109 @@ export default function FireAlarmChecklist({ params }: { params: Promise<{ zona:
         ) : (
           <div className="card-container preview-mode">
             <h2 className="preview-title">🔍 Preview Data</h2>
-            <div className="preview-table">
-              <table className="simple-table">
-                <thead>
-                  <tr>
-                    <th>No</th>
-                    <th>Zona</th>
-                    <th>Lokasi</th>
-                    <th>Alarm Bell</th>
-                    <th>Indicator</th>
-                    <th>Manual Call</th>
-                    <th>ID Zona</th>
-                    <th>Kebersihan</th>
-                    <th>Keterangan</th>
-                    <th>Foto</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {items.map((item, index) => (
-                    <tr key={index}>
-                      <td>{item.no}</td>
-                      <td>{item.zona}</td>
-                      <td>{item.lokasi}</td>
-                      <td className={item.alarmBell === "NG" ? "status-ng" : ""}>
-                        {item.alarmBell}
-                      </td>
-                      <td className={item.indicatorLamp === "NG" ? "status-ng" : ""}>
-                        {item.indicatorLamp}
-                      </td>
-                      <td className={item.manualCallPoint === "NG" ? "status-ng" : ""}>
-                        {item.manualCallPoint}
-                      </td>
-                      <td className={item.idZona === "NG" ? "status-ng" : ""}>
-                        {item.idZona}
-                      </td>
-                      <td className={item.kebersihan === "NG" ? "status-ng" : ""}>
-                        {item.kebersihan}
-                      </td>
-                      <td>{item.kondisiNok || "-"}</td>
-                      <td>
-                        {item.foto ? (
-                          <img 
-                            src={item.foto.startsWith('data:') ? item.foto : `${process.env.NEXT_PUBLIC_BASE_URL || ''}${item.foto}`} 
-                            alt="Foto" 
-                            className="preview-image" 
-                          />
-                        ) : (
-                          "–"
-                        )}
-                      </td>
+            
+            {/* ✅ DESKTOP: Preview Table */}
+            <div className="desktop-preview">
+              <div className="table-wrapper-responsive">
+                <table className="simple-table">
+                  <thead>
+                    <tr>
+                      <th>No</th>
+                      <th>Zona</th>
+                      <th>Lokasi</th>
+                      <th>Status</th>
+                      <th>Keterangan</th>
+                      <th>Foto</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody>
+                    {items.map((item, index) => {
+                      const hasNgItem =
+                        item.alarmBell === "NG" ||
+                        item.indicatorLamp === "NG" ||
+                        item.manualCallPoint === "NG" ||
+                        item.idZona === "NG" ||
+                        item.kebersihan === "NG";
+                      return (
+                        <tr key={index} className={hasNgItem ? "row-ng" : ""}>
+                          <td>{item.no}</td>
+                          <td>{item.zona}</td>
+                          <td>{item.lokasi}</td>
+                          <td className={hasNgItem ? "status-ng" : "status-ok"}>
+                            {hasNgItem ? "NG" : "OK"}
+                          </td>
+                          <td>{item.kondisiNok || "-"}</td>
+                          <td>
+                            {item.foto ? (
+                              <img
+                                src={item.foto.startsWith('data:') ? item.foto : `${process.env.NEXT_PUBLIC_BASE_URL || ''}${item.foto}`}
+                                alt="Foto"
+                                className="preview-image"
+                              />
+                            ) : (
+                              "–"
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            {/* ✅ MOBILE: Preview Cards */}
+            <div className="mobile-preview">
+              {items.map((item, index) => {
+                const hasNgItem =
+                  item.alarmBell === "NG" ||
+                  item.indicatorLamp === "NG" ||
+                  item.manualCallPoint === "NG" ||
+                  item.idZona === "NG" ||
+                  item.kebersihan === "NG";
+                
+                return (
+                  <div key={index} className={`preview-card ${hasNgItem ? 'preview-card-ng' : ''}`}>
+                    <div className="preview-card-header">
+                      <span className="preview-card-no">#{item.no}</span>
+                      <span className={`preview-card-status ${hasNgItem ? 'status-ng' : 'status-ok'}`}>
+                        {hasNgItem ? 'NG' : 'OK'}
+                      </span>
+                    </div>
+                    <div className="preview-card-body">
+                      <div className="preview-row">
+                        <span className="preview-label">Zona:</span>
+                        <span className="preview-value">{item.zona}</span>
+                      </div>
+                      <div className="preview-row">
+                        <span className="preview-label">Lokasi:</span>
+                        <span className="preview-value">{item.lokasi}</span>
+                      </div>
+                      {item.kondisiNok && (
+                        <div className="preview-row">
+                          <span className="preview-label">Keterangan:</span>
+                          <span className="preview-value">{item.kondisiNok}</span>
+                        </div>
+                      )}
+                      {item.foto && (
+                        <div className="preview-row">
+                          <span className="preview-label">Foto:</span>
+                          <img
+                            src={item.foto.startsWith('data:') ? item.foto : `${process.env.NEXT_PUBLIC_BASE_URL || ''}${item.foto}`}
+                            alt="Foto"
+                            className="preview-card-image"
+                          />
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
             </div>
 
             <div className="preview-actions">
-              <button 
-                onClick={handleCancelPreview} 
+              <button
+                onClick={handleCancelPreview}
                 className="cancel-btn"
                 disabled={loading}
               >
@@ -627,15 +818,15 @@ export default function FireAlarmChecklist({ params }: { params: Promise<{ zona:
               </button>
               {hasNg ? (
                 <div className="ng-actions">
-                  <button 
-                    onClick={handleReportNg} 
+                  <button
+                    onClick={handleReportNg}
                     className="report-btn"
                     disabled={loading}
                   >
                     📢 Laporkan NG
                   </button>
-                  <button 
-                    onClick={handleSave} 
+                  <button
+                    onClick={handleSave}
                     className="save-btn"
                     disabled={loading}
                   >
@@ -643,8 +834,8 @@ export default function FireAlarmChecklist({ params }: { params: Promise<{ zona:
                   </button>
                 </div>
               ) : (
-                <button 
-                  onClick={handleSave} 
+                <button
+                  onClick={handleSave}
                   className="save-btn"
                   disabled={loading}
                 >
@@ -656,7 +847,6 @@ export default function FireAlarmChecklist({ params }: { params: Promise<{ zona:
         )}
       </div>
 
-      {/* Global Styles */}
       <style jsx global>{`
         body {
           font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen,
@@ -667,7 +857,6 @@ export default function FireAlarmChecklist({ params }: { params: Promise<{ zona:
         }
       `}</style>
 
-      {/* Component Styles */}
       <style jsx>{`
         .app-page {
           display: flex;
@@ -677,9 +866,10 @@ export default function FireAlarmChecklist({ params }: { params: Promise<{ zona:
 
         .page-content {
           flex: 1;
-          max-width: 1200px;
+          max-width: 1400px;
           margin: 0 auto;
           padding: 24px;
+          width: 100%;
         }
 
         .header-banner {
@@ -692,13 +882,14 @@ export default function FireAlarmChecklist({ params }: { params: Promise<{ zona:
           display: flex;
           align-items: center;
           gap: 16px;
+          flex-wrap: wrap;
         }
 
         .btn-back {
           display: flex;
           align-items: center;
           gap: 8px;
-          padding: 6px 12px;
+          padding: 8px 16px;
           background: rgba(255, 255, 255, 0.2);
           color: white;
           border: none;
@@ -707,32 +898,39 @@ export default function FireAlarmChecklist({ params }: { params: Promise<{ zona:
           font-weight: 600;
           transition: all 0.3s ease;
           font-size: 0.9rem;
+          min-height: 44px;
         }
 
         .btn-back:hover {
           background: rgba(255, 255, 255, 0.3);
         }
 
+        .btn-back-text {
+          display: inline;
+        }
+
         .page-title {
           margin: 0;
-          font-size: 1.8rem;
+          font-size: 1.4rem;
           font-weight: 700;
           flex: 1;
+          word-break: break-word;
         }
 
         .subtitle {
           color: rgba(255, 255, 255, 0.95);
           margin-top: 8px;
           margin-bottom: 24px;
-          font-size: 1.1rem;
+          font-size: 1rem;
           display: flex;
           align-items: center;
           gap: 8px;
+          flex-wrap: wrap;
         }
 
         .date-text {
           font-weight: 700;
-          font-size: 1.2rem;
+          font-size: 1.1rem;
           color: #ffeb3b;
           text-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
           background: rgba(0, 0, 0, 0.2);
@@ -746,7 +944,6 @@ export default function FireAlarmChecklist({ params }: { params: Promise<{ zona:
           border-radius: 16px;
           box-shadow: 0 6px 20px rgba(0, 0, 0, 0.15);
           padding: 24px;
-          overflow-x: auto;
           color: white;
           position: relative;
         }
@@ -755,12 +952,33 @@ export default function FireAlarmChecklist({ params }: { params: Promise<{ zona:
           background: linear-gradient(135deg, #0d47a1 0%, #1976d2 100%);
         }
 
+        /* Desktop View */
+        .desktop-view,
+        .desktop-preview {
+          display: block;
+          overflow-x: auto;
+          -webkit-overflow-scrolling: touch;
+        }
+
+        .mobile-view,
+        .mobile-preview {
+          display: none;
+        }
+
+        .table-wrapper-responsive {
+          overflow-x: auto;
+          -webkit-overflow-scrolling: touch;
+          border-radius: 8px;
+          border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+
         .checklist-table,
         .simple-table {
           width: 100%;
           border-collapse: collapse;
           margin-bottom: 24px;
           color: #fff8f8;
+          min-width: 1000px;
         }
 
         .checklist-table th,
@@ -771,6 +989,7 @@ export default function FireAlarmChecklist({ params }: { params: Promise<{ zona:
           text-align: left;
           border: 1px solid rgba(255, 255, 255, 0.2);
           color: white;
+          white-space: nowrap;
         }
 
         .checklist-table th,
@@ -780,6 +999,7 @@ export default function FireAlarmChecklist({ params }: { params: Promise<{ zona:
           position: sticky;
           top: 0;
           color: white;
+          z-index: 10;
         }
 
         .status-select,
@@ -791,6 +1011,7 @@ export default function FireAlarmChecklist({ params }: { params: Promise<{ zona:
           font-size: 0.9rem;
           background: rgba(255, 255, 255, 0.9);
           color: #333;
+          min-height: 40px;
         }
 
         .status-select:focus,
@@ -806,23 +1027,184 @@ export default function FireAlarmChecklist({ params }: { params: Promise<{ zona:
           cursor: not-allowed;
         }
 
-        /* Upload & Preview Image */
+        /* Mobile Card View */
+        .checklist-card,
+        .preview-card {
+          background: rgba(255, 255, 255, 0.1);
+          border-radius: 12px;
+          margin-bottom: 16px;
+          overflow: hidden;
+          border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+
+        .preview-card-ng {
+          border-color: rgba(244, 67, 54, 0.5);
+          background: rgba(244, 67, 54, 0.1);
+        }
+
+        .card-header,
+        .preview-card-header {
+          display: flex;
+          align-items: center;
+          gap: 12px;
+          padding: 16px;
+          cursor: pointer;
+          background: rgba(0, 0, 0, 0.1);
+          transition: background 0.2s;
+          min-height: 44px;
+        }
+
+        .card-header:hover,
+        .preview-card-header:hover {
+          background: rgba(0, 0, 0, 0.2);
+        }
+
+        .card-no,
+        .preview-card-no {
+          width: 36px;
+          height: 36px;
+          background: #1976d2;
+          color: white;
+          border-radius: 50%;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          font-weight: 700;
+          font-size: 1rem;
+          flex-shrink: 0;
+        }
+
+        .preview-card-status {
+          margin-left: auto;
+          padding: 4px 12px;
+          border-radius: 20px;
+          font-weight: 600;
+          font-size: 0.8rem;
+        }
+
+        .preview-card-status.ok {
+          background: rgba(76, 175, 80, 0.3);
+          color: #c8e6c9;
+        }
+
+        .preview-card-status.ng {
+          background: rgba(244, 67, 54, 0.3);
+          color: #ffcdd2;
+        }
+
+        .card-info {
+          flex: 1;
+          min-width: 0;
+        }
+
+        .card-zona {
+          font-size: 0.85rem;
+          color: rgba(255, 255, 255, 0.8);
+          margin-bottom: 4px;
+        }
+
+        .card-lokasi {
+          font-size: 1rem;
+          font-weight: 600;
+          color: white;
+          word-break: break-word;
+        }
+
+        .expand-icon {
+          font-size: 1.2rem;
+          color: rgba(255, 255, 255, 0.8);
+          transition: transform 0.3s ease;
+        }
+
+        .expand-icon.expanded {
+          transform: rotate(180deg);
+        }
+
+        .card-body,
+        .preview-card-body {
+          padding: 16px;
+          background: rgba(0, 0, 0, 0.1);
+        }
+
+        .preview-row {
+          display: flex;
+          justify-content: space-between;
+          align-items: flex-start;
+          padding: 8px 0;
+          border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+          gap: 12px;
+        }
+
+        .preview-row:last-child {
+          border-bottom: none;
+        }
+
+        .preview-label {
+          font-size: 0.85rem;
+          color: rgba(255, 255, 255, 0.8);
+          font-weight: 500;
+          min-width: 80px;
+          flex-shrink: 0;
+        }
+
+        .preview-value {
+          font-size: 0.9rem;
+          color: white;
+          word-break: break-word;
+          text-align: right;
+          flex: 1;
+        }
+
+        .preview-card-image {
+          width: 60px;
+          height: 60px;
+          object-fit: cover;
+          border-radius: 6px;
+          border: 2px solid white;
+          cursor: pointer;
+        }
+
+        .form-group {
+          margin-bottom: 16px;
+        }
+
+        .form-group:last-child {
+          margin-bottom: 0;
+        }
+
+        .form-group label {
+          display: block;
+          margin-bottom: 6px;
+          font-size: 0.9rem;
+          color: rgba(255, 255, 255, 0.9);
+          font-weight: 500;
+        }
+
         .image-upload {
           display: flex;
           justify-content: center;
           align-items: center;
-          min-height: 40px;
+          min-height: 44px;
         }
 
         .file-label {
           display: inline-block;
-          padding: 6px 12px;
+          padding: 8px 16px;
           background: rgba(255, 255, 255, 0.9);
           color: #333;
           border-radius: 6px;
-          font-size: 0.85rem;
+          font-size: 0.9rem;
           cursor: pointer;
           transition: background 0.2s;
+          min-height: 44px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+        }
+
+        .file-label-large {
+          width: 100%;
+          padding: 12px 16px;
         }
 
         .file-label:hover {
@@ -835,8 +1217,8 @@ export default function FireAlarmChecklist({ params }: { params: Promise<{ zona:
 
         .image-preview {
           position: relative;
-          width: 60px;
-          height: 60px;
+          width: 80px;
+          height: 80px;
         }
 
         .uploaded-image,
@@ -861,15 +1243,17 @@ export default function FireAlarmChecklist({ params }: { params: Promise<{ zona:
           color: white;
           border: 2px solid white;
           border-radius: 50%;
-          width: 20px;
-          height: 20px;
-          font-size: 12px;
+          width: 24px;
+          height: 24px;
+          font-size: 14px;
           cursor: pointer;
           display: flex;
           align-items: center;
           justify-content: center;
           padding: 0;
           transition: all 0.2s;
+          min-height: 24px;
+          min-width: 24px;
         }
 
         .remove-btn:hover {
@@ -889,6 +1273,7 @@ export default function FireAlarmChecklist({ params }: { params: Promise<{ zona:
           gap: 16px;
           justify-content: flex-end;
           margin-top: 20px;
+          flex-wrap: wrap;
         }
 
         .btn-cancel,
@@ -896,13 +1281,15 @@ export default function FireAlarmChecklist({ params }: { params: Promise<{ zona:
         .cancel-btn,
         .save-btn,
         .report-btn {
-          padding: 10px 20px;
+          padding: 12px 24px;
           border: none;
           border-radius: 8px;
           font-weight: 600;
           cursor: pointer;
-          font-size: 0.95rem;
+          font-size: 1rem;
           transition: all 0.2s ease;
+          min-height: 48px;
+          min-width: 120px;
         }
 
         .btn-cancel,
@@ -973,15 +1360,29 @@ export default function FireAlarmChecklist({ params }: { params: Promise<{ zona:
         }
 
         .status-ng {
-          background: rgba(244, 67, 54, 0.2);
+          background: rgba(244, 67, 54, 0.3);
           color: #ffcdd2;
           font-weight: bold;
           border-radius: 4px;
+          padding: 4px 8px;
+        }
+
+        .status-ok {
+          background: rgba(76, 175, 80, 0.3);
+          color: #c8e6c9;
+          font-weight: bold;
+          border-radius: 4px;
+          padding: 4px 8px;
+        }
+
+        .row-ng {
+          background: rgba(244, 67, 54, 0.1);
         }
 
         .ng-actions {
           display: flex;
           gap: 12px;
+          flex-wrap: wrap;
         }
 
         .checklist-table .info-cell {
@@ -1042,17 +1443,82 @@ export default function FireAlarmChecklist({ params }: { params: Promise<{ zona:
           to { transform: rotate(360deg); }
         }
 
-        @media (max-width: 768px) {
+        /* ✅ TABLET RESPONSIVE */
+        @media (max-width: 1024px) {
+          .page-content {
+            padding: 20px 16px;
+          }
+
+          .page-title {
+            font-size: 1.4rem;
+          }
+
           .checklist-table,
           .simple-table {
-            font-size: 0.8rem;
+            min-width: 900px;
+            font-size: 0.85rem;
           }
 
           .checklist-table th,
           .checklist-table td,
           .simple-table th,
           .simple-table td {
-            padding: 8px 4px;
+            padding: 10px 8px;
+          }
+        }
+
+        /* ✅ MOBILE RESPONSIVE */
+        @media (max-width: 768px) {
+          .page-content {
+            padding: 16px 12px;
+            margin-left: 0;
+          }
+
+          .header-banner {
+            padding: 12px 16px;
+            flex-direction: column;
+            align-items: flex-start;
+            gap: 12px;
+          }
+
+          .btn-back {
+            width: 100%;
+            justify-content: center;
+          }
+
+          .btn-back-text {
+            display: inline;
+          }
+
+          .page-title {
+            font-size: 1.3rem;
+            width: 100%;
+          }
+
+          .subtitle {
+            font-size: 0.9rem;
+            width: 100%;
+          }
+
+          .date-text {
+            font-size: 1rem;
+            width: 100%;
+            text-align: center;
+          }
+
+          .card-container {
+            padding: 16px 12px;
+          }
+
+          /* Hide desktop table, show mobile cards */
+          .desktop-view,
+          .desktop-preview {
+            display: none;
+          }
+
+          .mobile-view,
+          .mobile-preview {
+            display: block;
           }
 
           .form-actions,
@@ -1062,18 +1528,183 @@ export default function FireAlarmChecklist({ params }: { params: Promise<{ zona:
             gap: 12px;
           }
 
-          .page-title {
-            font-size: 1.5rem;
+          .btn-cancel,
+          .btn-submit,
+          .cancel-btn,
+          .save-btn,
+          .report-btn {
+            width: 100%;
+            min-height: 52px;
+            font-size: 1rem;
+          }
+
+          .checklist-table,
+          .simple-table {
+            min-width: 700px;
+            font-size: 0.8rem;
+          }
+
+          .checklist-table th,
+          .checklist-table td,
+          .simple-table th,
+          .simple-table td {
+            padding: 8px 6px;
+          }
+
+          .status-select,
+          .notes-input {
+            font-size: 0.9rem;
+            min-height: 44px;
           }
 
           .image-preview {
-            width: 40px;
-            height: 40px;
+            width: 70px;
+            height: 70px;
+          }
+
+          .preview-image {
+            max-width: 70px;
+            max-height: 70px;
+          }
+
+          .card-no {
+            width: 32px;
+            height: 32px;
+            font-size: 0.9rem;
+          }
+
+          .card-lokasi {
+            font-size: 0.95rem;
+          }
+
+          .preview-label {
+            min-width: 70px;
+            font-size: 0.8rem;
+          }
+
+          .preview-value {
+            font-size: 0.85rem;
+          }
+
+          .preview-card-image {
+            width: 50px;
+            height: 50px;
+          }
+        }
+
+        /* ✅ SMALL MOBILE */
+        @media (max-width: 480px) {
+          .page-content {
+            padding: 12px 8px;
+          }
+
+          .header-banner {
+            padding: 10px 12px;
+          }
+
+          .page-title {
+            font-size: 1.1rem;
+          }
+
+          .subtitle {
+            font-size: 0.85rem;
+          }
+
+          .date-text {
+            font-size: 0.9rem;
+            padding: 3px 8px;
+          }
+
+          .card-container {
+            padding: 12px 8px;
+          }
+
+          .card-header,
+          .preview-card-header {
+            padding: 12px;
+          }
+
+          .card-no,
+          .preview-card-no {
+            width: 28px;
+            height: 28px;
+            font-size: 0.85rem;
+          }
+
+          .card-body,
+          .preview-card-body {
+            padding: 12px;
+          }
+
+          .form-group label {
+            font-size: 0.85rem;
+          }
+
+          .status-select,
+          .notes-input {
+            font-size: 0.9rem;
+            min-height: 44px;
+          }
+
+          .file-label {
+            padding: 10px 14px;
+            font-size: 0.85rem;
+            min-height: 44px;
+          }
+
+          .file-label-large {
+            padding: 12px 14px;
+          }
+
+          .image-preview {
+            width: 60px;
+            height: 60px;
           }
 
           .preview-image {
             max-width: 60px;
             max-height: 60px;
+          }
+
+          .btn-cancel,
+          .btn-submit,
+          .cancel-btn,
+          .save-btn,
+          .report-btn {
+            min-height: 56px;
+            font-size: 0.95rem;
+            padding: 14px 20px;
+          }
+
+          .checklist-table,
+          .simple-table {
+            min-width: 600px;
+            font-size: 0.75rem;
+          }
+
+          .checklist-table th,
+          .checklist-table td,
+          .simple-table th,
+          .simple-table td {
+            padding: 6px 4px;
+          }
+
+          .preview-title {
+            font-size: 1.3rem;
+          }
+
+          .preview-label {
+            min-width: 60px;
+            font-size: 0.75rem;
+          }
+
+          .preview-value {
+            font-size: 0.8rem;
+          }
+
+          .preview-card-image {
+            width: 45px;
+            height: 45px;
           }
         }
       `}</style>

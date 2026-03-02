@@ -1,4 +1,4 @@
-// app/exit-lamp-pintu-darurat/riwayat/titik-kumpul/page.tsx
+// app/status-ga/exit-lamp-pintu-darurat/riwayat/titik-kumpul/page.tsx
 "use client";
 
 import { useState, useEffect } from "react";
@@ -50,6 +50,8 @@ export default function RiwayatTitikKumpul() {
   const [filterDate, setFilterDate] = useState("");
   const [filterLocation, setFilterLocation] = useState("");
   const [previewImage, setPreviewImage] = useState<string | null>(null);
+  const [expandedRecord, setExpandedRecord] = useState<number | null>(null);
+  const [expandedSection, setExpandedSection] = useState<'titikKumpul' | 'jalurEvakuasi' | null>(null);
 
   // Validasi akses
   useEffect(() => {
@@ -58,13 +60,12 @@ export default function RiwayatTitikKumpul() {
     }
   }, [user, router]);
 
-  // ✅ Load data dari API (BUKAN localStorage)
+  // Load data dari API
   useEffect(() => {
     const loadRecords = async () => {
       try {
         setLoading(true);
         
-        // ✅ Fetch data dari API
         const response = await fetch('/api/titik-kumpul/history');
         
         if (!response.ok) {
@@ -75,11 +76,10 @@ export default function RiwayatTitikKumpul() {
         
         const data = await response.json();
         
-        // ✅ Format data agar sesuai dengan interface
         const formattedData = data.map((record: any) => ({
-          id: record.id.toString(), // Convert number ke string
+          id: record.id.toString(),
           date: record.date,
-          category: "titik-kumpul", // Tambahkan category
+          category: "titik-kumpul",
           checker: record.checker,
           submittedAt: record.submittedAt,
           titikKumpul: record.titikKumpul.map((item: any, index: number) => ({
@@ -116,7 +116,7 @@ export default function RiwayatTitikKumpul() {
     };
     
     loadRecords();
-  }, []); // ✅ Hanya load sekali saat component mount
+  }, []);
 
   // Terapkan filter
   useEffect(() => {
@@ -152,6 +152,14 @@ export default function RiwayatTitikKumpul() {
     setPreviewImage(null);
   };
 
+  const toggleExpandRecord = (recordIndex: number) => {
+    setExpandedRecord(expandedRecord === recordIndex ? null : recordIndex);
+  };
+
+  const toggleExpandSection = (section: 'titikKumpul' | 'jalurEvakuasi') => {
+    setExpandedSection(expandedSection === section ? null : section);
+  };
+
   if (!user) return null;
 
   return (
@@ -159,6 +167,7 @@ export default function RiwayatTitikKumpul() {
       <Sidebar userName={user.fullName} />
 
       <div className="page-content">
+        {/* Header Banner */}
         <div className="header-banner">
           <button
             onClick={() => router.push("/status-ga/exit-lamp-pintu-darurat")}
@@ -166,7 +175,7 @@ export default function RiwayatTitikKumpul() {
             aria-label="Kembali"
           >
             <ArrowLeft size={18} />
-            <span>Kembali</span>
+            <span className="btn-back-text">Kembali</span>
           </button>
           <h1 className="page-title">📍 Riwayat Titik Kumpul & Jalur Evakuasi</h1>
         </div>
@@ -214,7 +223,10 @@ export default function RiwayatTitikKumpul() {
         {/* Daftar Riwayat */}
         <div className="riwayat-container">
           {loading ? (
-            <div className="loading-state">⏳ Memuat data...</div>
+            <div className="loading-state">
+              <div className="spinner"></div>
+              <p>⏳ Memuat data...</p>
+            </div>
           ) : filteredRecords.length === 0 ? (
             <div className="empty-state">
               {records.length === 0 
@@ -223,116 +235,283 @@ export default function RiwayatTitikKumpul() {
             </div>
           ) : (
             <div className="data-tables">
-              {filteredRecords.map((record) => (
-                <div key={record.id} className="data-section">
-                  <div className="section-header">
-                    <span>📅 Tanggal: {new Date(record.date).toLocaleDateString('id-ID')}</span>
-                    <span>👤 Petugas: {record.checker}</span>
-                  </div>
+              {/* ✅ DESKTOP: Table View */}
+              <div className="desktop-view">
+                {filteredRecords.map((record) => (
+                  <div key={record.id} className="data-section">
+                    <div className="section-header">
+                      <span>📅 Tanggal: {new Date(record.date).toLocaleDateString('id-ID')}</span>
+                      <span>👤 Petugas: {record.checker}</span>
+                    </div>
 
-                  {/* C.1 AREA EVAKUASI (TITIK KUMPUL) */}
-                  <h3 className="subsection-title">C.1 AREA EVAKUASI (TITIK KUMPUL)</h3>
-                  <div className="table-wrapper">
-                    <table className="apd-table">
-                      <thead>
-                        <tr>
-                          <th>No</th>
-                          <th>Lokasi</th>
-                          <th>Area Aman</th>
-                          <th>Identitas</th>
-                          <th>Mobil PMK</th>
-                          <th>Keterangan</th>
-                          <th>Foto</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {record.titikKumpul.map((item) => (
-                          <tr key={`${record.id}-tk-${item.no}`}>
-                            <td>{item.no}</td>
-                            <td>{item.lokasi}</td>
-                            <td className={item.areaAman === "NG" ? "status-ng" : ""}>
-                              {item.areaAman || "-"}
-                            </td>
-                            <td className={item.identitasTitikKumpul === "NG" ? "status-ng" : ""}>
-                              {item.identitasTitikKumpul || "-"}
-                            </td>
-                            <td className={item.areaMobilPMK === "NG" ? "status-ng" : ""}>
-                              {item.areaMobilPMK || "-"}
-                            </td>
-                            <td>{item.keterangan || "-"}</td>
-                            <td>
-                              {item.foto ? (
-                                <img
-                                  src={item.foto.startsWith('http') || item.foto.startsWith('data:') 
-                                    ? item.foto 
-                                    : `/uploads${item.foto.split('uploads')[1]}`}
-                                  alt="Foto"
-                                  className="history-image clickable"
-                                  onClick={() => openImagePreview(item.foto)}
-                                  onError={(e) => {
-                                    console.error('Image load error:', item.foto);
-                                    (e.target as HTMLImageElement).style.display = 'none';
-                                  }}
-                                />
-                              ) : (
-                                "-"
-                              )}
-                            </td>
+                    {/* C.1 AREA EVAKUASI (TITIK KUMPUL) */}
+                    <h3 className="subsection-title">C.1 AREA EVAKUASI (TITIK KUMPUL)</h3>
+                    <div className="table-wrapper">
+                      <table className="apd-table">
+                        <thead>
+                          <tr>
+                            <th>No</th>
+                            <th>Lokasi</th>
+                            <th>Area Aman</th>
+                            <th>Identitas</th>
+                            <th>Mobil PMK</th>
+                            <th>Keterangan</th>
+                            <th>Foto</th>
                           </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
+                        </thead>
+                        <tbody>
+                          {record.titikKumpul.map((item) => {
+                            const hasNg = 
+                              item.areaAman === "NG" ||
+                              item.identitasTitikKumpul === "NG" ||
+                              item.areaMobilPMK === "NG";
+                            
+                            return (
+                              <tr key={`${record.id}-tk-${item.no}`} className={hasNg ? 'row-ng' : ''}>
+                                <td>{item.no}</td>
+                                <td>{item.lokasi}</td>
+                                <td className={item.areaAman === "NG" ? "status-ng" : ""}>
+                                  {item.areaAman || "-"}
+                                </td>
+                                <td className={item.identitasTitikKumpul === "NG" ? "status-ng" : ""}>
+                                  {item.identitasTitikKumpul || "-"}
+                                </td>
+                                <td className={item.areaMobilPMK === "NG" ? "status-ng" : ""}>
+                                  {item.areaMobilPMK || "-"}
+                                </td>
+                                <td>{item.keterangan || "-"}</td>
+                                <td>
+                                  {item.foto ? (
+                                    <img
+                                      src={item.foto.startsWith('http') || item.foto.startsWith('data:') 
+                                        ? item.foto 
+                                        : `/uploads${item.foto.split('uploads')[1]}`}
+                                      alt="Foto"
+                                      className="history-image clickable"
+                                      onClick={() => openImagePreview(item.foto)}
+                                      onError={(e) => {
+                                        console.error('Image load error:', item.foto);
+                                        (e.target as HTMLImageElement).style.display = 'none';
+                                      }}
+                                    />
+                                  ) : (
+                                    "-"
+                                  )}
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
 
-                  {/* C.2 JALUR EVAKUASI */}
-                  <h3 className="subsection-title" style={{ marginTop: "24px" }}>
-                    C.2 JALUR EVAKUASI
-                  </h3>
-                  <div className="table-wrapper">
-                    <table className="apd-table">
-                      <thead>
-                        <tr>
-                          <th>No</th>
-                          <th>Item Pengecekan</th>
-                          <th>Hasil Cek</th>
-                          <th>Keterangan</th>
-                          <th>Foto</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {record.jalurEvakuasi.map((item) => (
-                          <tr key={`${record.id}-je-${item.no}`}>
-                            <td>{item.no}</td>
-                            <td>{item.pertanyaan}</td>
-                            <td className={item.hasilCek === "NG" ? "status-ng" : ""}>
-                              {item.hasilCek || "-"}
-                            </td>
-                            <td>{item.keterangan || "-"}</td>
-                            <td>
-                              {item.foto ? (
-                                <img
-                                  src={item.foto.startsWith('http') || item.foto.startsWith('data:') 
-                                    ? item.foto 
-                                    : `/uploads${item.foto.split('uploads')[1]}`}
-                                  alt="Foto"
-                                  className="history-image clickable"
-                                  onClick={() => openImagePreview(item.foto)}
-                                  onError={(e) => {
-                                    console.error('Image load error:', item.foto);
-                                    (e.target as HTMLImageElement).style.display = 'none';
-                                  }}
-                                />
-                              ) : (
-                                "-"
-                              )}
-                            </td>
+                    {/* C.2 JALUR EVAKUASI */}
+                    <h3 className="subsection-title" style={{ marginTop: "24px" }}>
+                      C.2 JALUR EVAKUASI
+                    </h3>
+                    <div className="table-wrapper">
+                      <table className="apd-table">
+                        <thead>
+                          <tr>
+                            <th>No</th>
+                            <th>Item Pengecekan</th>
+                            <th>Hasil Cek</th>
+                            <th>Keterangan</th>
+                            <th>Foto</th>
                           </tr>
-                        ))}
-                      </tbody>
-                    </table>
+                        </thead>
+                        <tbody>
+                          {record.jalurEvakuasi.map((item) => (
+                            <tr key={`${record.id}-je-${item.no}`}>
+                              <td>{item.no}</td>
+                              <td>{item.pertanyaan}</td>
+                              <td className={item.hasilCek === "NG" ? "status-ng" : ""}>
+                                {item.hasilCek || "-"}
+                              </td>
+                              <td>{item.keterangan || "-"}</td>
+                              <td>
+                                {item.foto ? (
+                                  <img
+                                    src={item.foto.startsWith('http') || item.foto.startsWith('data:') 
+                                      ? item.foto 
+                                      : `/uploads${item.foto.split('uploads')[1]}`}
+                                    alt="Foto"
+                                    className="history-image clickable"
+                                    onClick={() => openImagePreview(item.foto)}
+                                    onError={(e) => {
+                                      console.error('Image load error:', item.foto);
+                                      (e.target as HTMLImageElement).style.display = 'none';
+                                    }}
+                                  />
+                                ) : (
+                                  "-"
+                                )}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
                   </div>
-                </div>
-              ))}
+                ))}
+              </div>
+
+              {/* ✅ MOBILE: Card View */}
+              <div className="mobile-view">
+                {filteredRecords.map((record, recordIndex) => (
+                  <div key={record.id} className="record-card">
+                    <div 
+                      className="card-header" 
+                      onClick={() => toggleExpandRecord(recordIndex)}
+                    >
+                      <div className="card-date">
+                        <span className="calendar-icon">📅</span>
+                        <span>{new Date(record.date).toLocaleDateString('id-ID')}</span>
+                      </div>
+                      <div className="card-checker">
+                        <span className="user-icon">👤</span>
+                        <span>{record.checker}</span>
+                      </div>
+                      <div className={`expand-icon ${expandedRecord === recordIndex ? 'expanded' : ''}`}>
+                        ▼
+                      </div>
+                    </div>
+
+                    {expandedRecord === recordIndex && (
+                      <div className="card-body">
+                        {/* C.1 Titik Kumpul Section */}
+                        <div className="mobile-section">
+                          <div 
+                            className="section-toggle"
+                            onClick={() => toggleExpandSection('titikKumpul')}
+                          >
+                            <h4 className="mobile-section-title">C.1 AREA EVAKUASI (TITIK KUMPUL)</h4>
+                            <span className="toggle-icon">{expandedSection === 'titikKumpul' ? '▲' : '▼'}</span>
+                          </div>
+
+                          {expandedSection === 'titikKumpul' && (
+                            <div className="items-list">
+                              {record.titikKumpul.map((item, itemIndex) => {
+                                const hasNg = 
+                                  item.areaAman === "NG" ||
+                                  item.identitasTitikKumpul === "NG" ||
+                                  item.areaMobilPMK === "NG";
+                                
+                                return (
+                                  <div key={`${record.id}-tk-${itemIndex}`} className={`item-card ${hasNg ? 'item-card-ng' : ''}`}>
+                                    <div className="item-header">
+                                      <span className="item-no">#{item.no}</span>
+                                      <span className={`item-status ${hasNg ? 'status-ng' : 'status-ok'}`}>
+                                        {hasNg ? 'NG' : 'OK'}
+                                      </span>
+                                    </div>
+                                    <div className="item-lokasi">{item.lokasi}</div>
+                                    
+                                    <div className="item-details">
+                                      <div className="detail-row">
+                                        <span className="detail-label">Area Aman:</span>
+                                        <span className={`detail-value ${item.areaAman === 'NG' ? 'ng' : 'ok'}`}>
+                                          {item.areaAman || '-'}
+                                        </span>
+                                      </div>
+                                      <div className="detail-row">
+                                        <span className="detail-label">Identitas:</span>
+                                        <span className={`detail-value ${item.identitasTitikKumpul === 'NG' ? 'ng' : 'ok'}`}>
+                                          {item.identitasTitikKumpul || '-'}
+                                        </span>
+                                      </div>
+                                      <div className="detail-row">
+                                        <span className="detail-label">Mobil PMK:</span>
+                                        <span className={`detail-value ${item.areaMobilPMK === 'NG' ? 'ng' : 'ok'}`}>
+                                          {item.areaMobilPMK || '-'}
+                                        </span>
+                                      </div>
+                                      {item.keterangan && (
+                                        <div className="detail-row full">
+                                          <span className="detail-label">Keterangan:</span>
+                                          <span className="detail-value">{item.keterangan}</span>
+                                        </div>
+                                      )}
+                                      {item.foto && (
+                                        <div className="detail-row full">
+                                          <span className="detail-label">Foto:</span>
+                                          <img
+                                            src={item.foto.startsWith('http') || item.foto.startsWith('data:') 
+                                              ? item.foto 
+                                              : `/uploads${item.foto.split('uploads')[1]}`}
+                                            alt="Foto"
+                                            className="item-photo"
+                                            onClick={() => openImagePreview(item.foto)}
+                                          />
+                                        </div>
+                                      )}
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          )}
+                        </div>
+
+                        {/* C.2 Jalur Evakuasi Section */}
+                        <div className="mobile-section">
+                          <div 
+                            className="section-toggle"
+                            onClick={() => toggleExpandSection('jalurEvakuasi')}
+                          >
+                            <h4 className="mobile-section-title">C.2 JALUR EVAKUASI</h4>
+                            <span className="toggle-icon">{expandedSection === 'jalurEvakuasi' ? '▲' : '▼'}</span>
+                          </div>
+
+                          {expandedSection === 'jalurEvakuasi' && (
+                            <div className="items-list">
+                              {record.jalurEvakuasi.map((item, itemIndex) => (
+                                <div key={`${record.id}-je-${itemIndex}`} className={`item-card ${item.hasilCek === 'NG' ? 'item-card-ng' : ''}`}>
+                                  <div className="item-header">
+                                    <span className="item-no">#{item.no}</span>
+                                    <span className={`item-status ${item.hasilCek === 'NG' ? 'status-ng' : 'status-ok'}`}>
+                                      {item.hasilCek === 'NG' ? 'NG' : 'OK'}
+                                    </span>
+                                  </div>
+                                  <div className="item-pertanyaan">{item.pertanyaan}</div>
+                                  
+                                  <div className="item-details">
+                                    <div className="detail-row">
+                                      <span className="detail-label">Hasil Cek:</span>
+                                      <span className={`detail-value ${item.hasilCek === 'NG' ? 'ng' : 'ok'}`}>
+                                        {item.hasilCek || '-'}
+                                      </span>
+                                    </div>
+                                    {item.keterangan && (
+                                      <div className="detail-row full">
+                                        <span className="detail-label">Keterangan:</span>
+                                        <span className="detail-value">{item.keterangan}</span>
+                                      </div>
+                                    )}
+                                    {item.foto && (
+                                      <div className="detail-row full">
+                                        <span className="detail-label">Foto:</span>
+                                        <img
+                                          src={item.foto.startsWith('http') || item.foto.startsWith('data:') 
+                                            ? item.foto 
+                                            : `/uploads${item.foto.split('uploads')[1]}`}
+                                          alt="Foto"
+                                          className="item-photo"
+                                          onClick={() => openImagePreview(item.foto)}
+                                        />
+                                      </div>
+                                    )}
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
             </div>
           )}
         </div>
@@ -342,11 +521,31 @@ export default function RiwayatTitikKumpul() {
           <div className="image-modal" onClick={closeImagePreview}>
             <div className="modal-content" onClick={(e) => e.stopPropagation()}>
               <button className="close-btn" onClick={closeImagePreview}>✕</button>
-              <img src={previewImage} alt="Zoom" className="modal-image" />
+              <img 
+                src={previewImage.startsWith('http') || previewImage.startsWith('data:') 
+                  ? previewImage 
+                  : `/uploads${previewImage.split('uploads')[1]}`}
+                alt="Zoom" 
+                className="modal-image"
+                onError={(e) => {
+                  console.error('Modal image load error');
+                  (e.target as HTMLImageElement).alt = 'Gambar tidak dapat dimuat';
+                }}
+              />
             </div>
           </div>
         )}
       </div>
+
+      <style jsx global>{`
+        body {
+          font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu,
+            Cantarell, sans-serif;
+          margin: 0;
+          padding: 0;
+          background-color: #f8fafc;
+        }
+      `}</style>
 
       <style jsx>{`
         .app-page {
@@ -357,30 +556,32 @@ export default function RiwayatTitikKumpul() {
 
         .page-content {
           flex: 1;
+          width: calc(100% - 280px);
+          margin-left: 280px;
           padding: 24px;
-          max-width: 1400px;
-          margin: 0 auto;
           color: #1e293b;
+          overflow-x: hidden;
         }
 
-        /* Header Banner Biru Gradasi */
+        /* Header Banner */
         .header-banner {
           background: linear-gradient(135deg, #1976d2 0%, #0d47a1 100%);
           color: white;
-          padding: 20px 24px;
+          padding: 16px 24px;
           border-radius: 16px;
           margin-bottom: 24px;
           box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
           display: flex;
           align-items: center;
           gap: 16px;
+          flex-wrap: wrap;
         }
 
         .btn-back {
           display: flex;
           align-items: center;
           gap: 8px;
-          padding: 6px 12px;
+          padding: 8px 16px;
           background: rgba(255, 255, 255, 0.2);
           color: white;
           border: none;
@@ -389,10 +590,15 @@ export default function RiwayatTitikKumpul() {
           font-weight: 600;
           font-size: 0.9rem;
           transition: background 0.2s;
+          min-height: 44px;
         }
 
         .btn-back:hover {
           background: rgba(255, 255, 255, 0.3);
+        }
+
+        .btn-back-text {
+          display: inline;
         }
 
         .page-title {
@@ -400,7 +606,7 @@ export default function RiwayatTitikKumpul() {
           font-size: 1.6rem;
           font-weight: 700;
           flex: 1;
-          text-align: center;
+          word-break: break-word;
         }
 
         /* Filter */
@@ -435,6 +641,7 @@ export default function RiwayatTitikKumpul() {
           border-radius: 8px;
           font-size: 0.95rem;
           min-width: 160px;
+          min-height: 44px;
         }
 
         .clear-filter {
@@ -446,6 +653,11 @@ export default function RiwayatTitikKumpul() {
           cursor: pointer;
           font-size: 0.9rem;
           font-weight: 600;
+          min-height: 44px;
+        }
+
+        .clear-filter:hover {
+          background: #b91c1c;
         }
 
         .btn-add {
@@ -457,6 +669,13 @@ export default function RiwayatTitikKumpul() {
           font-weight: 600;
           margin-left: auto;
           white-space: nowrap;
+          min-height: 44px;
+          display: flex;
+          align-items: center;
+        }
+
+        .btn-add:hover {
+          background: #1565c0;
         }
 
         /* Riwayat Container */
@@ -468,17 +687,33 @@ export default function RiwayatTitikKumpul() {
           min-height: 400px;
         }
 
-        .loading-state,
+        .loading-state {
+          text-align: center;
+          padding: 60px 20px;
+          color: #1e88e5;
+          font-weight: 600;
+        }
+
+        .spinner {
+          display: inline-block;
+          width: 40px;
+          height: 40px;
+          border: 4px solid #e2e8f0;
+          border-top-color: #1e88e5;
+          border-radius: 50%;
+          animation: spin 0.8s linear infinite;
+          margin-bottom: 16px;
+        }
+
+        @keyframes spin {
+          to { transform: rotate(360deg); }
+        }
+
         .empty-state {
           text-align: center;
           padding: 40px 20px;
           color: #64748b;
           font-size: 1.1rem;
-        }
-
-        .loading-state {
-          color: #1e88e5;
-          font-weight: 600;
         }
 
         .data-tables {
@@ -487,13 +722,24 @@ export default function RiwayatTitikKumpul() {
           gap: 24px;
         }
 
-        .data-section {
+        .desktop-view {
+          display: block;
+        }
+
+        .mobile-view {
+          display: none;
+        }
+
+        .data-section,
+        .record-card {
           border: 1px solid #e2e8f0;
           border-radius: 10px;
           overflow: hidden;
+          margin-bottom: 24px;
         }
 
-        .section-header {
+        .section-header,
+        .card-header {
           background: #f1f5f9;
           padding: 12px 16px;
           display: flex;
@@ -505,22 +751,69 @@ export default function RiwayatTitikKumpul() {
           gap: 12px;
         }
 
+        .card-header {
+          cursor: pointer;
+          background: #f8fafc;
+          transition: background 0.2s;
+          min-height: 44px;
+          align-items: center;
+        }
+
+        .card-header:hover {
+          background: #f1f5f9;
+        }
+
+        .card-date {
+          display: flex;
+          align-items: center;
+          gap: 6px;
+          font-size: 0.9rem;
+          color: #1e88e5;
+          font-weight: 600;
+        }
+
+        .card-checker {
+          display: flex;
+          align-items: center;
+          gap: 6px;
+          font-size: 0.9rem;
+          color: #64748b;
+          flex: 1;
+        }
+
+        .expand-icon {
+          font-size: 1.2rem;
+          color: #94a3b8;
+          transition: transform 0.3s ease;
+        }
+
+        .expand-icon.expanded {
+          transform: rotate(180deg);
+        }
+
+        .card-body {
+          padding: 16px;
+          background: #fafbfc;
+        }
+
         .subsection-title {
           margin: 24px 0 12px;
-          color: white;
+          color: #1e293b;
           font-size: 1.2rem;
           padding-bottom: 6px;
-          border-bottom: 1px solid rgba(255, 255, 255, 0.3);
+          border-bottom: 2px solid #e2e8f0;
         }
 
         .table-wrapper {
           overflow-x: auto;
+          -webkit-overflow-scrolling: touch;
         }
 
         .apd-table {
           width: 100%;
           border-collapse: collapse;
           font-size: 0.85rem;
+          min-width: 800px;
         }
 
         .apd-table th,
@@ -536,6 +829,7 @@ export default function RiwayatTitikKumpul() {
           color: #1e293b;
           position: sticky;
           top: 0;
+          z-index: 10;
         }
 
         .status-ng {
@@ -544,6 +838,10 @@ export default function RiwayatTitikKumpul() {
           font-weight: 600;
           border-radius: 4px;
           padding: 2px 6px;
+        }
+
+        .row-ng {
+          background: rgba(244, 67, 54, 0.05);
         }
 
         .history-image {
@@ -561,6 +859,165 @@ export default function RiwayatTitikKumpul() {
 
         .history-image.clickable:hover {
           transform: scale(1.05);
+        }
+
+        /* Mobile Section Styles */
+        .mobile-section {
+          margin-bottom: 24px;
+        }
+
+        .mobile-section:last-child {
+          margin-bottom: 0;
+        }
+
+        .section-toggle {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          padding: 12px 16px;
+          background: #f1f5f9;
+          border-radius: 8px;
+          cursor: pointer;
+          margin-bottom: 12px;
+        }
+
+        .mobile-section-title {
+          margin: 0;
+          font-size: 1rem;
+          color: #1e293b;
+          font-weight: 600;
+        }
+
+        .toggle-icon {
+          font-size: 1.2rem;
+          color: #64748b;
+        }
+
+        .items-list {
+          display: flex;
+          flex-direction: column;
+          gap: 12px;
+        }
+
+        .item-card {
+          background: white;
+          border: 1px solid #e2e8f0;
+          border-radius: 8px;
+          overflow: hidden;
+        }
+
+        .item-card-ng {
+          border-color: rgba(244, 67, 54, 0.5);
+          background: rgba(244, 67, 54, 0.05);
+        }
+
+        .item-header {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          padding: 12px 16px;
+          background: #f8fafc;
+          border-bottom: 1px solid #e2e8f0;
+        }
+
+        .item-no {
+          background: #1e88e5;
+          color: white;
+          padding: 4px 12px;
+          border-radius: 20px;
+          font-weight: 700;
+          font-size: 0.85rem;
+        }
+
+        .item-status {
+          padding: 4px 12px;
+          border-radius: 20px;
+          font-weight: 600;
+          font-size: 0.8rem;
+        }
+
+        .item-status.ok {
+          background: #d1fae5;
+          color: #065f46;
+        }
+
+        .item-status.ng {
+          background: #fee2e2;
+          color: #dc2626;
+        }
+
+        .item-lokasi,
+        .item-pertanyaan {
+          font-size: 0.95rem;
+          font-weight: 600;
+          color: #1e293b;
+          padding: 12px 16px 4px;
+          word-break: break-word;
+        }
+
+        .item-pertanyaan {
+          font-size: 0.9rem;
+          font-weight: 500;
+        }
+
+        .item-details {
+          display: flex;
+          flex-direction: column;
+          gap: 8px;
+          padding: 0 16px 16px;
+        }
+
+        .detail-row {
+          display: flex;
+          justify-content: space-between;
+          align-items: flex-start;
+          padding: 8px 0;
+          border-bottom: 1px solid #f1f5f9;
+          gap: 12px;
+        }
+
+        .detail-row:last-child {
+          border-bottom: none;
+        }
+
+        .detail-row.full {
+          flex-direction: column;
+          gap: 4px;
+        }
+
+        .detail-label {
+          font-size: 0.85rem;
+          color: #64748b;
+          font-weight: 500;
+          min-width: 100px;
+          flex-shrink: 0;
+        }
+
+        .detail-value {
+          font-size: 0.9rem;
+          color: #1e293b;
+          word-break: break-word;
+          text-align: right;
+          flex: 1;
+        }
+
+        .detail-value.ok {
+          color: #059669;
+          font-weight: 600;
+        }
+
+        .detail-value.ng {
+          color: #dc2626;
+          font-weight: 600;
+        }
+
+        .item-photo {
+          width: 60px;
+          height: 60px;
+          object-fit: cover;
+          border-radius: 6px;
+          border: 2px solid #e2e8f0;
+          cursor: pointer;
         }
 
         /* Image Modal */
@@ -604,6 +1061,11 @@ export default function RiwayatTitikKumpul() {
           box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
         }
 
+        .close-btn:hover {
+          background: #e0e0e0;
+          transform: scale(1.1);
+        }
+
         .modal-image {
           max-width: 100%;
           max-height: 80vh;
@@ -614,34 +1076,258 @@ export default function RiwayatTitikKumpul() {
           padding: 10px;
         }
 
-        @media (max-width: 768px) {
-          .header-banner {
-            flex-direction: column;
-            text-align: center;
-            gap: 12px;
+        /* ✅ TABLET RESPONSIVE */
+        @media (max-width: 1024px) {
+          .page-content {
+            padding: 20px 16px;
           }
 
           .page-title {
             font-size: 1.4rem;
           }
 
+          .apd-table {
+            min-width: 700px;
+            font-size: 0.8rem;
+          }
+
+          .apd-table th,
+          .apd-table td {
+            padding: 8px 6px;
+          }
+        }
+
+        /* ✅ MOBILE RESPONSIVE */
+        @media (max-width: 768px) {
+          .page-content {
+            width: 100%;
+            margin-left: 0;
+            padding: 16px 12px;
+          }
+
+          .header-banner {
+            padding: 12px 16px;
+            flex-direction: column;
+            align-items: flex-start;
+            gap: 12px;
+          }
+
+          .btn-back {
+            width: 100%;
+            justify-content: flex-start;
+          }
+
+          .btn-back-text {
+            display: inline;
+          }
+
+          .page-title {
+            font-size: 1.3rem;
+            margin: 8px 0 0 0;
+          }
+
           .date-filter {
             flex-direction: column;
             align-items: stretch;
+            gap: 12px;
+            padding: 12px;
+          }
+
+          .filter-group {
+            width: 100%;
+          }
+
+          .date-input,
+          .location-select {
+            width: 100%;
+            min-width: 100%;
+            font-size: 0.9rem;
+          }
+
+          .clear-filter,
+          .btn-add {
+            width: 100%;
+            justify-content: center;
           }
 
           .btn-add {
             margin-left: 0;
-            align-self: flex-start;
+          }
+
+          .riwayat-container {
+            padding: 16px 12px;
+          }
+
+          /* Hide desktop table, show mobile cards */
+          .desktop-view {
+            display: none;
+          }
+
+          .mobile-view {
+            display: block;
           }
 
           .apd-table {
+            min-width: 600px;
             font-size: 0.75rem;
           }
 
           .apd-table th,
           .apd-table td {
-            padding: 6px;
+            padding: 6px 4px;
+          }
+
+          .history-image {
+            width: 45px;
+            height: 45px;
+          }
+
+          .section-header {
+            flex-direction: column;
+            align-items: flex-start;
+            gap: 8px;
+          }
+
+          .card-date,
+          .card-checker {
+            font-size: 0.85rem;
+          }
+
+          .item-lokasi,
+          .item-pertanyaan {
+            font-size: 0.9rem;
+            padding: 10px 12px 4px;
+          }
+
+          .item-details {
+            padding: 0 12px 12px;
+          }
+
+          .detail-label {
+            min-width: 80px;
+            font-size: 0.8rem;
+          }
+
+          .detail-value {
+            font-size: 0.85rem;
+          }
+
+          .item-photo {
+            width: 50px;
+            height: 50px;
+          }
+        }
+
+        /* ✅ SMALL MOBILE */
+        @media (max-width: 480px) {
+          .page-content {
+            padding: 12px 8px;
+          }
+
+          .header-banner {
+            padding: 10px 12px;
+          }
+
+          .page-title {
+            font-size: 1.1rem;
+          }
+
+          .date-filter {
+            padding: 10px;
+            gap: 10px;
+          }
+
+          .filter-group label {
+            font-size: 0.85rem;
+          }
+
+          .date-input,
+          .location-select {
+            font-size: 0.85rem;
+            padding: 8px 10px;
+          }
+
+          .clear-filter,
+          .btn-add {
+            font-size: 0.85rem;
+            padding: 10px 14px;
+          }
+
+          .riwayat-container {
+            padding: 12px 8px;
+          }
+
+          .card-header {
+            padding: 12px;
+          }
+
+          .card-date,
+          .card-checker {
+            font-size: 0.8rem;
+          }
+
+          .card-body {
+            padding: 12px;
+          }
+
+          .section-toggle {
+            padding: 10px 12px;
+          }
+
+          .mobile-section-title {
+            font-size: 0.95rem;
+          }
+
+          .item-header {
+            padding: 10px 12px;
+          }
+
+          .item-no {
+            padding: 3px 10px;
+            font-size: 0.8rem;
+          }
+
+          .item-status {
+            font-size: 0.75rem;
+            padding: 3px 10px;
+          }
+
+          .item-lokasi,
+          .item-pertanyaan {
+            font-size: 0.85rem;
+            padding: 10px 12px 4px;
+          }
+
+          .item-details {
+            padding: 0 12px 12px;
+          }
+
+          .detail-row {
+            padding: 6px 0;
+          }
+
+          .detail-label {
+            min-width: 70px;
+            font-size: 0.75rem;
+          }
+
+          .detail-value {
+            font-size: 0.8rem;
+          }
+
+          .item-photo {
+            width: 45px;
+            height: 45px;
+          }
+
+          .apd-table {
+            min-width: 500px;
+            font-size: 0.7rem;
+          }
+
+          .apd-table th,
+          .apd-table td {
+            padding: 4px 3px;
           }
 
           .history-image {
@@ -649,9 +1335,9 @@ export default function RiwayatTitikKumpul() {
             height: 40px;
           }
 
-          .section-header {
-            flex-direction: column;
-            align-items: flex-start;
+          .spinner {
+            width: 35px;
+            height: 35px;
           }
         }
       `}</style>

@@ -4,7 +4,19 @@ import pool from '../../../../lib/db';
 
 export async function DELETE(request: NextRequest) {
   try {
-    const { id } = await request.json();
+    // ✅ FIX: Support BOTH query params AND JSON body for ID
+    const searchParams = request.nextUrl.searchParams;
+    let id = searchParams.get('id'); // Try query param first
+    
+    if (!id) {
+      // Fallback: try JSON body
+      try {
+        const body = await request.json();
+        id = body.id;
+      } catch {
+        // Body might not be JSON or already parsed
+      }
+    }
 
     if (!id) {
       return NextResponse.json(
@@ -17,7 +29,7 @@ export async function DELETE(request: NextRequest) {
     
     try {
       await client.query('BEGIN');
-      console.log('🔄 Transaction started for delete');
+      console.log('🔄 Transaction started for delete, id:', id);
 
       // Hapus items terlebih dahulu (karena foreign key constraint)
       await client.query(
@@ -27,7 +39,7 @@ export async function DELETE(request: NextRequest) {
 
       // Hapus record utama
       const deleteResult = await client.query(
-        'DELETE FROM apar_records WHERE id = $1 RETURNING *',
+        'DELETE FROM apar_records WHERE id = $1 RETURNING id',
         [id]
       );
 
@@ -40,7 +52,7 @@ export async function DELETE(request: NextRequest) {
       }
 
       await client.query('COMMIT');
-      console.log('✅ Record berhasil dihapus');
+      console.log('✅ Record berhasil dihapus:', id);
       
       return NextResponse.json({
         success: true,
@@ -57,12 +69,11 @@ export async function DELETE(request: NextRequest) {
   } catch (error) {
     console.error('Delete APAR error:', error);
     
-    // ✅ Fixed: Gunakan type assertion atau helper
     return NextResponse.json(
       { 
         success: false, 
         message: 'Gagal menghapus record',
-        error: (error as Error).message  // ✅ Aman untuk Next.js
+        error: (error as Error).message
       },
       { status: 500 }
     );

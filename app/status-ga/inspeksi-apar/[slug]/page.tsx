@@ -1,6 +1,5 @@
 // app/status-ga/inspeksi-apar/[slug]/page.tsx
 "use client";
-
 import { useState, useEffect, use } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
@@ -17,22 +16,22 @@ const areaNames: Record<string, string> = {
   "exim": "EXIM",
   "area-genba-a": "AREA GENBA A",
   "area-mezzanine-genba-a": "AREA MEZZANINE GENBA A",
-  "jig-proto-1-area-receiving": "JIG PROTO 1 AREA RECEIVING (SEBELAH PINTU MASUK) FABRIKASI JP SISI BARAT",
+  "jig-proto-1-area-receiving": "JIG PROTO 1 AREA RECEIVING",
   "stock-control-area": "STOCK CONTROL AREA",
-  "jig-proto-2-cnc-room": "JIG PROTO 2 CNC ROOM FABRIKASI C/B JP",
-  "area-training-dining-mtc": "AREA TRAINING A& DINING ROOM , MTC OFFICE",
+  "jig-proto-2-cnc-room": "JIG PROTO 2 CNC ROOM",
+  "area-training-dining-mtc": "AREA TRAINING & DINING ROOM",
   "genba-c": "GENBA C",
   "area-pump-room-warehouse": "AREA PUMP ROOM & WAREHOUSE",
-  "power-house-genba-a": "POWER HOUSE (UNTUK GENBA A)",
-  "power-house-genba-c": "POWER HOUSE (UNTUK GENBA C)",
+  "power-house-genba-a": "POWER HOUSE (GENBA A)",
+  "power-house-genba-c": "POWER HOUSE (GENBA C)",
   "area-tps-b3": "AREA TPS B3",
   "new-building-warehouse": "NEW BUILDING WAREHOUSE",
   "genba-b": "GENBA B",
-  "power-house-workshop": "POWER HOUSE AREA DAN WORKSHOP",
+  "power-house-workshop": "POWER HOUSE & WORKSHOP",
   "area-segitiga-ga": "AREA SEGITIGA GA",
   "area-parkir-motor": "AREA PARKIR MOTOR",
   "forklift": "FORKLIFT",
-  "samping-pagar-rak-helm": "SAMPING PAGAR SEBELAH RAK HELM",
+  "samping-pagar-rak-helm": "SAMPING PAGAR RAK HELM",
   "belakang-kantin": "BELAKANG KANTIN",
   "ir-room": "IR ROOM",
   "area-auditorium-outdoor": "AREA AUDITORIUM OUTDOOR",
@@ -43,18 +42,18 @@ const areaNames: Record<string, string> = {
 };
 
 const checkItems = [
-  { label: "Masa Berlaku", help: "Lihat identitas APAR apakah masih berlaku atau tidak" },
-  { label: "Tekanan", help: "Pastikan jarum penunjuk tekanan APAR tepat di warna hijau" },
-  { label: "Isi Tabung", help: "Pastikan isi APAR tidak menggumpal dengan menggoyangkan, mengocok tabung dan menimbang APAR" },
-  { label: "Selang", help: "Pastikan selang APAR tidak rusak & tidak tersumbat benda apapun" },
-  { label: "Segel", help: "Periksa segel APAR apakah dalam kondisi terkunci ataukah dalam kondisi terbuka" },
-  { label: "Kondisi Tabung & Kebersihan tabung", help: "Pastikan area APAR tidak terhalang benda apapun" },
-  { label: "Gantungan Apar", help: "Pastikan masing-masing Gantungan APAR Tidak Rusak" },
-  { label: "Lay out APAR", help: "Pastikan masing-masing APAR ada Lay out nya" },
-  { label: "Papan Petunjuk & Nomor Apar", help: "Pastikan terpasang dan mudah dilihat" },
-  { label: "OS & C/S", help: "Pastikan Operation standart & Check Sheet terpasang rapi dan jelas dan update" },
-  { label: "Area Sekitar", help: "Pastikan Jalan/akses APAR mudah dan dapat dijangkau oleh tim" },
-  { label: "Posisi APAR tidak bergeser", help: "Pastikan APAR tetap pada posisi semula dan tidak bergeser" },
+  { label: "Masa Berlaku", short: "Masa", help: "Lihat identitas APAR apakah masih berlaku" },
+  { label: "Tekanan", short: "Tekanan", help: "Jarum tekanan di warna hijau" },
+  { label: "Isi Tabung", short: "Isi", help: "Isi APAR tidak menggumpal" },
+  { label: "Selang", short: "Selang", help: "Selang tidak rusak" },
+  { label: "Segel", short: "Segel", help: "Segel terkunci" },
+  { label: "Kondisi Tabung", short: "Tabung", help: "Area APAR tidak terhalang" },
+  { label: "Gantungan", short: "Gantung", help: "Gantungan tidak rusak" },
+  { label: "Lay out", short: "Layout", help: "APAR ada lay out" },
+  { label: "Papan Petunjuk", short: "Papan", help: "Terpasang dan mudah dilihat" },
+  { label: "OS & C/S", short: "OS/CS", help: "Terpasang rapi dan update" },
+  { label: "Area Sekitar", short: "Area", help: "Akses APAR mudah" },
+  { label: "Posisi APAR", short: "Posisi", help: "APAR tidak bergeser" },
 ];
 
 export default function InspeksiAparForm({ params }: { params: Promise<{ slug: string }> }) {
@@ -63,13 +62,14 @@ export default function InspeksiAparForm({ params }: { params: Promise<{ slug: s
   const { slug } = use(params);
   const today = new Date();
   const date = format(today, "yyyy-MM-dd");
-  
+
   const [items, setItems] = useState<any[]>([]);
   const [showPreview, setShowPreview] = useState(false);
   const [hasNg, setHasNg] = useState(false);
   const [redirected, setRedirected] = useState(false);
   const [loading, setLoading] = useState(false);
   const [tempPhotoPreviews, setTempPhotoPreviews] = useState<Record<number, string>>({});
+  const [expandedItem, setExpandedItem] = useState<number | null>(null);
 
   // Akses hanya untuk inspector-ga
   useEffect(() => {
@@ -88,7 +88,6 @@ export default function InspeksiAparForm({ params }: { params: Promise<{ slug: s
       router.push("/status-ga/inspeksi-apar");
       return;
     }
-    
     const rawData = aparDataBySlug[slug as keyof typeof aparDataBySlug] || [];
     const initialItems = rawData.map((item) => ({
       no: item.no,
@@ -96,7 +95,7 @@ export default function InspeksiAparForm({ params }: { params: Promise<{ slug: s
       lokasi: item.lokasi,
       noApar: item.noApar,
       expDate: item.expDate,
-      ...Object.fromEntries(checkItems.map((_, idx) => [`check${idx + 1}`, "O"])), // ✅ Default "O" bukan kosong
+      ...Object.fromEntries(checkItems.map((_, idx) => [`check${idx + 1}`, "O"])),
       keterangan: "",
       tindakanPerbaikan: "",
       pic: user?.fullName || "",
@@ -116,28 +115,25 @@ export default function InspeksiAparForm({ params }: { params: Promise<{ slug: s
     const file = e.target.files?.[0];
     if (!file) return;
 
-    // Validasi file
     if (!['image/jpeg', 'image/jpg', 'image/png', 'image/webp'].includes(file.type)) {
       alert('Format file tidak didukung. Gunakan JPEG, PNG, atau WEBP');
       return;
     }
 
-    if (file.size > 5 * 1024 * 1024) { // 5MB
+    if (file.size > 5 * 1024 * 1024) {
       alert('Ukuran file terlalu besar. Maksimal 5MB');
       return;
     }
 
     try {
       setLoading(true);
-      
-      // ✅ Tampilkan preview langsung dari file
+
       const reader = new FileReader();
       reader.onloadend = () => {
         setTempPhotoPreviews(prev => ({ ...prev, [index]: reader.result as string }));
       };
       reader.readAsDataURL(file);
 
-      // Upload ke API
       const formData = new FormData();
       formData.append('file', file);
       formData.append('slug', slug);
@@ -151,19 +147,14 @@ export default function InspeksiAparForm({ params }: { params: Promise<{ slug: s
       const result = await response.json();
 
       if (response.ok && result.success) {
-        // ✅ Update item dengan path file dari server
         handleInputChange(index, "foto", result.data.path);
-        
-        // ✅ Hapus temporary preview
         setTempPhotoPreviews(prev => {
           const newPreviews = { ...prev };
           delete newPreviews[index];
           return newPreviews;
         });
-        
         alert('✅ Foto berhasil diupload!');
       } else {
-        // ❌ Jika gagal upload, hapus temporary preview
         setTempPhotoPreviews(prev => {
           const newPreviews = { ...prev };
           delete newPreviews[index];
@@ -173,7 +164,6 @@ export default function InspeksiAparForm({ params }: { params: Promise<{ slug: s
       }
     } catch (error) {
       console.error('Upload error:', error);
-      // Hapus temporary preview jika error
       setTempPhotoPreviews(prev => {
         const newPreviews = { ...prev };
         delete newPreviews[index];
@@ -182,22 +172,12 @@ export default function InspeksiAparForm({ params }: { params: Promise<{ slug: s
       alert('❌ Terjadi kesalahan saat upload foto');
     } finally {
       setLoading(false);
-      // Reset input file
       e.target.value = '';
     }
   };
 
   const handleRemoveImage = (index: number) => {
-    // Hapus foto dari database jika sudah tersimpan
-    const fotoPath = items[index].foto;
-    if (fotoPath && !fotoPath.startsWith('')) {
-      console.log('Foto akan dihapus saat submit:', fotoPath);
-    }
-    
-    // Hapus foto path
     handleInputChange(index, "foto", "");
-    
-    // Hapus temporary preview jika ada
     setTempPhotoPreviews(prev => {
       const newPreviews = { ...prev };
       delete newPreviews[index];
@@ -205,29 +185,23 @@ export default function InspeksiAparForm({ params }: { params: Promise<{ slug: s
     });
   };
 
-  // ✅ FUNGSI AMAN - TAMBAHKAN PENGECEKAN NULL/UNDEFINED
-const parseExpDate = (dateStr: string | null | undefined): Date | null => {
-  // ✅ Tambahkan pengecekan awal
-  if (!dateStr || typeof dateStr !== 'string') {
+  const parseExpDate = (dateStr: string | null | undefined): Date | null => {
+    if (!dateStr || typeof dateStr !== 'string') {
+      return null;
+    }
+    let parsed = parse(dateStr, "dd/MM/yyyy", new Date());
+    if (isValid(parsed)) return parsed;
+    parsed = parse(dateStr, "dd/MM/yy", new Date());
+    if (isValid(parsed)) return parsed;
     return null;
-  }
-  
-  let parsed = parse(dateStr, "dd/MM/yyyy", new Date());
-  if (isValid(parsed)) return parsed;
-  
-  parsed = parse(dateStr, "dd/MM/yy", new Date());
-  if (isValid(parsed)) return parsed;
-  
-  return null;
-};
+  };
 
-const isExpired = (expDateString: string | null | undefined): boolean => {
-  const expDate = parseExpDate(expDateString);
-  return expDate ? isBefore(expDate, new Date()) : false;
-};
+  const isExpired = (expDateString: string | null | undefined): boolean => {
+    const expDate = parseExpDate(expDateString);
+    return expDate ? isBefore(expDate, new Date()) : false;
+  };
 
   const handleShowPreview = () => {
-    // ✅ Semua field check harus "O" atau "X" (tidak boleh kosong)
     for (const item of items) {
       for (let i = 1; i <= checkItems.length; i++) {
         const val = item[`check${i}`];
@@ -241,7 +215,6 @@ const isExpired = (expDateString: string | null | undefined): boolean => {
     const ngExists = items.some((item) =>
       Array.from({ length: checkItems.length }, (_, i) => item[`check${i + 1}`] === "X").some(Boolean)
     );
-
     if (ngExists) {
       const missingKeterangan = items.some(
         (item) =>
@@ -253,83 +226,47 @@ const isExpired = (expDateString: string | null | undefined): boolean => {
         return;
       }
     }
-
     setHasNg(ngExists);
     setShowPreview(true);
   };
 
   const handleCancelPreview = () => setShowPreview(false);
 
-  // 🔥 SIMPAN KE API
   const handleSave = async () => {
-  try {
-    setLoading(true);
+    try {
+      setLoading(true);
 
-    console.log('🔍 [DEBUG] Mulai proses validasi dan submit...');
-    console.log('📊 [DEBUG] Jumlah items:', items.length);
+      for (let index = 0; index < items.length; index++) {
+        const item = items[index];
+        if (!item.no) throw new Error(`Baris ${index + 1}: Nomor urut tidak boleh kosong`);
+        if (!item.lokasi || item.lokasi.trim() === '') throw new Error(`Baris ${index + 1}: Lokasi wajib diisi`);
+        if (!item.noApar || item.noApar.trim() === '') throw new Error(`Baris ${index + 1}: Nomor APAR wajib diisi`);
+        if (!item.expDate || item.expDate.trim() === '') throw new Error(`Baris ${index + 1}: Exp. Date wajib diisi`);
 
-    // ✅ Validasi komprehensif sebelum submit
-    for (let index = 0; index < items.length; index++) {
-      const item = items[index];
-      
-      console.log(`📝 [DEBUG] Validasi item ${index + 1}:`, {
-        no: item.no,
-        lokasi: item.lokasi,
-        noApar: item.noApar,
-        expDate: item.expDate
-      });
-
-      // Validasi field wajib
-      if (!item.no) {
-        throw new Error(`Baris ${index + 1}: Nomor urut tidak boleh kosong`);
-      }
-      
-      if (!item.lokasi || item.lokasi.trim() === '') {
-        throw new Error(`Baris ${index + 1}: Lokasi wajib diisi`);
-      }
-      
-      if (!item.noApar || item.noApar.trim() === '') {
-        throw new Error(`Baris ${index + 1}: Nomor APAR wajib diisi`);
-      }
-      
-      if (!item.expDate || item.expDate.trim() === '') {
-        throw new Error(`Baris ${index + 1}: Exp. Date wajib diisi`);
-      }
-
-      // Validasi semua check items harus 'O' atau 'X'
-      for (let i = 1; i <= 12; i++) {
-        const checkValue = item[`check${i}`];
-        console.log(`   [DEBUG] Check ${i}:`, checkValue);
-        
-        if (checkValue === undefined || checkValue === null || checkValue === '') {
-          throw new Error(`Baris ${index + 1}: Check item ${i} harus diisi dengan 'O' atau 'X'`);
+        for (let i = 1; i <= 12; i++) {
+          const checkValue = item[`check${i}`];
+          if (checkValue === undefined || checkValue === null || checkValue === '') {
+            throw new Error(`Baris ${index + 1}: Check item ${i} harus diisi dengan 'O' atau 'X'`);
+          }
+          if (checkValue !== 'O' && checkValue !== 'X') {
+            throw new Error(`Baris ${index + 1}: Check item ${i} harus diisi dengan 'O' atau 'X'`);
+          }
         }
-        
-        if (checkValue !== 'O' && checkValue !== 'X') {
-          throw new Error(`Baris ${index + 1}: Check item ${i} harus diisi dengan 'O' atau 'X' (ditemukan: '${checkValue}')`);
+
+        const hasNg = Array.from({ length: 12 }, (_, i) => item[`check${i + 1}`] === 'X').some(Boolean);
+        if (hasNg) {
+          if (!item.keterangan || item.keterangan.trim() === '') {
+            throw new Error(`Baris ${index + 1}: Keterangan wajib diisi untuk item dengan status NG`);
+          }
         }
       }
 
-      // Jika ada status 'X' (NG), keterangan wajib diisi
-      const hasNg = Array.from({ length: 12 }, (_, i) => item[`check${i + 1}`] === 'X').some(Boolean);
-      if (hasNg) {
-        console.log(`   [DEBUG] Item ${index + 1} memiliki status NG`);
-        if (!item.keterangan || item.keterangan.trim() === '') {
-          throw new Error(`Baris ${index + 1}: Keterangan wajib diisi untuk item dengan status NG`);
-        }
-      }
-    }
-
-    console.log('✅ [DEBUG] Validasi berhasil!');
-
-    // Siapkan data untuk submit
-    const submitData = {
-      date,
-      slug,
-      checker: user?.fullName || "",
-      checkerNik: user?.nik || "",
-      items: items.map((item, idx) => {
-        const itemData = {
+      const submitData = {
+        date,
+        slug,
+        checker: user?.fullName || "",
+        checkerNik: user?.nik || "",
+        items: items.map((item) => ({
           no: item.no,
           jenisApar: item.jenisApar,
           lokasi: item.lokasi,
@@ -351,130 +288,34 @@ const isExpired = (expDateString: string | null | undefined): boolean => {
           tindakanPerbaikan: item.tindakanPerbaikan || "",
           pic: item.pic,
           foto: item.foto || null
-        };
-        
-        console.log(`📤 [DEBUG] Item ${idx + 1}:`, itemData);
-        return itemData;
-      })
-    };
+        }))
+      };
 
-    console.log('📤 [DEBUG] Data lengkap yang akan dikirim:', {
-      ...submitData,
-      items: submitData.items.map(i => ({ ...i, foto: i.foto ? '[FILE]' : null }))
-    });
-
-    // Submit ke API
-    console.log('📡 [DEBUG] Mengirim request ke /api/apar/submit...');
-    
-    const response = await fetch('/api/apar/submit', {
-      method: 'POST',
-      headers: { 
-        'Content-Type': 'application/json',
-        'Accept': 'application/json'
-      },
-      body: JSON.stringify(submitData),
-      credentials: 'include'
-    });
-
-    console.log('📥 [DEBUG] Response status:', response.status);
-    console.log('📥 [DEBUG] Response headers:', Object.fromEntries(response.headers.entries()));
-
-    if (!response.ok) {
-      console.error('❌ [DEBUG] Response tidak OK. Status:', response.status);
-      
-      try {
-        const errorData = await response.json();
-        console.error('❌ [DEBUG] Error response body:', errorData);
-        throw new Error(errorData.message || `Server error: ${response.status}`);
-      } catch (parseError) {
-        console.error('❌ [DEBUG] Gagal parse error response:', parseError);
-        throw new Error(`Server error: ${response.status} - ${response.statusText}`);
-      }
-    }
-
-    const result = await response.json();
-    console.log('✅ [DEBUG] Response berhasil:', result);
-
-    if (!result.success) {
-      console.error('❌ [DEBUG] API response success=false:', result);
-      throw new Error(result.message || 'Gagal menyimpan data');
-    }
-
-    // ✅ Berhasil tersimpan
-    console.log('🎉 [DEBUG] Data berhasil disimpan!');
-    
-    // Tampilkan informasi sukses
-    const successMessage = `✅ Data berhasil disimpan!\n\nID Record: ${result.data?.id || 'N/A'}\nTotal Item: ${items.length}\nArea: ${areaNames[slug]}`;
-    
-    alert(successMessage);
-
-    // Cek apakah ada NG untuk menawarkan pelaporan
-    const hasNgInResult = result.data?.hasNg;
-    if (hasNgInResult) {
-      console.log('⚠️ [DEBUG] Terdapat item NG, menawarkan pelaporan...');
-      const confirmReport = confirm('⚠️ Terdapat item dengan status NG. Apakah ingin langsung melaporkan?');
-      if (confirmReport) {
-        console.log('📢 [DEBUG] User memilih untuk melaporkan NG');
-        handleReportNg();
-        return;
-      }
-    }
-
-    // Redirect ke halaman riwayat
-    console.log('🔄 [DEBUG] Redirecting to history page...');
-    router.push(`/status-ga/inspeksi-apar/${slug}/riwayat`);
-
-  } catch (error) {
-    console.error('❌ [CRITICAL] Submit error:', error);
-    
-    let errorMessage = 'Terjadi kesalahan tidak terduga';
-    
-    if (error instanceof Error) {
-      errorMessage = error.message;
-      console.error('❌ [CRITICAL] Error details:', {
-        name: error.name,
-        message: error.message,
-        stack: error.stack
+      const response = await fetch('/api/apar/submit', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+        body: JSON.stringify(submitData),
+        credentials: 'include'
       });
+
+      const result = await response.json();
+
+      if (response.ok && result.success) {
+        alert('✅ Data berhasil disimpan!');
+        router.push(`/status-ga/inspeksi-apar/${slug}/riwayat`);
+      } else {
+        throw new Error(result.message || 'Gagal menyimpan data');
+      }
+    } catch (error) {
+      console.error('Submit error:', error);
+      alert('❌ Gagal menyimpan data: ' + (error as any).message);
+    } finally {
+      setLoading(false);
     }
+  };
 
-    // Tampilkan error yang lebih informatif
-    const fullErrorMessage = `❌ Gagal menyimpan data\n\n${errorMessage}\n\nSilakan cek console untuk detail error dan coba lagi.`;
-    
-    console.error('❌ [CRITICAL] Full error message:', fullErrorMessage);
-    alert(fullErrorMessage);
-  } finally {
-    console.log('🔚 [DEBUG] Proses submit selesai');
-    setLoading(false);
-  }
-};
-  const handleReportNg = () => {
-    const ngItems = items
-      .filter((item) =>
-        Array.from({ length: checkItems.length }, (_, i) => item[`check${i + 1}`] === "X").some(Boolean)
-      )
-      .map((item) => ({
-        name: `${item.lokasi} (${item.noApar})`,
-        notes: item.keterangan || "Tidak ada keterangan",
-        foto: item.foto || undefined,
-      }));
-
-    const pelaporanData = {
-      tanggal: date,
-      mainType: "ga",
-      subType: "inspector",
-      checkPoint: `Inspeksi APAR - ${areaNames[slug]}`,
-      shift: "A",
-      ngNotes: "Temuan NG dari checklist APAR",
-      department: "General Affairs",
-      reporter: user?.fullName || "",
-      reportedAt: new Date().toISOString(),
-      status: "open" as const,
-      ngItemsDetail: ngItems,
-    };
-
-    localStorage.setItem("temp_ng_report", JSON.stringify(pelaporanData));
-    router.push("/status-ga/pelaporan");
+  const toggleExpandItem = (index: number) => {
+    setExpandedItem(expandedItem === index ? null : index);
   };
 
   if (!user) return null;
@@ -482,6 +323,7 @@ const isExpired = (expDateString: string | null | undefined): boolean => {
   return (
     <div className="app-page">
       <Sidebar userName={user.fullName} />
+
       <div className="page-content">
         {/* Header Banner */}
         <div className="header-banner">
@@ -490,10 +332,11 @@ const isExpired = (expDateString: string | null | undefined): boolean => {
             className="btn-back"
           >
             <ArrowLeft size={18} />
-            <span>Kembali</span>
+            <span className="btn-back-text">Kembali</span>
           </button>
           <h1 className="page-title">🧯 Inspeksi APAR - {areaNames[slug]}</h1>
         </div>
+
         <p className="subtitle">
           📅{" "}
           <span className="date-text">
@@ -515,119 +358,243 @@ const isExpired = (expDateString: string | null | undefined): boolean => {
 
         {!showPreview ? (
           <div className="card-container">
-            <table className="checklist-table">
-              <thead>
-                <tr>
-                  <th>No</th>
-                  <th>Jenis APAR</th>
-                  <th>Lokasi</th>
-                  <th>No. APAR</th>
-                  <th>Exp. Date</th>
-                  {checkItems.map((item, idx) => (
-                    <th key={idx} title={item.help}>
-                      {item.label}
-                    </th>
-                  ))}
-                  <th>Keterangan</th>
-                  <th>Tindakan Perbaikan</th>
-                  <th>PIC</th>
-                  <th>Foto</th>
-                </tr>
-              </thead>
-              <tbody>
-                {items.map((item, index) => (
-                  <tr key={index}>
-                    <td className="info-cell">{item.no}</td>
-                    <td className="info-cell">{item.jenisApar}</td>
-                    <td className="info-cell">{item.lokasi}</td>
-                    <td className="info-cell">{item.noApar}</td>
-                    <td className={isExpired(item.expDate) ? "status-expired" : "info-cell"}>
-                      {item.expDate}
-                    </td>
-                    {checkItems.map((_, idx) => (
-                      <td key={idx}>
-                        <select
-                          value={item[`check${idx + 1}`]}
-                          onChange={(e) => handleInputChange(index, `check${idx + 1}`, e.target.value)}
-                          className="status-select"
-                          disabled={loading}
-                        >
-                          <option value="O">O</option> {/* ✅ Default "O" */}
-                          <option value="X">X</option>
-                        </select>
-                      </td>
+            {/* ✅ DESKTOP: Table View */}
+            <div className="desktop-view">
+              <table className="checklist-table">
+                <thead>
+                  <tr>
+                    <th>No</th>
+                    <th>Jenis APAR</th>
+                    <th>Lokasi</th>
+                    <th>No. APAR</th>
+                    <th>Exp. Date</th>
+                    {checkItems.map((item, idx) => (
+                      <th key={idx} title={item.help} className="check-th">
+                        {item.short}
+                      </th>
                     ))}
-                    <td>
-                      <input
-                        type="text"
-                        value={item.keterangan}
-                        onChange={(e) => handleInputChange(index, "keterangan", e.target.value)}
-                        placeholder="Wajib diisi jika NG"
-                        className="notes-input"
-                        disabled={loading}
-                      />
-                    </td>
-                    <td>
-                      <input
-                        type="text"
-                        value={item.tindakanPerbaikan}
-                        onChange={(e) => handleInputChange(index, "tindakanPerbaikan", e.target.value)}
-                        placeholder="Tindakan perbaikan..."
-                        className="notes-input"
-                        disabled={loading}
-                      />
-                    </td>
-                    <td>
-                      <div className="info-cell">{item.pic}</div>
-                    </td>
-                    <td>
-                      <div className="image-upload">
-                        {/* ✅ Tampilkan foto yang sudah diupload ATAU temporary preview */}
-                        {(items[index].foto || tempPhotoPreviews[index]) ? (
-                          <div className="image-preview">
-                            <img 
-                              src={
-                                tempPhotoPreviews[index] || 
-                                (items[index].foto.startsWith('') 
-                                  ? items[index].foto 
-                                  : `${process.env.NEXT_PUBLIC_BASE_URL || ''}${items[index].foto}`)
-                              } 
-                              alt="Preview" 
-                              className="uploaded-image" 
-                            />
-                            <button
-                              type="button"
-                              onClick={() => handleRemoveImage(index)}
-                              className="remove-btn"
+                    <th>Keterangan</th>
+                    <th>Tindakan</th>
+                    <th>PIC</th>
+                    <th>Foto</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {items.map((item, index) => (
+                    <tr key={index}>
+                      <td className="info-cell">{item.no}</td>
+                      <td className="info-cell">{item.jenisApar}</td>
+                      <td className="info-cell">{item.lokasi}</td>
+                      <td className="info-cell">{item.noApar}</td>
+                      <td className={isExpired(item.expDate) ? "status-expired" : "info-cell"}>
+                        {item.expDate}
+                      </td>
+                      {checkItems.map((_, idx) => (
+                        <td key={idx}>
+                          <select
+                            value={item[`check${idx + 1}`]}
+                            onChange={(e) => handleInputChange(index, `check${idx + 1}`, e.target.value)}
+                            className="status-select"
+                            disabled={loading}
+                          >
+                            <option value="O">O</option>
+                            <option value="X">X</option>
+                          </select>
+                        </td>
+                      ))}
+                      <td>
+                        <input
+                          type="text"
+                          value={item.keterangan}
+                          onChange={(e) => handleInputChange(index, "keterangan", e.target.value)}
+                          placeholder="Wajib jika NG"
+                          className="notes-input"
+                          disabled={loading}
+                        />
+                      </td>
+                      <td>
+                        <input
+                          type="text"
+                          value={item.tindakanPerbaikan}
+                          onChange={(e) => handleInputChange(index, "tindakanPerbaikan", e.target.value)}
+                          placeholder="Tindakan..."
+                          className="notes-input"
+                          disabled={loading}
+                        />
+                      </td>
+                      <td>
+                        <div className="info-cell">{item.pic}</div>
+                      </td>
+                      <td>
+                        <div className="image-upload">
+                          {(items[index].foto || tempPhotoPreviews[index]) ? (
+                            <div className="image-preview">
+                              <img
+                                src={
+                                  tempPhotoPreviews[index] ||
+                                  (items[index].foto.startsWith('data:')
+                                    ? items[index].foto
+                                    : `${process.env.NEXT_PUBLIC_BASE_URL || ''}${items[index].foto}`)
+                                }
+                                alt="Preview"
+                                className="uploaded-image"
+                              />
+                              <button
+                                type="button"
+                                onClick={() => handleRemoveImage(index)}
+                                className="remove-btn"
+                                disabled={loading}
+                              >
+                                ✕
+                              </button>
+                              {loading && (
+                                <div className="upload-loading">
+                                  <div className="spinner-small"></div>
+                                </div>
+                              )}
+                            </div>
+                          ) : (
+                            <label className="file-label">
+                              📷 Unggah
+                              <input
+                                type="file"
+                                accept="image/*"
+                                onChange={(e) => handleImageUpload(e, index)}
+                                className="file-input"
+                                disabled={loading}
+                              />
+                            </label>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            {/* ✅ MOBILE: Card View */}
+            <div className="mobile-view">
+              {items.map((item, index) => (
+                <div key={index} className="apar-card">
+                  <div className="card-header" onClick={() => toggleExpandItem(index)}>
+                    <div className="card-no">{item.no}</div>
+                    <div className="card-info">
+                      <div className="card-jenis">{item.jenisApar}</div>
+                      <div className="card-lokasi">{item.lokasi}</div>
+                      <div className="card-noapar">No. APAR: {item.noApar}</div>
+                    </div>
+                    <div className={`expand-icon ${expandedItem === index ? 'expanded' : ''}`}>
+                      ▼
+                    </div>
+                  </div>
+
+                  {expandedItem === index && (
+                    <div className="card-body">
+                      <div className="info-row">
+                        <span className="info-label">Exp. Date:</span>
+                        <span className={`info-value ${isExpired(item.expDate) ? 'expired' : ''}`}>
+                          {item.expDate} {isExpired(item.expDate) && '⚠️'}
+                        </span>
+                      </div>
+
+                      <div className="checklist-section">
+                        <h4 className="section-title">✅ Checklist Inspeksi</h4>
+                        {checkItems.map((checkItem, idx) => (
+                          <div key={idx} className="check-row">
+                            <label className="check-label" title={checkItem.help}>
+                              {checkItem.label}
+                            </label>
+                            <select
+                              value={item[`check${idx + 1}`]}
+                              onChange={(e) => handleInputChange(index, `check${idx + 1}`, e.target.value)}
+                              className="check-select"
                               disabled={loading}
                             >
-                              ✕
-                            </button>
-                            {/* ✅ Loading indicator saat upload */}
-                            {loading && (
-                              <div className="upload-loading">
-                                <div className="spinner-small"></div>
-                              </div>
-                            )}
+                              <option value="O">O - OK</option>
+                              <option value="X">X - NG</option>
+                            </select>
                           </div>
-                        ) : (
-                          <label className="file-label">
-                            📷 Unggah
-                            <input
-                              type="file"
-                              accept="image/*"
-                              onChange={(e) => handleImageUpload(e, index)}
-                              className="file-input"
-                              disabled={loading}
-                            />
-                          </label>
-                        )}
+                        ))}
                       </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+
+                      <div className="form-group">
+                        <label>Keterangan</label>
+                        <input
+                          type="text"
+                          value={item.keterangan}
+                          onChange={(e) => handleInputChange(index, "keterangan", e.target.value)}
+                          placeholder="Wajib diisi jika NG"
+                          className="notes-input"
+                          disabled={loading}
+                        />
+                      </div>
+
+                      <div className="form-group">
+                        <label>Tindakan Perbaikan</label>
+                        <input
+                          type="text"
+                          value={item.tindakanPerbaikan}
+                          onChange={(e) => handleInputChange(index, "tindakanPerbaikan", e.target.value)}
+                          placeholder="Tindakan perbaikan..."
+                          className="notes-input"
+                          disabled={loading}
+                        />
+                      </div>
+
+                      <div className="form-group">
+                        <label>PIC</label>
+                        <div className="info-cell">{item.pic}</div>
+                      </div>
+
+                      <div className="form-group">
+                        <label>Foto</label>
+                        <div className="image-upload">
+                          {(items[index].foto || tempPhotoPreviews[index]) ? (
+                            <div className="image-preview">
+                              <img
+                                src={
+                                  tempPhotoPreviews[index] ||
+                                  (items[index].foto.startsWith('data:')
+                                    ? items[index].foto
+                                    : `${process.env.NEXT_PUBLIC_BASE_URL || ''}${items[index].foto}`)
+                                }
+                                alt="Preview"
+                                className="uploaded-image"
+                              />
+                              <button
+                                type="button"
+                                onClick={() => handleRemoveImage(index)}
+                                className="remove-btn"
+                                disabled={loading}
+                              >
+                                ✕
+                              </button>
+                              {loading && (
+                                <div className="upload-loading">
+                                  <div className="spinner-small"></div>
+                                </div>
+                              )}
+                            </div>
+                          ) : (
+                            <label className="file-label file-label-large">
+                              📷 Unggah Foto
+                              <input
+                                type="file"
+                                accept="image/*"
+                                onChange={(e) => handleImageUpload(e, index)}
+                                className="file-input"
+                                disabled={loading}
+                              />
+                            </label>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
 
             <div className="form-actions">
               <button
@@ -637,8 +604,8 @@ const isExpired = (expDateString: string | null | undefined): boolean => {
               >
                 Batal
               </button>
-              <button 
-                onClick={handleShowPreview} 
+              <button
+                onClick={handleShowPreview}
                 className="btn-submit"
                 disabled={loading}
               >
@@ -649,52 +616,99 @@ const isExpired = (expDateString: string | null | undefined): boolean => {
         ) : (
           <div className="card-container preview-mode">
             <h2 className="preview-title">🔍 Preview Data</h2>
-            <div className="preview-table">
-              <table className="simple-table">
-                <thead>
-                  <tr>
-                    <th>No</th>
-                    <th>Lokasi</th>
-                    <th>No. APAR</th>
-                    {checkItems.map((item, idx) => (
-                      <th key={idx}>{item.label}</th>
-                    ))}
-                    <th>Keterangan</th>
-                    <th>Foto</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {items.map((item, index) => (
-                    <tr key={index}>
-                      <td>{item.no}</td>
-                      <td>{item.lokasi}</td>
-                      <td>{item.noApar}</td>
-                      {checkItems.map((_, idx) => (
-                        <td key={idx} className={item[`check${idx + 1}`] === "X" ? "status-ng" : ""}>
-                          {item[`check${idx + 1}`]}
-                        </td>
-                      ))}
-                      <td>{item.keterangan || "-"}</td>
-                      <td>
-                        {item.foto ? (
-                          <img 
-                            src={item.foto.startsWith('') ? item.foto : `${process.env.NEXT_PUBLIC_BASE_URL || ''}${item.foto}`} 
-                            alt="Foto" 
-                            className="preview-image" 
-                          />
-                        ) : (
-                          "–"
-                        )}
-                      </td>
+
+            {/* ✅ DESKTOP: Preview Table */}
+            <div className="desktop-preview">
+              <div className="table-wrapper-responsive">
+                <table className="simple-table">
+                  <thead>
+                    <tr>
+                      <th>No</th>
+                      <th>Lokasi</th>
+                      <th>No. APAR</th>
+                      <th>Status</th>
+                      <th>Keterangan</th>
+                      <th>Foto</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody>
+                    {items.map((item, index) => {
+                      const hasNgItem = Array.from({ length: 12 }, (_, i) => item[`check${i + 1}`] === "X").some(Boolean);
+                      return (
+                        <tr key={index} className={hasNgItem ? "row-ng" : ""}>
+                          <td>{item.no}</td>
+                          <td>{item.lokasi}</td>
+                          <td>{item.noApar}</td>
+                          <td className={hasNgItem ? "status-ng" : "status-ok"}>
+                            {hasNgItem ? "NG" : "OK"}
+                          </td>
+                          <td>{item.keterangan || "-"}</td>
+                          <td>
+                            {item.foto ? (
+                              <img
+                                src={item.foto.startsWith('data:') ? item.foto : `${process.env.NEXT_PUBLIC_BASE_URL || ''}${item.foto}`}
+                                alt="Foto"
+                                className="preview-image"
+                              />
+                            ) : (
+                              "–"
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            {/* ✅ MOBILE: Preview Cards */}
+            <div className="mobile-preview">
+              {items.map((item, index) => {
+                const hasNgItem = Array.from({ length: 12 }, (_, i) => item[`check${i + 1}`] === "X").some(Boolean);
+
+                return (
+                  <div key={index} className={`preview-card ${hasNgItem ? 'preview-card-ng' : ''}`}>
+                    <div className="preview-card-header">
+                      <span className="preview-card-no">#{item.no}</span>
+                      <span className={`preview-card-status ${hasNgItem ? 'status-ng' : 'status-ok'}`}>
+                        {hasNgItem ? 'NG' : 'OK'}
+                      </span>
+                    </div>
+                    <div className="preview-card-body">
+                      <div className="preview-row">
+                        <span className="preview-label">Lokasi:</span>
+                        <span className="preview-value">{item.lokasi}</span>
+                      </div>
+                      <div className="preview-row">
+                        <span className="preview-label">No. APAR:</span>
+                        <span className="preview-value">{item.noApar}</span>
+                      </div>
+                      {item.keterangan && (
+                        <div className="preview-row">
+                          <span className="preview-label">Keterangan:</span>
+                          <span className="preview-value">{item.keterangan}</span>
+                        </div>
+                      )}
+                      {item.foto && (
+                        <div className="preview-row">
+                          <span className="preview-label">Foto:</span>
+                          <img
+                            src={item.foto.startsWith('data:') ? item.foto : `${process.env.NEXT_PUBLIC_BASE_URL || ''}${item.foto}`}
+                            alt="Foto"
+                            className="preview-card-image"
+                          />
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
             </div>
 
             <div className="preview-actions">
-              <button 
-                onClick={handleCancelPreview} 
+              <button
+                onClick={handleCancelPreview}
                 className="cancel-btn"
                 disabled={loading}
               >
@@ -702,24 +716,17 @@ const isExpired = (expDateString: string | null | undefined): boolean => {
               </button>
               {hasNg ? (
                 <div className="ng-actions">
-                  <button 
-                    onClick={handleReportNg} 
-                    className="report-btn"
-                    disabled={loading}
-                  >
-                    📢 Laporkan NG
-                  </button>
-                  <button 
-                    onClick={handleSave} 
+                  <button
+                    onClick={handleSave}
                     className="save-btn"
                     disabled={loading}
                   >
-                    💾 Simpan Tanpa Lapor
+                    💾 Simpan
                   </button>
                 </div>
               ) : (
-                <button 
-                  onClick={handleSave} 
+                <button
+                  onClick={handleSave}
                   className="save-btn"
                   disabled={loading}
                 >
@@ -733,8 +740,7 @@ const isExpired = (expDateString: string | null | undefined): boolean => {
 
       <style jsx global>{`
         body {
-          font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu,
-            Cantarell, sans-serif;
+          font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
           margin: 0;
           padding: 0;
           background-color: #f8fafc;
@@ -767,13 +773,14 @@ const isExpired = (expDateString: string | null | undefined): boolean => {
           display: flex;
           align-items: center;
           gap: 16px;
+          flex-wrap: wrap;
         }
 
         .btn-back {
           display: flex;
           align-items: center;
           gap: 8px;
-          padding: 6px 12px;
+          padding: 8px 16px;
           background: rgba(255, 255, 255, 0.2);
           color: white;
           border: none;
@@ -782,32 +789,39 @@ const isExpired = (expDateString: string | null | undefined): boolean => {
           font-weight: 600;
           transition: all 0.3s ease;
           font-size: 0.9rem;
+          min-height: 44px;
         }
 
         .btn-back:hover {
           background: rgba(255, 255, 255, 0.3);
         }
 
+        .btn-back-text {
+          display: inline;
+        }
+
         .page-title {
           margin: 0;
-          font-size: 1.8rem;
+          font-size: 1.4rem;
           font-weight: 700;
           flex: 1;
+          word-break: break-word;
         }
 
         .subtitle {
           color: rgba(255, 255, 255, 0.95);
           margin-top: 8px;
           margin-bottom: 24px;
-          font-size: 1.1rem;
+          font-size: 1rem;
           display: flex;
           align-items: center;
           gap: 8px;
+          flex-wrap: wrap;
         }
 
         .date-text {
           font-weight: 700;
-          font-size: 1.2rem;
+          font-size: 1.1rem;
           color: #ffeb3b;
           text-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
           background: rgba(0, 0, 0, 0.2);
@@ -821,7 +835,6 @@ const isExpired = (expDateString: string | null | undefined): boolean => {
           border-radius: 16px;
           box-shadow: 0 6px 20px rgba(0, 0, 0, 0.15);
           padding: 24px;
-          overflow-x: auto;
           color: white;
           position: relative;
         }
@@ -830,12 +843,33 @@ const isExpired = (expDateString: string | null | undefined): boolean => {
           background: linear-gradient(135deg, #0d47a1 0%, #1976d2 100%);
         }
 
+        /* Desktop View */
+        .desktop-view,
+        .desktop-preview {
+          display: block;
+          overflow-x: auto;
+          -webkit-overflow-scrolling: touch;
+        }
+
+        .mobile-view,
+        .mobile-preview {
+          display: none;
+        }
+
+        .table-wrapper-responsive {
+          overflow-x: auto;
+          -webkit-overflow-scrolling: touch;
+          border-radius: 8px;
+          border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+
         .checklist-table,
         .simple-table {
           width: 100%;
           border-collapse: collapse;
           margin-bottom: 24px;
           color: #fff8f8;
+          min-width: 1400px;
         }
 
         .checklist-table th,
@@ -846,6 +880,7 @@ const isExpired = (expDateString: string | null | undefined): boolean => {
           text-align: left;
           border: 1px solid rgba(255, 255, 255, 0.2);
           color: white;
+          white-space: nowrap;
         }
 
         .checklist-table th,
@@ -855,6 +890,11 @@ const isExpired = (expDateString: string | null | undefined): boolean => {
           position: sticky;
           top: 0;
           color: white;
+          z-index: 10;
+        }
+
+        .check-th {
+          text-align: center;
         }
 
         .status-select,
@@ -866,6 +906,7 @@ const isExpired = (expDateString: string | null | undefined): boolean => {
           font-size: 0.9rem;
           background: rgba(255, 255, 255, 0.9);
           color: #333;
+          min-height: 44px;
         }
 
         .status-select:focus,
@@ -893,23 +934,258 @@ const isExpired = (expDateString: string | null | undefined): boolean => {
           font-weight: bold;
         }
 
-        /* Upload & Preview Image */
+        /* Mobile Card Styles */
+        .apar-card,
+        .preview-card {
+          background: rgba(255, 255, 255, 0.1);
+          border-radius: 12px;
+          margin-bottom: 16px;
+          overflow: hidden;
+          border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+
+        .preview-card-ng {
+          border-color: rgba(244, 67, 54, 0.5);
+          background: rgba(244, 67, 54, 0.1);
+        }
+
+        .card-header,
+        .preview-card-header {
+          display: flex;
+          align-items: center;
+          gap: 12px;
+          padding: 16px;
+          cursor: pointer;
+          background: rgba(0, 0, 0, 0.1);
+          transition: background 0.2s;
+          min-height: 44px;
+        }
+
+        .card-header:hover,
+        .preview-card-header:hover {
+          background: rgba(0, 0, 0, 0.2);
+        }
+
+        .card-no,
+        .preview-card-no {
+          width: 40px;
+          height: 40px;
+          background: #1976d2;
+          color: white;
+          border-radius: 50%;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          font-weight: 700;
+          font-size: 1.1rem;
+          flex-shrink: 0;
+        }
+
+        .preview-card-status {
+          margin-left: auto;
+          padding: 4px 12px;
+          border-radius: 20px;
+          font-weight: 600;
+          font-size: 0.8rem;
+        }
+
+        .preview-card-status.ok {
+          background: rgba(76, 175, 80, 0.3);
+          color: #c8e6c9;
+        }
+
+        .preview-card-status.ng {
+          background: rgba(244, 67, 54, 0.3);
+          color: #ffcdd2;
+        }
+
+        .card-info {
+          flex: 1;
+          min-width: 0;
+        }
+
+        .card-jenis {
+          font-size: 0.85rem;
+          color: rgba(255, 255, 255, 0.8);
+          margin-bottom: 4px;
+        }
+
+        .card-lokasi {
+          font-size: 1rem;
+          font-weight: 600;
+          color: white;
+          word-break: break-word;
+          margin-bottom: 4px;
+        }
+
+        .card-noapar {
+          font-size: 0.85rem;
+          color: rgba(255, 255, 255, 0.9);
+        }
+
+        .expand-icon {
+          font-size: 1.2rem;
+          color: rgba(255, 255, 255, 0.8);
+          transition: transform 0.3s ease;
+        }
+
+        .expand-icon.expanded {
+          transform: rotate(180deg);
+        }
+
+        .card-body,
+        .preview-card-body {
+          padding: 16px;
+          background: rgba(0, 0, 0, 0.1);
+        }
+
+        .info-row {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          padding: 12px;
+          background: rgba(255, 255, 255, 0.1);
+          border-radius: 8px;
+          margin-bottom: 16px;
+        }
+
+        .info-label {
+          font-weight: 600;
+          color: rgba(255, 255, 255, 0.9);
+        }
+
+        .info-value {
+          color: white;
+          font-weight: 500;
+        }
+
+        .info-value.expired {
+          color: #ffcdd2;
+          font-weight: 700;
+        }
+
+        .checklist-section {
+          margin-bottom: 16px;
+        }
+
+        .section-title {
+          font-size: 1rem;
+          font-weight: 600;
+          color: white;
+          margin-bottom: 12px;
+          padding-bottom: 8px;
+          border-bottom: 2px solid rgba(255, 255, 255, 0.2);
+        }
+
+        .check-row {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          padding: 10px 0;
+          border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .check-row:last-child {
+          border-bottom: none;
+        }
+
+        .check-label {
+          font-size: 0.9rem;
+          color: rgba(255, 255, 255, 0.9);
+          flex: 1;
+          padding-right: 12px;
+        }
+
+        .check-select {
+          padding: 8px 12px;
+          border: 1px solid rgba(255, 255, 255, 0.4);
+          border-radius: 6px;
+          font-size: 0.9rem;
+          background: rgba(255, 255, 255, 0.9);
+          color: #333;
+          min-width: 100px;
+          min-height: 44px;
+        }
+
+        .form-group {
+          margin-bottom: 16px;
+        }
+
+        .form-group:last-child {
+          margin-bottom: 0;
+        }
+
+        .form-group label {
+          display: block;
+          margin-bottom: 6px;
+          font-size: 0.9rem;
+          color: rgba(255, 255, 255, 0.9);
+          font-weight: 500;
+        }
+
+        .preview-row {
+          display: flex;
+          justify-content: space-between;
+          align-items: flex-start;
+          padding: 8px 0;
+          border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+          gap: 12px;
+        }
+
+        .preview-row:last-child {
+          border-bottom: none;
+        }
+
+        .preview-label {
+          font-size: 0.85rem;
+          color: rgba(255, 255, 255, 0.8);
+          font-weight: 500;
+          min-width: 80px;
+          flex-shrink: 0;
+        }
+
+        .preview-value {
+          font-size: 0.9rem;
+          color: white;
+          word-break: break-word;
+          text-align: right;
+          flex: 1;
+        }
+
+        .preview-card-image {
+          width: 60px;
+          height: 60px;
+          object-fit: cover;
+          border-radius: 6px;
+          border: 2px solid white;
+          cursor: pointer;
+        }
+
         .image-upload {
           display: flex;
           justify-content: center;
           align-items: center;
-          min-height: 40px;
+          min-height: 44px;
         }
 
         .file-label {
           display: inline-block;
-          padding: 6px 12px;
+          padding: 10px 16px;
           background: rgba(255, 255, 255, 0.9);
           color: #333;
           border-radius: 6px;
-          font-size: 0.85rem;
+          font-size: 0.9rem;
           cursor: pointer;
           transition: background 0.2s;
+          min-height: 44px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+        }
+
+        .file-label-large {
+          width: 100%;
+          padding: 12px 16px;
         }
 
         .file-label:hover {
@@ -922,8 +1198,8 @@ const isExpired = (expDateString: string | null | undefined): boolean => {
 
         .image-preview {
           position: relative;
-          width: 60px;
-          height: 60px;
+          width: 80px;
+          height: 80px;
         }
 
         .uploaded-image,
@@ -948,15 +1224,17 @@ const isExpired = (expDateString: string | null | undefined): boolean => {
           color: white;
           border: 2px solid white;
           border-radius: 50%;
-          width: 20px;
-          height: 20px;
-          font-size: 12px;
+          width: 24px;
+          height: 24px;
+          font-size: 14px;
           cursor: pointer;
           display: flex;
           align-items: center;
           justify-content: center;
           padding: 0;
           transition: all 0.2s;
+          min-height: 24px;
+          min-width: 24px;
         }
 
         .remove-btn:hover {
@@ -976,6 +1254,7 @@ const isExpired = (expDateString: string | null | undefined): boolean => {
           gap: 16px;
           justify-content: flex-end;
           margin-top: 20px;
+          flex-wrap: wrap;
         }
 
         .btn-cancel,
@@ -983,13 +1262,15 @@ const isExpired = (expDateString: string | null | undefined): boolean => {
         .cancel-btn,
         .save-btn,
         .report-btn {
-          padding: 10px 20px;
+          padding: 12px 24px;
           border: none;
           border-radius: 8px;
           font-weight: 600;
           cursor: pointer;
-          font-size: 0.95rem;
+          font-size: 1rem;
           transition: all 0.2s ease;
+          min-height: 48px;
+          min-width: 120px;
         }
 
         .btn-cancel,
@@ -1037,20 +1318,6 @@ const isExpired = (expDateString: string | null | undefined): boolean => {
           cursor: not-allowed;
         }
 
-        .report-btn {
-          background: #d32f2f;
-          color: white;
-        }
-
-        .report-btn:hover {
-          background: #b71c1c;
-        }
-
-        .report-btn:disabled {
-          opacity: 0.5;
-          cursor: not-allowed;
-        }
-
         .preview-title {
           margin: 0 0 24px;
           color: white;
@@ -1060,15 +1327,29 @@ const isExpired = (expDateString: string | null | undefined): boolean => {
         }
 
         .status-ng {
-          background: rgba(244, 67, 54, 0.2);
+          background: rgba(244, 67, 54, 0.3);
           color: #ffcdd2;
           font-weight: bold;
           border-radius: 4px;
+          padding: 4px 8px;
+        }
+
+        .status-ok {
+          background: rgba(76, 175, 80, 0.3);
+          color: #c8e6c9;
+          font-weight: bold;
+          border-radius: 4px;
+          padding: 4px 8px;
+        }
+
+        .row-ng {
+          background: rgba(244, 67, 54, 0.1);
         }
 
         .ng-actions {
           display: flex;
           gap: 12px;
+          flex-wrap: wrap;
         }
 
         /* Loading Overlay */
@@ -1123,17 +1404,83 @@ const isExpired = (expDateString: string | null | undefined): boolean => {
           to { transform: rotate(360deg); }
         }
 
-        @media (max-width: 768px) {
+        /* ✅ TABLET RESPONSIVE */
+        @media (max-width: 1024px) {
+          .page-content {
+            padding: 20px 16px;
+          }
+
+          .page-title {
+            font-size: 1.2rem;
+          }
+
           .checklist-table,
           .simple-table {
-            font-size: 0.8rem;
+            min-width: 1200px;
+            font-size: 0.85rem;
           }
 
           .checklist-table th,
           .checklist-table td,
           .simple-table th,
           .simple-table td {
-            padding: 8px 4px;
+            padding: 10px 8px;
+          }
+        }
+
+        /* ✅ MOBILE RESPONSIVE */
+        @media (max-width: 768px) {
+          .page-content {
+            padding: 16px 12px;
+            margin-left: 0;
+          }
+
+          .header-banner {
+            padding: 12px 16px;
+            flex-direction: column;
+            align-items: flex-start;
+            gap: 12px;
+          }
+
+          .btn-back {
+            width: 100%;
+            justify-content: center;
+          }
+
+          .btn-back-text {
+            display: inline;
+          }
+
+          .page-title {
+            font-size: 1.1rem;
+            width: 100%;
+            text-align: center;
+          }
+
+          .subtitle {
+            font-size: 0.9rem;
+            width: 100%;
+          }
+
+          .date-text {
+            font-size: 1rem;
+            width: 100%;
+            text-align: center;
+          }
+
+          .card-container {
+            padding: 16px 12px;
+          }
+
+          /* Hide desktop table, show mobile cards */
+          .desktop-view,
+          .desktop-preview {
+            display: none;
+          }
+
+          .mobile-view,
+          .mobile-preview {
+            display: block;
           }
 
           .form-actions,
@@ -1143,18 +1490,214 @@ const isExpired = (expDateString: string | null | undefined): boolean => {
             gap: 12px;
           }
 
-          .page-title {
-            font-size: 1.5rem;
+          .btn-cancel,
+          .btn-submit,
+          .cancel-btn,
+          .save-btn,
+          .report-btn {
+            width: 100%;
+            min-height: 52px;
+            font-size: 1rem;
+          }
+
+          .checklist-table,
+          .simple-table {
+            min-width: 900px;
+            font-size: 0.8rem;
+          }
+
+          .checklist-table th,
+          .checklist-table td,
+          .simple-table th,
+          .simple-table td {
+            padding: 8px 6px;
+          }
+
+          .status-select,
+          .notes-input {
+            font-size: 0.9rem;
+            min-height: 44px;
           }
 
           .image-preview {
-            width: 40px;
-            height: 40px;
+            width: 70px;
+            height: 70px;
+          }
+
+          .preview-image {
+            max-width: 70px;
+            max-height: 70px;
+          }
+
+          .card-no,
+          .preview-card-no {
+            width: 36px;
+            height: 36px;
+            font-size: 1rem;
+          }
+
+          .card-lokasi {
+            font-size: 0.95rem;
+          }
+
+          .preview-label {
+            min-width: 70px;
+            font-size: 0.8rem;
+          }
+
+          .preview-value {
+            font-size: 0.85rem;
+          }
+
+          .preview-card-image {
+            width: 50px;
+            height: 50px;
+          }
+
+          .check-label {
+            font-size: 0.85rem;
+          }
+
+          .check-select {
+            min-width: 90px;
+          }
+        }
+
+        /* ✅ SMALL MOBILE */
+        @media (max-width: 480px) {
+          .page-content {
+            padding: 12px 8px;
+          }
+
+          .header-banner {
+            padding: 10px 12px;
+          }
+
+          .page-title {
+            font-size: 1rem;
+          }
+
+          .subtitle {
+            font-size: 0.85rem;
+          }
+
+          .date-text {
+            font-size: 0.9rem;
+            padding: 3px 8px;
+          }
+
+          .card-container {
+            padding: 12px 8px;
+          }
+
+          .card-header,
+          .preview-card-header {
+            padding: 12px;
+          }
+
+          .card-no,
+          .preview-card-no {
+            width: 32px;
+            height: 32px;
+            font-size: 0.9rem;
+          }
+
+          .card-body,
+          .preview-card-body {
+            padding: 12px;
+          }
+
+          .info-row {
+            padding: 10px;
+          }
+
+          .section-title {
+            font-size: 0.95rem;
+          }
+
+          .check-row {
+            padding: 8px 0;
+          }
+
+          .check-label {
+            font-size: 0.8rem;
+          }
+
+          .check-select {
+            min-width: 80px;
+            font-size: 0.85rem;
+            padding: 6px 10px;
+          }
+
+          .form-group label {
+            font-size: 0.85rem;
+          }
+
+          .status-select,
+          .notes-input {
+            font-size: 0.85rem;
+            min-height: 44px;
+          }
+
+          .file-label {
+            padding: 10px 14px;
+            font-size: 0.85rem;
+            min-height: 44px;
+          }
+
+          .file-label-large {
+            padding: 12px 14px;
+          }
+
+          .image-preview {
+            width: 60px;
+            height: 60px;
           }
 
           .preview-image {
             max-width: 60px;
             max-height: 60px;
+          }
+
+          .btn-cancel,
+          .btn-submit,
+          .cancel-btn,
+          .save-btn,
+          .report-btn {
+            min-height: 56px;
+            font-size: 0.95rem;
+            padding: 14px 20px;
+          }
+
+          .checklist-table,
+          .simple-table {
+            min-width: 700px;
+            font-size: 0.75rem;
+          }
+
+          .checklist-table th,
+          .checklist-table td,
+          .simple-table th,
+          .simple-table td {
+            padding: 6px 4px;
+          }
+
+          .preview-title {
+            font-size: 1.3rem;
+          }
+
+          .preview-label {
+            min-width: 60px;
+            font-size: 0.75rem;
+          }
+
+          .preview-value {
+            font-size: 0.8rem;
+          }
+
+          .preview-card-image {
+            width: 45px;
+            height: 45px;
           }
         }
       `}</style>

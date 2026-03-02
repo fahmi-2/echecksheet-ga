@@ -11,6 +11,7 @@ type SubItem = {
   label: string;
   method: "VISUAL" | "DICOBA";
 };
+
 const inspectionData: Record<string, { title: string; imageKey?: string; subItems: SubItem[] }> = {
   "1": {
     title: "PONDASI / BAUT PENGIKAT",
@@ -64,7 +65,7 @@ const inspectionData: Record<string, { title: string; imageKey?: string; subItem
     subItems: [
       { id: "5A", label: "KOROSI", method: "VISUAL" },
       { id: "5B", label: "KERETAKAN", method: "VISUAL" },
-      { id: "5C", label: "SAMBU NGAN REL", method: "VISUAL" },
+      { id: "5C", label: "SAMBUNGAN REL", method: "VISUAL" },
       { id: "5D", label: "KELURUSAN REL", method: "VISUAL" },
       { id: "5F", label: "KERATAAN REL", method: "VISUAL" },
     ],
@@ -198,6 +199,7 @@ export default function InspeksiFormDetailPage() {
   const { user } = useAuth();
   const [redirected, setRedirected] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [expandedItems, setExpandedItems] = useState<Record<string, boolean>>({});
 
   const itemId = params?.itemId as string | undefined;
   const viewId = searchParams?.get("view") || null;
@@ -205,8 +207,6 @@ export default function InspeksiFormDetailPage() {
   if (!itemId) {
     return <div>Loading item...</div>;
   }
-
-  // ... useEffect dan validasi akses ...
 
   const item = inspectionData[itemId];
   if (!item) {
@@ -235,12 +235,10 @@ export default function InspeksiFormDetailPage() {
   useEffect(() => {
     if (viewId && itemId) {
       setIsViewMode(true);
-      // Fetch specific inspection data
       fetch(`/api/lift-barang/inspeksi/history?itemId=${itemId}`)
         .then(res => res.json())
         .then(result => {
           if (result.success && result.data.length > 0) {
-            // Find the specific inspection by ID
             const inspection = result.data.find((entry: any) => entry.id === viewId);
             if (inspection) {
               const loadedData: FormData = {};
@@ -266,7 +264,14 @@ export default function InspeksiFormDetailPage() {
     }
   }, [viewId, itemId, item.subItems]);
 
-  // Fungsi untuk mengubah status
+  // Toggle expand for mobile card view
+  const toggleExpand = (subId: string) => {
+    setExpandedItems(prev => ({
+      ...prev,
+      [subId]: !prev[subId]
+    }));
+  };
+
   const handleStatusChange = (subId: string, status: "OK" | "NG") => {
     setFormData((prev) => ({
       ...prev,
@@ -279,7 +284,6 @@ export default function InspeksiFormDetailPage() {
     }));
   };
 
-  // Fungsi untuk mengubah input teks
   const handleInputChange = (subId: string, field: "keterangan" | "solusi", value: string) => {
     setFormData((prev) => ({
       ...prev,
@@ -290,7 +294,6 @@ export default function InspeksiFormDetailPage() {
     }));
   };
 
-  // Upload foto
   const handleImageUpload = async (subId: string, e: ChangeEvent<HTMLInputElement>) => {
     if (isViewMode) return;
     
@@ -344,30 +347,25 @@ export default function InspeksiFormDetailPage() {
     }
   };
 
-  // 🔥 SIMPAN KE API - DENGAN VALIDASI LEBIH KETAT
   const handleSubmit = async () => {
     if (isViewMode) return;
 
     try {
       setLoading(true);
 
-      // ✅ VALIDASI SETIAP ITEM SEBELUM KIRIM
       const validatedData: Record<string, any> = {};
       let hasValidItems = false;
 
       for (const sub of item.subItems) {
         const entry = formData[sub.id];
         
-        // Pastikan entry ada dan valid
         if (!entry || typeof entry !== 'object') {
           console.warn(`Item ${sub.id} tidak valid atau undefined`);
           continue;
         }
 
-        // Validasi status
         const status = entry.status === 'NG' ? 'NG' : 'OK';
         
-        // Untuk status NG, pastikan keterangan dan solusi diisi
         if (status === 'NG') {
           const keterangan = (entry.keterangan || '').trim();
           const solusi = (entry.solusi || '').trim();
@@ -395,18 +393,16 @@ export default function InspeksiFormDetailPage() {
         hasValidItems = true;
       }
 
-      // ✅ Pastikan ada item yang valid
       if (!hasValidItems) {
         alert('❗ Tidak ada item yang valid untuk disimpan!');
         return;
       }
 
-      // ✅ STRUKTUR DATA YANG SESUAI DENGAN API
       const submitData = {
         inspection_date: new Date().toISOString().split('T')[0],
         inspector: user?.fullName || 'Unknown Inspector',
         inspector_nik: user?.nik || '',
-         data: validatedData
+        data: validatedData
       };
 
       console.log('📤 Data yang akan dikirim ke API:', {
@@ -439,7 +435,6 @@ export default function InspeksiFormDetailPage() {
       setLoading(false);
     }
   };
-
 
   return (
     <div className="app-page">
@@ -475,141 +470,284 @@ export default function InspeksiFormDetailPage() {
           </div>
         )}
 
-        <table className="form-table">
-          <thead>
-            <tr>
-              <th>No</th>
-              <th>Sub-Item</th>
-              <th>Metode</th>
-              <th>Status</th>
-              {/* Tambahkan kolom Foto di view mode */}
-              {isViewMode && <th>Foto</th>}
-              {!isViewMode && <th>Keterangan (jika NG)</th>}
-              {!isViewMode && <th>Solusi (jika NG)</th>}
-              {!isViewMode && <th>Foto Hasil</th>}
-              {isViewMode && <th>Keterangan & Solusi</th>}
-            </tr>
-          </thead>
-          <tbody>
-            {item.subItems.map((sub, idx) => {
-              const entry = formData[sub.id];
-              return (
-                <tr key={sub.id}>
-                  <td>{String.fromCharCode(65 + idx)}.</td>
-                  <td>{sub.label}</td>
-                  <td>{sub.method}</td>
-                  <td>
-                    {isViewMode ? (
-                      <span className={entry?.status === "NG" ? "status-ng" : "status-ok"}>
-                        {entry?.status || "-"}
-                      </span>
-                    ) : (
-                      <div className="radio-group">
-                        <label>
-                          <input
-                            type="radio"
-                            name={`status-${sub.id}`}
-                            checked={entry?.status === "OK"}
-                            onChange={() => handleStatusChange(sub.id, "OK")}
-                            disabled={isViewMode || loading}
-                          /> OK
-                        </label>
-                        <label>
-                          <input
-                            type="radio"
-                            name={`status-${sub.id}`}
-                            checked={entry?.status === "NG"}
-                            onChange={() => handleStatusChange(sub.id, "NG")}
-                            disabled={isViewMode || loading}
-                          /> NG
-                        </label>
-                      </div>
-                    )}
-                  </td>
-                  
-                  {/* Kolom Foto untuk view mode */}
-                  {isViewMode && (
+        {/* ✅ DESKTOP: Table View */}
+        <div className="desktop-view">
+          <table className="form-table">
+            <thead>
+              <tr>
+                <th>No</th>
+                <th>Sub-Item</th>
+                <th>Metode</th>
+                <th>Status</th>
+                {isViewMode && <th>Foto</th>}
+                {!isViewMode && <th>Keterangan (jika NG)</th>}
+                {!isViewMode && <th>Solusi (jika NG)</th>}
+                {!isViewMode && <th>Foto Hasil</th>}
+                {isViewMode && <th>Keterangan & Solusi</th>}
+              </tr>
+            </thead>
+            <tbody>
+              {item.subItems.map((sub, idx) => {
+                const entry = formData[sub.id];
+                return (
+                  <tr key={sub.id}>
+                    <td>{String.fromCharCode(65 + idx)}.</td>
+                    <td>{sub.label}</td>
+                    <td>{sub.method}</td>
                     <td>
-                      {entry?.foto_path ? (
-                        <div className="image-preview">
-                          <img 
-                            src={entry.foto_path.startsWith('http') 
-                              ? entry.foto_path 
-                              : `${process.env.NEXT_PUBLIC_BASE_URL || ''}${entry.foto_path}`} 
-                            alt="Foto inspeksi" 
-                            className="uploaded-image" 
-                          />
-                        </div>
+                      {isViewMode ? (
+                        <span className={entry?.status === "NG" ? "status-ng" : "status-ok"}>
+                          {entry?.status || "-"}
+                        </span>
                       ) : (
-                        <span className="no-photos">Tidak ada foto</span>
+                        <div className="radio-group">
+                          <label>
+                            <input
+                              type="radio"
+                              name={`status-${sub.id}`}
+                              checked={entry?.status === "OK"}
+                              onChange={() => handleStatusChange(sub.id, "OK")}
+                              disabled={isViewMode || loading}
+                            /> OK
+                          </label>
+                          <label>
+                            <input
+                              type="radio"
+                              name={`status-${sub.id}`}
+                              checked={entry?.status === "NG"}
+                              onChange={() => handleStatusChange(sub.id, "NG")}
+                              disabled={isViewMode || loading}
+                            /> NG
+                          </label>
+                        </div>
                       )}
                     </td>
-                  )}
-                  
-                  {!isViewMode && (
-                    <>
+                    
+                    {isViewMode && (
                       <td>
-                        {entry?.status === "NG" && (
-                          <textarea
-                            placeholder="Jelaskan kondisi NG..."
-                            value={entry.keterangan || ""}
-                            onChange={(e) => handleInputChange(sub.id, "keterangan", e.target.value)}
-                            className="text-input"
-                            disabled={isViewMode || loading}
-                          />
-                        )}
-                      </td>
-                      <td>
-                        {entry?.status === "NG" && (
-                          <textarea
-                            placeholder="Usulan solusi/perbaikan..."
-                            value={entry.solusi || ""}
-                            onChange={(e) => handleInputChange(sub.id, "solusi", e.target.value)}
-                            className="text-input"
-                            disabled={isViewMode || loading}
-                          />
-                        )}
-                      </td>
-                      <td>
-                        <input 
-                          type="file" 
-                          accept="image/*" 
-                          onChange={(e) => handleImageUpload(sub.id, e)}
-                          disabled={isViewMode || loading}
-                        />
-                        {/* Tampilkan preview foto */}
-                        {entry?.foto_path && (
+                        {entry?.foto_path ? (
                           <div className="image-preview">
                             <img 
                               src={entry.foto_path.startsWith('http') 
                                 ? entry.foto_path 
                                 : `${process.env.NEXT_PUBLIC_BASE_URL || ''}${entry.foto_path}`} 
-                              alt="Preview" 
+                              alt="Foto inspeksi" 
                               className="uploaded-image" 
                             />
                           </div>
+                        ) : (
+                          <span className="no-photos">Tidak ada foto</span>
                         )}
                       </td>
-                    </>
-                  )}
-                  
-                  {isViewMode && (
-                    <td>
-                      {entry?.status === "NG" ? (
-                        <div>
-                          <div><strong>Keterangan:</strong> {entry.keterangan || "-"}</div>
-                          <div><strong>Solusi:</strong> {entry.solusi || "-"}</div>
-                        </div>
+                    )}
+                    
+                    {!isViewMode && (
+                      <>
+                        <td>
+                          {entry?.status === "NG" && (
+                            <textarea
+                              placeholder="Jelaskan kondisi NG..."
+                              value={entry.keterangan || ""}
+                              onChange={(e) => handleInputChange(sub.id, "keterangan", e.target.value)}
+                              className="text-input"
+                              disabled={isViewMode || loading}
+                            />
+                          )}
+                        </td>
+                        <td>
+                          {entry?.status === "NG" && (
+                            <textarea
+                              placeholder="Usulan solusi/perbaikan..."
+                              value={entry.solusi || ""}
+                              onChange={(e) => handleInputChange(sub.id, "solusi", e.target.value)}
+                              className="text-input"
+                              disabled={isViewMode || loading}
+                            />
+                          )}
+                        </td>
+                        <td>
+                          <input 
+                            type="file" 
+                            accept="image/*" 
+                            onChange={(e) => handleImageUpload(sub.id, e)}
+                            disabled={isViewMode || loading}
+                            className="file-input"
+                          />
+                          {entry?.foto_path && (
+                            <div className="image-preview">
+                              <img 
+                                src={entry.foto_path.startsWith('http') 
+                                  ? entry.foto_path 
+                                  : `${process.env.NEXT_PUBLIC_BASE_URL || ''}${entry.foto_path}`} 
+                                alt="Preview" 
+                                className="uploaded-image" 
+                              />
+                            </div>
+                          )}
+                        </td>
+                      </>
+                    )}
+                    
+                    {isViewMode && (
+                      <td>
+                        {entry?.status === "NG" ? (
+                          <div>
+                            <div><strong>Keterangan:</strong> {entry.keterangan || "-"}</div>
+                            <div><strong>Solusi:</strong> {entry.solusi || "-"}</div>
+                          </div>
+                        ) : (
+                          "-"
+                        )}
+                      </td>
+                    )}
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+
+        {/* ✅ MOBILE: Card View */}
+        <div className="mobile-view">
+          {item.subItems.map((sub, idx) => {
+            const entry = formData[sub.id];
+            const isExpanded = expandedItems[sub.id] || false;
+            
+            return (
+              <div key={sub.id} className="inspection-card">
+                <div 
+                  className="card-header"
+                  onClick={() => toggleExpand(sub.id)}
+                >
+                  <div className="card-no">{String.fromCharCode(65 + idx)}.</div>
+                  <div className="card-info">
+                    <div className="card-label">{sub.label}</div>
+                    <div className="card-method">{sub.method}</div>
+                  </div>
+                  <div className={`expand-icon ${isExpanded ? 'expanded' : ''}`}>
+                    {isExpanded ? '▲' : '▼'}
+                  </div>
+                </div>
+
+                {isExpanded && (
+                  <div className="card-body">
+                    <div className="form-group">
+                      <label className="form-label">Status</label>
+                      {isViewMode ? (
+                        <span className={entry?.status === "NG" ? "status-ng" : "status-ok"}>
+                          {entry?.status || "-"}
+                        </span>
                       ) : (
-                        "-"
+                        <div className="radio-group-mobile">
+                          <label className="radio-label">
+                            <input
+                              type="radio"
+                              name={`status-mobile-${sub.id}`}
+                              checked={entry?.status === "OK"}
+                              onChange={() => handleStatusChange(sub.id, "OK")}
+                              disabled={isViewMode || loading}
+                            />
+                            <span className="radio-text ok">OK</span>
+                          </label>
+                          <label className="radio-label">
+                            <input
+                              type="radio"
+                              name={`status-mobile-${sub.id}`}
+                              checked={entry?.status === "NG"}
+                              onChange={() => handleStatusChange(sub.id, "NG")}
+                              disabled={isViewMode || loading}
+                            />
+                            <span className="radio-text ng">NG</span>
+                          </label>
+                        </div>
                       )}
-                    </td>
-                  )}
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
+                    </div>
+
+                    {!isViewMode && entry?.status === "NG" && (
+                      <>
+                        <div className="form-group">
+                          <label className="form-label">Keterangan</label>
+                          <textarea
+                            placeholder="Jelaskan kondisi NG..."
+                            value={entry.keterangan || ""}
+                            onChange={(e) => handleInputChange(sub.id, "keterangan", e.target.value)}
+                            className="text-input-mobile"
+                            disabled={isViewMode || loading}
+                          />
+                        </div>
+
+                        <div className="form-group">
+                          <label className="form-label">Solusi</label>
+                          <textarea
+                            placeholder="Usulan solusi/perbaikan..."
+                            value={entry.solusi || ""}
+                            onChange={(e) => handleInputChange(sub.id, "solusi", e.target.value)}
+                            className="text-input-mobile"
+                            disabled={isViewMode || loading}
+                          />
+                        </div>
+
+                        <div className="form-group">
+                          <label className="form-label">Foto</label>
+                          <input 
+                            type="file" 
+                            accept="image/*" 
+                            onChange={(e) => handleImageUpload(sub.id, e)}
+                            disabled={isViewMode || loading}
+                            className="file-input-mobile"
+                          />
+                          {entry?.foto_path && (
+                            <div className="image-preview-mobile">
+                              <img 
+                                src={entry.foto_path.startsWith('http') 
+                                  ? entry.foto_path 
+                                  : `${process.env.NEXT_PUBLIC_BASE_URL || ''}${entry.foto_path}`} 
+                                alt="Preview" 
+                                className="uploaded-image-mobile" 
+                              />
+                            </div>
+                          )}
+                        </div>
+                      </>
+                    )}
+
+                    {isViewMode && (
+                      <>
+                        {entry?.foto_path && (
+                          <div className="form-group">
+                            <label className="form-label">Foto</label>
+                            <div className="image-preview-mobile">
+                              <img 
+                                src={entry.foto_path.startsWith('http') 
+                                  ? entry.foto_path 
+                                  : `${process.env.NEXT_PUBLIC_BASE_URL || ''}${entry.foto_path}`} 
+                                alt="Foto inspeksi" 
+                                className="uploaded-image-mobile" 
+                              />
+                            </div>
+                          </div>
+                        )}
+                        
+                        {entry?.status === "NG" && (
+                          <>
+                            <div className="form-group">
+                              <label className="form-label">Keterangan</label>
+                              <p className="view-text">{entry.keterangan || "-"}</p>
+                            </div>
+                            <div className="form-group">
+                              <label className="form-label">Solusi</label>
+                              <p className="view-text">{entry.solusi || "-"}</p>
+                            </div>
+                          </>
+                        )}
+                      </>
+                    )}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
 
         {!isViewMode && (
           <div className="actions">
@@ -630,7 +768,9 @@ export default function InspeksiFormDetailPage() {
           margin: 0 auto;
           padding: 24px;
           background: #fafafa;
+          width: 100%;
         }
+
         .back-btn {
           background: white;
           border: 1.5px solid #e0e0e0;
@@ -641,19 +781,23 @@ export default function InspeksiFormDetailPage() {
           font-weight: 600;
           color: #1565c0;
           transition: all 0.3s ease;
+          min-height: 44px;
         }
+
         .back-btn:hover {
           background: #f5f5f5;
           border-color: #1565c0;
           transform: translateX(-2px);
           box-shadow: 0 2px 6px rgba(21, 101, 192, 0.15);
         }
+
         h1 {
           color: #0d47a1;
           margin: 16px 0 24px 0;
           font-size: 1.8rem;
           font-weight: 700;
         }
+
         .ref-image {
           text-align: center;
           margin: 24px 0;
@@ -662,18 +806,31 @@ export default function InspeksiFormDetailPage() {
           border-radius: 12px;
           border: 1px solid #bbdefb;
         }
+
         .ref-image img {
           max-height: 280px;
+          max-width: 100%;
           border: 2px solid #90caf9;
           border-radius: 8px;
           margin-bottom: 12px;
           box-shadow: 0 4px 12px rgba(66, 133, 244, 0.15);
         }
+
         .ref-image p {
           color: #512da8;
           margin: 0;
           font-weight: 500;
         }
+
+        /* Desktop View */
+        .desktop-view {
+          display: block;
+        }
+
+        .mobile-view {
+          display: none;
+        }
+
         .form-table {
           width: 100%;
           border-collapse: collapse;
@@ -683,27 +840,33 @@ export default function InspeksiFormDetailPage() {
           overflow: hidden;
           margin-bottom: 24px;
         }
+
         .form-table th,
         .form-table td {
           padding: 16px;
           text-align: left;
           border-bottom: 1px solid #f0f0f0;
         }
+
         .form-table th {
           background: linear-gradient(135deg, #1e88e5 0%, #1565c0 100%);
           font-weight: 600;
           color: white;
         }
+
         .form-table tbody tr {
           transition: background-color 0.2s ease;
         }
+
         .form-table tbody tr:hover {
           background-color: #f8f9fa;
         }
+
         .radio-group {
           display: flex;
           gap: 20px;
         }
+
         .radio-group label {
           display: flex;
           align-items: center;
@@ -712,12 +875,14 @@ export default function InspeksiFormDetailPage() {
           color: #424242;
           cursor: pointer;
         }
+
         .radio-group input[type="radio"] {
           cursor: pointer;
           width: 20px;
           height: 20px;
           accent-color: #1e88e5;
         }
+
         .text-input {
           width: 100%;
           min-height: 80px;
@@ -730,26 +895,32 @@ export default function InspeksiFormDetailPage() {
           color: #333;
           transition: all 0.3s ease;
         }
+
         .text-input:focus {
           outline: none;
           border-color: #1e88e5;
           box-shadow: 0 0 0 3px rgba(30, 136, 229, 0.1);
           background: #f8fbff;
         }
+
         .text-input:disabled {
           background-color: #f5f5f5;
           cursor: not-allowed;
           color: #999;
         }
-        input[type="file"] {
+
+        .file-input {
           cursor: pointer;
           font-size: 0.9rem;
           color: #666;
+          margin-bottom: 8px;
         }
-        input[type="file"]:disabled {
+
+        .file-input:disabled {
           cursor: not-allowed;
           opacity: 0.5;
         }
+
         .actions {
           margin-top: 32px;
           text-align: right;
@@ -757,6 +928,7 @@ export default function InspeksiFormDetailPage() {
           justify-content: flex-end;
           gap: 12px;
         }
+
         .btn-primary {
           padding: 13px 36px;
           background: linear-gradient(135deg, #1e88e5 0%, #1565c0 100%);
@@ -768,14 +940,24 @@ export default function InspeksiFormDetailPage() {
           font-size: 1rem;
           transition: all 0.3s ease;
           box-shadow: 0 4px 12px rgba(30, 136, 229, 0.25);
+          min-height: 48px;
         }
+
         .btn-primary:hover {
           box-shadow: 0 6px 20px rgba(30, 136, 229, 0.35);
           transform: translateY(-2px);
         }
+
         .btn-primary:active {
           transform: translateY(0);
         }
+
+        .btn-primary:disabled {
+          opacity: 0.6;
+          cursor: not-allowed;
+          transform: none;
+        }
+
         .status-ok {
           color: #2e7d32;
           font-weight: bold;
@@ -784,6 +966,7 @@ export default function InspeksiFormDetailPage() {
           border-radius: 4px;
           display: inline-block;
         }
+
         .status-ng {
           color: #c62828;
           font-weight: bold;
@@ -792,12 +975,13 @@ export default function InspeksiFormDetailPage() {
           border-radius: 4px;
           display: inline-block;
         }
-        /* Styling untuk kolom foto */
+
         .image-preview {
           margin-top: 8px;
           display: flex;
           justify-content: center;
         }
+
         .uploaded-image {
           max-width: 100px;
           max-height: 100px;
@@ -807,14 +991,462 @@ export default function InspeksiFormDetailPage() {
           cursor: pointer;
           transition: transform 0.2s;
         }
+
         .uploaded-image:hover {
           transform: scale(1.05);
         }
+
         .no-photos {
           color: #999;
           font-style: italic;
           font-size: 0.85rem;
           text-align: center;
+        }
+
+        /* Mobile Card Styles */
+        .inspection-card {
+          background: white;
+          border-radius: 12px;
+          margin-bottom: 16px;
+          overflow: hidden;
+          box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+          border: 1px solid #e0e0e0;
+        }
+
+        .card-header {
+          display: flex;
+          align-items: center;
+          gap: 12px;
+          padding: 16px;
+          cursor: pointer;
+          background: linear-gradient(135deg, #f5f7fa 0%, #e8eaf6 100%);
+          transition: background 0.2s;
+          min-height: 44px;
+        }
+
+        .card-header:hover {
+          background: linear-gradient(135deg, #e8eaf6 0%, #d1c4e9 100%);
+        }
+
+        .card-no {
+          width: 36px;
+          height: 36px;
+          background: #1e88e5;
+          color: white;
+          border-radius: 50%;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          font-weight: 700;
+          font-size: 1rem;
+          flex-shrink: 0;
+        }
+
+        .card-info {
+          flex: 1;
+          min-width: 0;
+        }
+
+        .card-label {
+          font-size: 0.95rem;
+          font-weight: 600;
+          color: #1e293b;
+          margin-bottom: 4px;
+        }
+
+        .card-method {
+          font-size: 0.8rem;
+          color: #64748b;
+          background: #f1f5f9;
+          padding: 2px 8px;
+          border-radius: 12px;
+          display: inline-block;
+        }
+
+        .expand-icon {
+          font-size: 1.2rem;
+          color: #64748b;
+          transition: transform 0.3s ease;
+        }
+
+        .expand-icon.expanded {
+          transform: rotate(180deg);
+        }
+
+        .card-body {
+          padding: 16px;
+          background: #fafbfc;
+        }
+
+        .form-group {
+          margin-bottom: 16px;
+        }
+
+        .form-group:last-child {
+          margin-bottom: 0;
+        }
+
+        .form-label {
+          display: block;
+          margin-bottom: 8px;
+          font-weight: 600;
+          color: #475569;
+          font-size: 0.9rem;
+        }
+
+        .radio-group-mobile {
+          display: flex;
+          gap: 16px;
+        }
+
+        .radio-label {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          cursor: pointer;
+          min-height: 44px;
+          padding: 8px 12px;
+          border-radius: 8px;
+          background: white;
+          border: 1.5px solid #e0e0e0;
+          transition: all 0.2s;
+        }
+
+        .radio-label:hover {
+          border-color: #1e88e5;
+        }
+
+        .radio-label input[type="radio"] {
+          width: 20px;
+          height: 20px;
+          accent-color: #1e88e5;
+        }
+
+        .radio-text {
+          font-weight: 600;
+          font-size: 0.95rem;
+        }
+
+        .radio-text.ok {
+          color: #2e7d32;
+        }
+
+        .radio-text.ng {
+          color: #c62828;
+        }
+
+        .text-input-mobile {
+          width: 100%;
+          min-height: 100px;
+          padding: 12px;
+          border: 1.5px solid #e0e0e0;
+          border-radius: 8px;
+          resize: vertical;
+          font-family: inherit;
+          font-size: 0.95rem;
+          color: #333;
+          transition: all 0.3s ease;
+          min-height: 44px;
+        }
+
+        .text-input-mobile:focus {
+          outline: none;
+          border-color: #1e88e5;
+          box-shadow: 0 0 0 3px rgba(30, 136, 229, 0.1);
+          background: #f8fbff;
+        }
+
+        .text-input-mobile:disabled {
+          background-color: #f5f5f5;
+          cursor: not-allowed;
+          color: #999;
+        }
+
+        .file-input-mobile {
+          width: 100%;
+          padding: 12px;
+          border: 1.5px dashed #e0e0e0;
+          border-radius: 8px;
+          background: white;
+          cursor: pointer;
+          font-size: 0.9rem;
+          color: #666;
+          min-height: 44px;
+        }
+
+        .file-input-mobile:disabled {
+          cursor: not-allowed;
+          opacity: 0.5;
+        }
+
+        .image-preview-mobile {
+          margin-top: 12px;
+          display: flex;
+          justify-content: center;
+        }
+
+        .uploaded-image-mobile {
+          max-width: 120px;
+          max-height: 120px;
+          border-radius: 8px;
+          border: 2px solid #e0e0e0;
+          box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+          cursor: pointer;
+          transition: transform 0.2s;
+        }
+
+        .uploaded-image-mobile:hover {
+          transform: scale(1.05);
+        }
+
+        .view-text {
+          background: white;
+          padding: 12px;
+          border-radius: 8px;
+          border: 1px solid #e0e0e0;
+          color: #333;
+          font-size: 0.95rem;
+          line-height: 1.5;
+        }
+
+        /* Loading Overlay */
+        .loading-overlay {
+          position: fixed;
+          top: 0;
+          left: 0;
+          right: 0;
+          bottom: 0;
+          background: rgba(0, 0, 0, 0.7);
+          display: flex;
+          flex-direction: column;
+          justify-content: center;
+          align-items: center;
+          z-index: 9999;
+          color: white;
+        }
+
+        .spinner {
+          width: 60px;
+          height: 60px;
+          border: 6px solid rgba(255, 255, 255, 0.3);
+          border-top-color: #4caf50;
+          border-radius: 50%;
+          animation: spin 0.8s linear infinite;
+          margin-bottom: 16px;
+        }
+
+        @keyframes spin {
+          to { transform: rotate(360deg); }
+        }
+
+        /* ✅ TABLET RESPONSIVE */
+        @media (max-width: 1024px) {
+          .page-content {
+            padding: 20px 16px;
+          }
+
+          h1 {
+            font-size: 1.6rem;
+          }
+
+          .form-table {
+            font-size: 0.9rem;
+          }
+
+          .form-table th,
+          .form-table td {
+            padding: 12px 8px;
+          }
+        }
+
+        /* ✅ MOBILE RESPONSIVE */
+        @media (max-width: 768px) {
+          .page-content {
+            padding: 16px 12px;
+            margin-left: 0;
+          }
+
+          .back-btn {
+            width: 100%;
+            justify-content: center;
+          }
+
+          h1 {
+            font-size: 1.4rem;
+            margin: 16px 0 20px 0;
+          }
+
+          .ref-image {
+            padding: 16px;
+            margin: 16px 0;
+          }
+
+          .ref-image img {
+            max-height: 200px;
+          }
+
+          /* Hide desktop table, show mobile cards */
+          .desktop-view {
+            display: none;
+          }
+
+          .mobile-view {
+            display: block;
+          }
+
+          .actions {
+            margin-top: 24px;
+          }
+
+          .btn-primary {
+            width: 100%;
+            padding: 14px 24px;
+            font-size: 1rem;
+          }
+
+          .card-header {
+            padding: 14px 12px;
+          }
+
+          .card-no {
+            width: 32px;
+            height: 32px;
+            font-size: 0.9rem;
+          }
+
+          .card-label {
+            font-size: 0.9rem;
+          }
+
+          .card-method {
+            font-size: 0.75rem;
+          }
+
+          .card-body {
+            padding: 14px 12px;
+          }
+
+          .form-label {
+            font-size: 0.85rem;
+          }
+
+          .radio-group-mobile {
+            flex-direction: column;
+            gap: 8px;
+          }
+
+          .radio-label {
+            min-height: 44px;
+          }
+
+          .text-input-mobile {
+            min-height: 80px;
+            font-size: 0.9rem;
+          }
+
+          .uploaded-image-mobile {
+            max-width: 100px;
+            max-height: 100px;
+          }
+        }
+
+        /* ✅ SMALL MOBILE */
+        @media (max-width: 480px) {
+          .page-content {
+            padding: 12px 8px;
+          }
+
+          .back-btn {
+            padding: 10px 14px;
+            font-size: 0.9rem;
+          }
+
+          h1 {
+            font-size: 1.2rem;
+            margin: 12px 0 16px 0;
+          }
+
+          .ref-image {
+            padding: 12px;
+            margin: 12px 0;
+          }
+
+          .ref-image img {
+            max-height: 160px;
+          }
+
+          .ref-image p {
+            font-size: 0.85rem;
+          }
+
+          .card-header {
+            padding: 12px 10px;
+          }
+
+          .card-no {
+            width: 28px;
+            height: 28px;
+            font-size: 0.85rem;
+          }
+
+          .card-label {
+            font-size: 0.85rem;
+          }
+
+          .card-method {
+            font-size: 0.7rem;
+            padding: 2px 6px;
+          }
+
+          .card-body {
+            padding: 12px 10px;
+          }
+
+          .form-group {
+            margin-bottom: 14px;
+          }
+
+          .form-label {
+            font-size: 0.8rem;
+            margin-bottom: 6px;
+          }
+
+          .radio-label {
+            padding: 10px;
+            font-size: 0.9rem;
+          }
+
+          .text-input-mobile {
+            min-height: 70px;
+            padding: 10px;
+            font-size: 0.85rem;
+          }
+
+          .file-input-mobile {
+            padding: 10px;
+            font-size: 0.85rem;
+          }
+
+          .uploaded-image-mobile {
+            max-width: 80px;
+            max-height: 80px;
+          }
+
+          .view-text {
+            padding: 10px;
+            font-size: 0.85rem;
+          }
+
+          .btn-primary {
+            padding: 12px 20px;
+            font-size: 0.95rem;
+            min-height: 52px;
+          }
+
+          .spinner {
+            width: 50px;
+            height: 50px;
+          }
         }
       `}</style>
     </div>

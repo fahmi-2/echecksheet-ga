@@ -762,27 +762,96 @@ export default function EChecksheetPanelPage() {
           box-shadow: 0 4px 12px rgba(0,0,0,0.15);
         }
 
+        @media (max-width: 1200px) {
+          .page-content {
+            padding: 24px 16px;
+            margin: 0;
+          }
+
+          .header-content {
+            padding: 24px;
+          }
+
+          .table-container {
+            margin-bottom: 20px;
+          }
+        }
+
         @media (max-width: 768px) {
           .page-content {
             padding: 16px 12px;
+            margin: 0;
+            max-width: 100%;
           }
 
           .header-content {
             padding: 16px 20px;
+            border-radius: 8px;
+            margin-bottom: 16px;
           }
 
           .header-content h1 {
             font-size: 22px;
+            margin-bottom: 8px;
+          }
+
+          .header-subtitle {
+            font-size: 12px;
+          }
+
+          .info-card {
+            padding: 16px;
+            border-radius: 8px;
+            margin-bottom: 16px;
           }
 
           .info-row {
             flex-direction: column;
             align-items: flex-start;
             gap: 4px;
+            padding: 10px 0;
+          }
+
+          .info-label {
+            font-size: 11px;
+            min-width: auto;
           }
 
           .info-value {
             text-align: left;
+            font-size: 13px;
+          }
+
+          .date-section {
+            padding: 12px 16px;
+            border-radius: 8px;
+            margin-bottom: 16px;
+          }
+
+          .table-container {
+            border-radius: 8px;
+            margin-bottom: 16px;
+            overflow-x: auto;
+            -webkit-overflow-scrolling: touch;
+          }
+
+          .checksheet-table {
+            font-size: 12px;
+            min-width: 600px;
+          }
+
+          .checksheet-table th {
+            padding: 10px 12px;
+            font-size: 11px;
+          }
+
+          .checksheet-table td {
+            padding: 8px 10px;
+          }
+
+          .col-no {
+            width: 40px;
+            font-size: 11px;
           }
 
           .col-item {
@@ -790,13 +859,149 @@ export default function EChecksheetPanelPage() {
             font-size: 12px;
           }
 
+          .col-date {
+            width: 100px;
+          }
+
+          .col-input {
+            width: 100px;
+          }
+
+          input.input-field,
+          select.input-field {
+            font-size: 13px;
+            padding: 8px;
+            min-height: 36px;
+          }
+
           .action-buttons {
             flex-direction: column;
+            gap: 10px;
+            padding: 16px 0;
           }
 
           .btn-primary,
           .btn-secondary {
             width: 100%;
+            padding: 10px 16px;
+            font-size: 12px;
+            min-height: 44px;
+          }
+        }
+
+        @media (max-width: 480px) {
+          .page-content {
+            padding: 12px 8px;
+            margin: 0;
+            max-width: 100%;
+          }
+
+          .header-content {
+            padding: 12px 16px;
+            border-radius: 6px;
+            margin-bottom: 12px;
+          }
+
+          .header-content h1 {
+            font-size: 18px;
+            margin-bottom: 4px;
+          }
+
+          .header-subtitle {
+            font-size: 11px;
+          }
+
+          .info-section {
+            margin-bottom: 12px;
+          }
+
+          .info-card {
+            padding: 12px;
+            border-radius: 6px;
+            margin-bottom: 12px;
+          }
+
+          .info-row {
+            padding: 8px 0;
+            gap: 2px;
+          }
+
+          .info-label {
+            font-size: 10px;
+          }
+
+          .info-value {
+            font-size: 12px;
+          }
+
+          .date-section {
+            padding: 10px 12px;
+            border-radius: 6px;
+            margin-bottom: 12px;
+          }
+
+          .table-container {
+            border-radius: 6px;
+            margin-bottom: 12px;
+            overflow-x: auto;
+            -webkit-overflow-scrolling: touch;
+          }
+
+          .checksheet-table {
+            font-size: 10px;
+            min-width: 550px;
+          }
+
+          .checksheet-table th {
+            padding: 8px 8px;
+            font-size: 9px;
+            text-transform: capitalize;
+            letter-spacing: 0;
+          }
+
+          .checksheet-table td {
+            padding: 6px 8px;
+          }
+
+          .col-no {
+            width: 35px;
+            font-size: 9px;
+          }
+
+          .col-item {
+            min-width: 140px;
+            font-size: 10px;
+          }
+
+          .col-date {
+            width: 90px;
+          }
+
+          .col-input {
+            width: 85px;
+          }
+
+          input.input-field,
+          select.input-field {
+            font-size: 14px;
+            padding: 6px;
+            min-height: 34px;
+          }
+
+          .action-buttons {
+            flex-direction: column;
+            gap: 8px;
+            padding: 12px 0;
+          }
+
+          .btn-primary,
+          .btn-secondary {
+            width: 100%;
+            padding: 8px 12px;
+            font-size: 11px;
+            min-height: 40px;
+            letter-spacing: 0;
+            text-transform: none;
           }
         }
       `}</style>

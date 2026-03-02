@@ -210,57 +210,53 @@ if (slug.toLowerCase() === 'apar') {
     }
 
     // ========================================
-    // ✅ HANDLER: APD
-    // ========================================
-    if (slug.toLowerCase() === 'apd') {
-      console.log('📊 Querying APD...');
-      
-      const debugTotal = await pool.query(
-        'SELECT COUNT(*) as count FROM apd_records'
-      );
-      console.log('📊 Total APD records in DB:', debugTotal.rows[0].count);
-      
-      let query = `
-        SELECT 
-          TO_CHAR(DATE(r.submitted_at AT TIME ZONE 'Asia/Jakarta'), 'YYYY-MM-DD') as date,
-          COUNT(DISTINCT r.id) as total,
-          COUNT(DISTINCT CASE 
-            WHEN i.keterangan IS NULL OR i.keterangan = '' THEN r.id 
-          END) as ok_count,
-          COUNT(DISTINCT CASE 
-            WHEN i.keterangan IS NOT NULL AND i.keterangan != '' THEN r.id 
-          END) as ng_count
-        FROM apd_records r
-        LEFT JOIN apd_items i ON r.id = i.record_id
-        WHERE DATE(r.submitted_at AT TIME ZONE 'Asia/Jakarta') >= $1 
-          AND DATE(r.submitted_at AT TIME ZONE 'Asia/Jakarta') <= $2
-        GROUP BY DATE(r.submitted_at AT TIME ZONE 'Asia/Jakarta')
-        ORDER BY DATE(r.submitted_at AT TIME ZONE 'Asia/Jakarta') ASC
-      `;
-      
-      const params: any[] = [dateFrom, dateTo];
-      
-      console.log('📊 Executing APD query...');
-      console.log('📊 Params:', params);
-      
-      const result = await pool.query(query, params);
-      console.log('✅ APD query result:', result.rows.length, 'rows');
-      
-      const formattedData = result.rows.flatMap((row: any) => {
-        const date = row.date; // ✅ Sudah string YYYY-MM-DD dari TO_CHAR
-        const ok = parseInt(row.ok_count) || 0;
-        const ng = parseInt(row.ng_count) || 0;
-        
-        const data = [];
-        if (ok > 0) data.push({ date, status: 'OK', count: ok });
-        if (ng > 0) data.push({ date, status: 'NG', count: ng });
-        return data;
-      });
-      
-      console.log('📊 APD formattedData:', formattedData);
-      
-      return NextResponse.json({ success: true, data: formattedData });
-    }
+// ✅ HANDLER: APD (FIXED - All submissions = OK)
+// ========================================
+if (slug.toLowerCase() === 'apd') {
+  console.log('📊 Querying APD...');
+  
+  const debugTotal = await pool.query(
+    'SELECT COUNT(*) as count FROM apd_records'
+  );
+  console.log('📊 Total APD records in DB:', debugTotal.rows[0].count);
+  
+  // ✅ Semua submission dihitung sebagai OK, NG = 0
+  let query = `
+    SELECT 
+      TO_CHAR(DATE(r.submitted_at AT TIME ZONE 'Asia/Jakarta'), 'YYYY-MM-DD') as date,
+      COUNT(DISTINCT r.id) as total,
+      COUNT(DISTINCT r.id) as ok_count,  -- ✅ Semua dihitung OK
+      0 as ng_count                       -- ✅ Tidak ada NG untuk APD
+    FROM apd_records r
+    WHERE DATE(r.submitted_at AT TIME ZONE 'Asia/Jakarta') >= $1 
+      AND DATE(r.submitted_at AT TIME ZONE 'Asia/Jakarta') <= $2
+    GROUP BY DATE(r.submitted_at AT TIME ZONE 'Asia/Jakarta')
+    ORDER BY DATE(r.submitted_at AT TIME ZONE 'Asia/Jakarta') ASC
+  `;
+  
+  const params: any[] = [dateFrom, dateTo];
+  
+  console.log('📊 Executing APD query...');
+  console.log('📊 Params:', params);
+  
+  const result = await pool.query(query, params);
+  console.log('✅ APD query result:', result.rows.length, 'rows');
+  
+  const formattedData = result.rows.flatMap((row: any) => {
+    const date = row.date;
+    const ok = parseInt(row.ok_count) || 0;
+    const ng = 0; // ✅ Force NG = 0 untuk APD
+    
+    const data = [];
+    if (ok > 0) data.push({ date, status: 'OK', count: ok });
+    // ✅ Tidak push data NG karena selalu 0
+    return data;
+  });
+  
+  console.log('📊 APD formattedData:', formattedData);
+  
+  return NextResponse.json({ success: true, data: formattedData });
+}
 
     // ========================================
     // ✅ HANDLER: TOILET INSPECTION

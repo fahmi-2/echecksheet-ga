@@ -258,7 +258,7 @@ export function Sidebar({ userName = "User", userRole = "Role" }: SidebarProps) 
               {isExpanded && <span className="menu-label">Dashboard</span>}
             </Link>
 
-            <Link 
+            {/* <Link 
               href={getLaporanRoute()} 
               className={`menu-item ${pathname === '/pelaporan-list' ? 'active' : ''}`}
               onClick={() => {
@@ -273,10 +273,10 @@ export function Sidebar({ userName = "User", userRole = "Role" }: SidebarProps) 
                 </svg>
               </span>
               {isExpanded && <span className="menu-label">Laporan</span>}
-            </Link>
+            </Link> */}
           </nav>
 
-          {/* 🔔 Notifikasi */}
+          {/* 🔔 Notifikasi
           <div className="notification-section">
             <button
               ref={notificationButtonRef}
@@ -313,7 +313,7 @@ export function Sidebar({ userName = "User", userRole = "Role" }: SidebarProps) 
                 </span>
               )}
             </button>
-          </div>
+          </div> */}
 
           {/* Footer */}
           <div className="sidebar-footer">
@@ -735,7 +735,7 @@ export function Sidebar({ userName = "User", userRole = "Role" }: SidebarProps) 
         .mobile-toggle-btn {
           position: fixed;
           top: 16px;
-          left: 16px;
+          right: 16px;
           background: linear-gradient(135deg, #1e40af 0%, #1e3a8a 100%);
           border: none;
           width: 48px;

@@ -33,9 +33,8 @@ const getItemNameById = (id: string): string => {
   return item?.label || `Item ${id}`;
 };
 
-// ✅ Helper khusus untuk sub-item (sesuai kebutuhan Anda)
+// ✅ Helper khusus untuk sub-item
 const getSubItemLabel = (subItemId: string): string => {
-  // Ambil huruf terakhir dari subItemId (misal: "1A" -> "A")
   const suffix = subItemId.charAt(subItemId.length - 1);
   
   switch (suffix.toUpperCase()) {
@@ -66,7 +65,6 @@ interface InspectionRecord {
 export default function RiwayatInspeksiPerItemPage({ params }: { params: Promise<{ itemId: string }> }) {
   const { itemId } = use(params);
   
-  // ✅ Dapatkan nama item dari data lokal
   const itemDisplayName = getItemNameById(itemId);
   
   const router = useRouter();
@@ -122,7 +120,6 @@ export default function RiwayatInspeksiPerItemPage({ params }: { params: Promise
 
   if (!user) return null;
 
-  // ✅ Helper untuk mengubah items object menjadi array dengan sub_item_id
   const getItemsArray = (items: Record<string, any>) => {
     if (!items || typeof items !== 'object' || Array.isArray(items)) return [];
     
@@ -137,14 +134,14 @@ export default function RiwayatInspeksiPerItemPage({ params }: { params: Promise
       <Sidebar userName={user.fullName} />
 
       <div className="page-content">
-        {/* Header - Tampilkan nama item lengkap */}
+        {/* Header */}
         <div className="header">
           <button onClick={() => router.push("/status-ga/inspeksi-preventif-lift-barang/inspeksi")} className="btn-back">
             <ArrowLeft size={20} />
           </button>
           <div className="header-title">
             <h1>Riwayat Inspeksi</h1>
-            <p>{itemDisplayName}</p> {/* ✅ Tampilkan nama item lengkap */}
+            <p>{itemDisplayName}</p>
           </div>
         </div>
 
@@ -168,7 +165,6 @@ export default function RiwayatInspeksiPerItemPage({ params }: { params: Promise
             <p>Memuat riwayat...</p>
           </div>
         ) : records.length === 0 ? (
-          /* Empty State - Tampilkan nama item */
           <div className="empty">
             <div className="empty-icon">📋</div>
             <h3>Belum Ada Riwayat</h3>
@@ -181,10 +177,8 @@ export default function RiwayatInspeksiPerItemPage({ params }: { params: Promise
             </button>
           </div>
         ) : (
-          /* Records List */
           <div className="records">
             {records.map((record: InspectionRecord) => {
-              // ✅ Dapatkan array items dengan sub_item_id
               const itemsArray = getItemsArray(record.items);
               const ngCount = itemsArray.filter((item: any) => item.status === 'NG').length;
               const okCount = itemsArray.length - ngCount;
@@ -229,12 +223,11 @@ export default function RiwayatInspeksiPerItemPage({ params }: { params: Promise
                     </div>
                   </div>
 
-                  {/* Items List - Tampilkan sub-item dengan label yang sesuai */}
+                  {/* Items List */}
                   <div className="items">
                     {itemsArray.map((item: any, index: number) => (
                       <div key={index} className={`item ${item.status === 'NG' ? 'item-ng' : 'item-ok'}`}>
                         <div className="item-header">
-                          {/* ✅ Tampilkan label sub-item yang sesuai (KOROSI, KERETAKAN, dll) */}
                           <span className="item-label">{getSubItemLabel(item.sub_item_id)}</span>
                           <span className={`badge ${item.status === 'NG' ? 'badge-ng' : 'badge-ok'}`}>
                             {item.status}
@@ -263,6 +256,7 @@ export default function RiwayatInspeksiPerItemPage({ params }: { params: Promise
                                   alt="Dokumentasi" 
                                   className="photo"
                                   onClick={(e) => {
+                                    e.stopPropagation();
                                     const modal = document.createElement('div');
                                     modal.className = 'photo-modal';
                                     modal.innerHTML = `
@@ -322,6 +316,8 @@ export default function RiwayatInspeksiPerItemPage({ params }: { params: Promise
           align-items: center;
           justify-content: center;
           color: #64748b;
+          min-width: 44px;
+          min-height: 44px;
         }
 
         .btn-back:hover {
@@ -330,18 +326,25 @@ export default function RiwayatInspeksiPerItemPage({ params }: { params: Promise
           color: #334155;
         }
 
+        .header-title {
+          flex: 1;
+          min-width: 0;
+        }
+
         .header-title h1 {
           font-size: 1.5rem;
           font-weight: 600;
           color: #1e293b;
           margin: 0;
           line-height: 1.2;
+          word-break: break-word;
         }
 
         .header-title p {
           font-size: 0.875rem;
           color: #64748b;
           margin: 0.25rem 0 0 0;
+          word-break: break-word;
         }
 
         /* Alert */
@@ -366,6 +369,12 @@ export default function RiwayatInspeksiPerItemPage({ params }: { params: Promise
           align-items: center;
           gap: 0.75rem;
           color: #dc2626;
+          flex: 1;
+          min-width: 0;
+        }
+
+        .alert-content span {
+          word-break: break-word;
         }
 
         .btn-retry {
@@ -378,6 +387,8 @@ export default function RiwayatInspeksiPerItemPage({ params }: { params: Promise
           font-weight: 500;
           cursor: pointer;
           transition: all 0.2s;
+          min-height: 44px;
+          white-space: nowrap;
         }
 
         .btn-retry:hover {
@@ -443,6 +454,7 @@ export default function RiwayatInspeksiPerItemPage({ params }: { params: Promise
           font-weight: 500;
           cursor: pointer;
           transition: all 0.2s;
+          min-height: 44px;
         }
 
         .btn-primary:hover {
@@ -496,6 +508,7 @@ export default function RiwayatInspeksiPerItemPage({ params }: { params: Promise
           color: #1e293b;
           font-size: 0.875rem;
           font-weight: 500;
+          flex-wrap: wrap;
         }
 
         .nik {
@@ -508,6 +521,7 @@ export default function RiwayatInspeksiPerItemPage({ params }: { params: Promise
           display: flex;
           gap: 0.75rem;
           padding: 0 1.25rem 1.25rem;
+          flex-wrap: wrap;
         }
 
         .stat {
@@ -558,12 +572,16 @@ export default function RiwayatInspeksiPerItemPage({ params }: { params: Promise
           justify-content: space-between;
           align-items: center;
           gap: 0.75rem;
+          flex-wrap: wrap;
         }
 
         .item-label {
           font-weight: 500;
           color: #1e293b;
           font-size: 0.875rem;
+          word-break: break-word;
+          flex: 1;
+          min-width: 0;
         }
 
         .badge {
@@ -573,6 +591,8 @@ export default function RiwayatInspeksiPerItemPage({ params }: { params: Promise
           font-weight: 600;
           text-transform: uppercase;
           letter-spacing: 0.025em;
+          white-space: nowrap;
+          flex-shrink: 0;
         }
 
         .badge-ok {
@@ -600,6 +620,12 @@ export default function RiwayatInspeksiPerItemPage({ params }: { params: Promise
           font-size: 0.8125rem;
           line-height: 1.5;
           color: #475569;
+          word-break: break-word;
+        }
+
+        .detail span {
+          flex: 1;
+          min-width: 0;
         }
 
         .detail-photo {
@@ -607,6 +633,7 @@ export default function RiwayatInspeksiPerItemPage({ params }: { params: Promise
           align-items: center;
           gap: 0.5rem;
           margin-top: 0.25rem;
+          flex-wrap: wrap;
         }
 
         .photo {
@@ -617,6 +644,7 @@ export default function RiwayatInspeksiPerItemPage({ params }: { params: Promise
           border: 2px solid #e2e8f0;
           cursor: pointer;
           transition: all 0.2s;
+          flex-shrink: 0;
         }
 
         .photo:hover {
@@ -651,14 +679,49 @@ export default function RiwayatInspeksiPerItemPage({ params }: { params: Promise
           border-radius: 0.5rem;
         }
 
-        /* Responsive */
-        @media (max-width: 640px) {
+        /* ✅ TABLET RESPONSIVE (768px - 1024px) */
+        @media (max-width: 1024px) {
+          .page-content {
+            padding: 1.25rem;
+            max-width: 100%;
+          }
+
+          .header-title h1 {
+            font-size: 1.375rem;
+          }
+
+          .meta {
+            gap: 1rem;
+          }
+        }
+
+        /* ✅ MOBILE RESPONSIVE (481px - 768px) */
+        @media (max-width: 768px) {
           .page-content {
             padding: 1rem;
           }
 
+          .header {
+            gap: 0.75rem;
+            margin-bottom: 1.5rem;
+          }
+
+          .btn-back {
+            min-width: 44px;
+            min-height: 44px;
+            padding: 0.5rem;
+          }
+
           .header-title h1 {
             font-size: 1.25rem;
+          }
+
+          .header-title p {
+            font-size: 0.8125rem;
+          }
+
+          .card-header {
+            padding: 1rem;
           }
 
           .meta {
@@ -666,13 +729,265 @@ export default function RiwayatInspeksiPerItemPage({ params }: { params: Promise
             gap: 0.5rem;
           }
 
+          .meta-item {
+            font-size: 0.8125rem;
+          }
+
+          .inspector {
+            margin-top: 0.5rem;
+            font-size: 0.8125rem;
+          }
+
           .stats {
+            padding: 0 1rem 1rem;
+            gap: 0.5rem;
+          }
+
+          .stat {
+            padding: 0.5rem 0.75rem;
+            font-size: 0.8125rem;
+          }
+
+          .items {
+            padding: 0 1rem 1rem;
+            gap: 0.5rem;
+          }
+
+          .item {
+            padding: 0.75rem;
+          }
+
+          .item-header {
             flex-direction: column;
+            align-items: flex-start;
+            gap: 0.5rem;
+          }
+
+          .item-label {
+            font-size: 0.8125rem;
+          }
+
+          .badge {
+            padding: 0.25rem 0.5rem;
+            font-size: 0.6875rem;
+          }
+
+          .item-details {
+            margin-top: 0.75rem;
+            padding-top: 0.75rem;
+          }
+
+          .detail {
+            font-size: 0.75rem;
+            gap: 0.375rem;
+          }
+
+          .photo {
+            width: 70px;
+            height: 70px;
+          }
+
+          .alert {
+            padding: 0.875rem;
+            flex-direction: column;
+            align-items: stretch;
+          }
+
+          .btn-retry {
+            width: 100%;
+            text-align: center;
+          }
+
+          .empty {
+            padding: 3rem 1rem;
+          }
+
+          .empty-icon {
+            font-size: 3rem;
+          }
+
+          .empty h3 {
+            font-size: 1.125rem;
+          }
+
+          .empty p {
+            font-size: 0.875rem;
+          }
+
+          .btn-primary {
+            width: 100%;
+            padding: 0.875rem 1.25rem;
+          }
+        }
+
+        /* ✅ SMALL MOBILE (≤ 480px) */
+        @media (max-width: 480px) {
+          .page-content {
+            padding: 0.75rem;
+          }
+
+          .header {
+            gap: 0.5rem;
+            margin-bottom: 1.25rem;
+          }
+
+          .btn-back {
+            min-width: 310px;
+            min-height: 40px;
+            padding: 0.375rem;
+          }
+
+          .header-title h1 {
+            font-size: 1.125rem;
+          }
+
+          .header-title p {
+            font-size: 0.75rem;
+          }
+
+          .card-header {
+            padding: 0.875rem;
+          }
+
+          .meta-item {
+            font-size: 0.75rem;
+          }
+
+          .inspector {
+            font-size: 0.75rem;
+          }
+
+          .stats {
+            padding: 0 0.875rem 0.875rem;
+            flex-direction: column;
+          }
+
+          .stat {
+            width: 100%;
+            justify-content: center;
+            padding: 0.625rem 0.75rem;
+          }
+
+          .items {
+            padding: 0 0.875rem 0.875rem;
+          }
+
+          .item {
+            padding: 0.625rem;
+          }
+
+          .item-label {
+            font-size: 0.75rem;
+          }
+
+          .badge {
+            padding: 0.1875rem 0.5rem;
+            font-size: 0.625rem;
+          }
+
+          .item-details {
+            margin-top: 0.625rem;
+            padding-top: 0.625rem;
+          }
+
+          .detail {
+            font-size: 0.6875rem;
+            gap: 0.25rem;
+          }
+
+          .detail svg {
+            flex-shrink: 0;
+            width: 12px;
+            height: 12px;
           }
 
           .photo {
             width: 60px;
             height: 60px;
+          }
+
+          .loading {
+            padding: 3rem 1rem;
+          }
+
+          .spinner {
+            width: 35px;
+            height: 35px;
+          }
+
+          .loading p {
+            font-size: 0.8125rem;
+          }
+
+          .empty {
+            padding: 2.5rem 0.875rem;
+          }
+
+          .empty-icon {
+            font-size: 2.5rem;
+          }
+
+          .empty h3 {
+            font-size: 1rem;
+          }
+
+          .empty p {
+            font-size: 0.8125rem;
+          }
+
+          .btn-primary {
+            padding: 0.75rem 1rem;
+            font-size: 0.875rem;
+          }
+
+          .alert {
+            padding: 0.75rem;
+          }
+
+          .alert-content {
+            font-size: 0.8125rem;
+          }
+
+          .btn-retry {
+            padding: 0.5rem 0.875rem;
+            font-size: 0.8125rem;
+          }
+
+          :global(.photo-modal-content img) {
+            max-height: 80vh;
+          }
+        }
+
+        /* ✅ EXTRA SMALL MOBILE (≤ 360px) */
+        @media (max-width: 360px) {
+          .page-content {
+            padding: 0.5rem;
+          }
+
+          .header-title h1 {
+            font-size: 1rem;
+          }
+
+          .header-title p {
+            font-size: 0.6875rem;
+          }
+
+          .item-label {
+            font-size: 0.6875rem;
+          }
+
+          .badge {
+            font-size: 0.5625rem;
+            padding: 0.125rem 0.375rem;
+          }
+
+          .photo {
+            width: 50px;
+            height: 50px;
+          }
+
+          .detail {
+            font-size: 0.625rem;
           }
         }
       `}</style>

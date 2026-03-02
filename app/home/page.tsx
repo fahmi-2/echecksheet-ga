@@ -254,41 +254,7 @@ export default function ModernHomePage() {
           </div>
         </section>
 
-        {/* Recent Activity */}
-        <section className="section">
-          <div className="section-header">
-            <div>
-              <h2 className="section-title">🕐 Aktivitas Terbaru</h2>
-              <p className="section-desc">Checklist yang baru saja diselesaikan</p>
-            </div>
-            <Link href={dashboardLink} className="view-all-btn">
-              Lihat Semua →
-            </Link>
-          </div>
-          <div className="activity-list">
-            {activities.length > 0 ? (
-              activities.map((act, i) => (
-                <div key={i} className="activity-item">
-                  <div className={`activity-icon ${act.status === "OK" ? "ok" : "ng"}`} aria-hidden="true">
-                    {act.status === "OK" ? <CheckCircle2 size={18} /> : <AlertCircle size={18} />}
-                  </div>
-                  <div className="activity-content">
-                    <h3 className="activity-title">{act.title}</h3>
-                    <p className="activity-desc">Diselesaikan oleh {act.user}</p>
-                  </div>
-                  <div className="activity-meta">
-                    <span className="activity-time">{act.time}</span>
-                    <span className={`activity-status ${act.status === "OK" ? "ok" : "ng"}`}>
-                      {act.status}
-                    </span>
-                  </div>
-                </div>
-              ))
-            ) : (
-              <p className="empty-activity">Belum ada aktivitas checklist hari ini.</p>
-            )}
-          </div>
-        </section>
+        
       </main>
 
       <style jsx>{`
@@ -528,27 +494,223 @@ export default function ModernHomePage() {
           color: #dc2626;
         }
 
+        @media (max-width: 1200px) {
+          .cards-grid {
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+          }
+          
+          .main-content {
+            padding: 20px;
+          }
+        }
+
         @media (max-width: 768px) {
           .modern-home-page {
             flex-direction: column;
           }
+
           .main-content {
-            padding: 16px;
+            padding: 12px;
+            margin: 0;
+            max-width: 100%;
           }
+
           .welcome-banner {
             flex-direction: column;
             text-align: center;
-            padding: 20px;
+            padding: 16px;
+            gap: 16px;
+            margin-bottom: 20px;
           }
+
+          .welcome-illustration {
+            max-width: 120px;
+            margin: 0 auto;
+          }
+
+          .welcome-title {
+            font-size: 20px;
+            margin-bottom: 10px;
+          }
+
+          .welcome-text {
+            font-size: 13px;
+          }
+
           .cards-grid {
             grid-template-columns: 1fr;
+            gap: 14px;
           }
+
+          .feature-card {
+            padding: 20px;
+          }
+
+          .card-title {
+            font-size: 18px;
+          }
+
+          .card-desc {
+            font-size: 12px;
+          }
+
+          .section {
+            margin-bottom: 24px;
+          }
+
           .section-header {
             flex-direction: column;
             align-items: flex-start;
+            margin-bottom: 16px;
+            gap: 8px;
           }
+
+          .section-title {
+            font-size: 18px;
+          }
+
           .view-all-btn {
             align-self: flex-start;
+            padding: 6px 12px;
+            font-size: 13px;
+          }
+
+          .activity-item {
+            padding: 14px;
+            gap: 10px;
+            flex-wrap: wrap;
+          }
+
+          .activity-title {
+            font-size: 13px;
+          }
+
+          .activity-desc {
+            font-size: 11px;
+          }
+
+          .activity-meta {
+            width: 100%;
+            flex-direction: row;
+            justify-content: space-between;
+            align-items: center;
+          }
+
+          .activity-time {
+            font-size: 10px;
+          }
+        }
+
+        @media (max-width: 480px) {
+          .main-content {
+            padding: 8px;
+          }
+
+          .welcome-banner {
+            padding: 12px;
+            gap: 12px;
+            border-radius: 12px;
+            margin-bottom: 16px;
+          }
+
+          .welcome-title {
+            font-size: 18px;
+            margin-bottom: 8px;
+          }
+
+          .welcome-text {
+            font-size: 12px;
+            line-height: 1.5;
+          }
+
+          .welcome-illustration {
+            max-width: 100px;
+          }
+
+          .welcome-illustration svg {
+            width: 100px !important;
+            height: auto !important;
+          }
+
+          .cards-grid {
+            grid-template-columns: 1fr;
+            gap: 10px;
+          }
+
+          .feature-card {
+            padding: 16px;
+            border-radius: 12px;
+          }
+
+          .feature-card:hover {
+            transform: translateY(-4px);
+          }
+
+          .card-header {
+            margin-bottom: 12px;
+            gap: 8px;
+          }
+
+          .card-icon {
+            width: 44px;
+            height: 44px;
+            border-radius: 8px;
+          }
+
+          .card-title {
+            font-size: 16px;
+            margin-bottom: 6px;
+          }
+
+          .card-desc {
+            font-size: 11px;
+            margin-bottom: 12px;
+            line-height: 1.4;
+          }
+
+          .section {
+            margin-bottom: 18px;
+          }
+
+          .section-title {
+            font-size: 16px;
+          }
+
+          .section-desc {
+            font-size: 12px;
+          }
+
+          .activity-list {
+            gap: 10px;
+          }
+
+          .activity-item {
+            padding: 12px;
+            gap: 8px;
+            border-radius: 10px;
+          }
+
+          .activity-title {
+            font-size: 12px;
+          }
+
+          .activity-desc {
+            font-size: 10px;
+          }
+
+          .activity-icon {
+            width: 32px;
+            height: 32px;
+            min-width: 32px;
+          }
+
+          .activity-time {
+            font-size: 9px;
+          }
+
+          .activity-status {
+            padding: 3px 8px;
+            font-size: 10px;
           }
         }
       `}</style>
