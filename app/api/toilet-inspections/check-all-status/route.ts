@@ -1,68 +1,77 @@
-import type { NextApiRequest, NextApiResponse } from 'next';
-import pool from '../../../lib/db';
+// app/api/toilet-inspections/check-all-status/route.ts
+import { NextRequest, NextResponse } from 'next/server';
+import pool from '@/lib/db';
 
-export default async function handler(
-  req: NextApiRequest,
-  res: NextApiResponse
-) {
-  if (req.method !== 'GET') {
-    return res.status(405).json({ message: 'Method not allowed' });
-  }
-
-  const { area_codes, inspection_date, toilet_type = 'laki_perempuan' } = req.query;
-
+export async function GET(request: NextRequest) {
   try {
-    if (!area_codes || !inspection_date) {
-      return res.status(400).json({ 
-        success: false, 
-        message: 'area_codes dan inspection_date diperlukan' 
-      });
+    const { searchParams } = new URL(request.url);
+    const areaCodes = searchParams.get('area_codes');
+    const inspectionDate = searchParams.get('inspection_date');
+    const toiletType = searchParams.get('toilet_type') || 'laki_perempuan';
+
+    // Validasi required parameters
+    if (!areaCodes || !inspectionDate) {
+      return NextResponse.json(
+        { 
+          success: false, 
+          message: 'area_codes dan inspection_date diperlukan' 
+        },
+        { status: 400 }
+      );
     }
 
-    const areasArray = String(area_codes).split(',');
-    const placeholders = areasArray.map(() => '?').join(',');
+    const areasArray = areaCodes.split(',');
 
-    const [results] = await pool.query(
+    // ✅ PostgreSQL: Gunakan ANY() dengan array untuk IN clause
+    const result = await pool.query(
       `SELECT 
         area_code,
         CASE WHEN COUNT(id) > 0 THEN true ELSE false END as filled,
         MAX(overall_status) as status
        FROM toilet_inspections 
-       WHERE area_code IN (${placeholders}) 
-       AND inspection_date = ?
-       AND toilet_type = ?
+       WHERE area_code = ANY($1::text[]) 
+       AND inspection_date = $2
+       AND toilet_type = $3
        GROUP BY area_code`,
-      [...areasArray, inspection_date, toilet_type]
+      [areasArray, inspectionDate, toiletType]
     );
 
+    // Build status map untuk semua area
     const statusMap = new Map<string, any>();
     
     // Initialize all areas as not filled
     areasArray.forEach(area => {
-      statusMap.set(area, { area_code: area, filled: false, status: null });
+      statusMap.set(area, { 
+        area_code: area, 
+        filled: false, 
+        status: null 
+      });
     });
 
-    // Update with actual data
-    const inspectionsArray = results as any[];
-    inspectionsArray.forEach((item: any) => {
+    // Update with actual data from database
+    result.rows.forEach((item: any) => {
       statusMap.set(item.area_code, {
         area_code: item.area_code,
-        filled: !!item.filled,
+        filled: item.filled,
         status: item.status
       });
     });
 
     const data = Array.from(statusMap.values());
 
-    return res.status(200).json({ 
+    return NextResponse.json({ 
       success: true,
       data
     });
   } catch (error) {
-    console.error('Check all status error:', error);
-    return res.status(500).json({ 
-      success: false, 
-      message: 'Terjadi kesalahan server' 
-    });
+    console.error('❌ Check all status error:', error);
+    return NextResponse.json(
+      { 
+        success: false, 
+        message: 'Terjadi kesalahan server',
+        error: process.env.NODE_ENV === 'development' ? (error as any).message : undefined
+      },
+      { status: 500 }
+    );
   }
 }

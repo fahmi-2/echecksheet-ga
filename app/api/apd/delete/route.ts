@@ -14,15 +14,15 @@ export async function DELETE(request: NextRequest) {
       );
     }
 
-    // Delete record (items akan terhapus otomatis karena ON DELETE CASCADE)
-    const [result] = await pool.query(
-      `DELETE FROM apd_records WHERE id = ?`,
+    // ✅ FIX 1: Use $1 for PostgreSQL parameterized query
+    // ✅ FIX 2: Use rowCount instead of affectedRows
+    const result = await pool.query(
+      `DELETE FROM apd_records WHERE id = $1`,  // ✅ $1 not ?
       [id]
     );
 
-    const resultObject = result as any;
-
-    if (resultObject.affectedRows === 0) {
+    // ✅ PostgreSQL returns rowCount, not affectedRows
+    if (result.rowCount === 0) {  // ✅ rowCount not affectedRows
       return NextResponse.json(
         { success: false, message: 'Data tidak ditemukan' },
         { status: 404 }
@@ -42,7 +42,7 @@ export async function DELETE(request: NextRequest) {
       { 
         success: false, 
         message: 'Terjadi kesalahan server',
-        error: (error as any).message
+        error: (error as Error).message  // ✅ Use Error type for safety
       },
       { status: 500 }
     );

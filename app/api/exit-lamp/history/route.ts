@@ -1,3 +1,4 @@
+// app/api/exit-lamp/history/route.ts
 import { NextRequest, NextResponse } from 'next/server';
 import pool from '../../../../lib/db';
 
@@ -8,7 +9,7 @@ export async function GET(request: NextRequest) {
     const location = searchParams.get('location');
 
     let query = `
-      SELECT 
+      SELECT
         c.id,
         c.checklist_date as date,
         c.checker_name as checker,
@@ -26,25 +27,29 @@ export async function GET(request: NextRequest) {
         i.pic,
         i.foto_data as foto
       FROM exit_lamp_checklists c
-      JOIN exit_lamp_checklist_items i ON c.id = i.checklist_id  -- ✅ Sudah benar
+      JOIN exit_lamp_checklist_items i ON c.id = i.checklist_id
       WHERE 1=1
     `;
-    
+
     const params: any[] = [];
+    let paramIndex = 1;
 
     if (date) {
-      query += ' AND c.checklist_date = ?';
+      query += ` AND c.checklist_date = $${paramIndex}`;
       params.push(date);
+      paramIndex++;
     }
 
     if (location) {
-      query += ' AND i.location_name = ?';
+      query += ` AND i.location_name = $${paramIndex}`;
       params.push(location);
+      paramIndex++;
     }
 
     query += ' ORDER BY c.checklist_date DESC, i.id ASC';
 
-    const [rows]: any = await pool.query(query, params);
+    const result = await pool.query(query, params);
+    const rows = result.rows;
 
     // ✅ Group by tanggal
     const grouped: any = {};
@@ -74,17 +79,18 @@ export async function GET(request: NextRequest) {
       });
     });
 
-    const result = Object.values(grouped);
+    const resultArray = Object.values(grouped);
 
     console.log('✅ History data loaded:', {
-      totalRecords: result.length,
-      totalItems: result.reduce((sum: number, rec: any) => sum + rec.items.length, 0)
+      totalRecords: resultArray.length,
+      totalItems: resultArray.reduce((sum: number, rec: any) => sum + rec.items.length, 0)
     });
 
-    return NextResponse.json(result);
+    return NextResponse.json(resultArray);
   } catch (error) {
     console.error('❌ Exit Lamp history error:', error);
-    return NextResponse.json({ 
+    return NextResponse.json({
+      success: false,
       error: 'Gagal memuat riwayat',
       details: process.env.NODE_ENV === 'development' ? (error as Error).message : undefined
     }, { status: 500 });

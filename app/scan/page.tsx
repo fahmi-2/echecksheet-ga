@@ -574,10 +574,14 @@ export default function ScanPage() {
           display: flex;
           align-items: center;
           gap: 6px;
+          min-height: 44px;
+          min-width: 100px;
+          transition: all 0.3s ease;
         }
 
         .btn-cancel:hover {
           background: #b91c1c;
+          transform: translateY(-2px);
         }
 
         .error-box {
@@ -588,6 +592,127 @@ export default function ScanPage() {
           color: #c62828;
           max-width: 400px;
           margin: 0 auto;
+        }
+
+        /* Responsive Design */
+        @media (max-width: 1200px) {
+          .page-content {
+            padding: 20px 16px;
+          }
+
+          .header-banner {
+            padding: 20px 24px;
+            margin-bottom: 20px;
+          }
+
+          .header-title {
+            font-size: 1.6rem;
+            gap: 10px;
+          }
+
+          .qr-scanner {
+            max-width: 280px;
+          }
+        }
+
+        @media (max-width: 768px) {
+          .page-content {
+            padding: 16px 12px;
+            margin-left: 0;
+          }
+
+          .header-banner {
+            padding: 16px 20px;
+            margin-bottom: 16px;
+            border-radius: 12px;
+          }
+
+          .header-title {
+            font-size: 1.4rem;
+            gap: 8px;
+          }
+
+          .scan-container {
+            gap: 16px;
+          }
+
+          .qr-scanner {
+            max-width: 250px;
+          }
+
+          .scan-instruction {
+            font-size: 0.95rem;
+          }
+
+          .btn-cancel,
+          .btn-back-small {
+            padding: 8px 14px;
+            font-size: 0.9rem;
+          }
+
+          .error-box {
+            padding: 16px 14px;
+            max-width: 350px;
+            font-size: 0.9rem;
+          }
+        }
+
+        @media (max-width: 480px) {
+          .page-content {
+            padding: 12px 8px;
+            margin-left: 0;
+          }
+
+          .header-banner {
+            padding: 12px 16px;
+            margin-bottom: 12px;
+            border-radius: 10px;
+          }
+
+          .header-title {
+            font-size: 1.2rem;
+            gap: 6px;
+          }
+
+          .header-title svg {
+            width: 24px !important;
+            height: 24px !important;
+          }
+
+          .scan-container {
+            gap: 12px;
+          }
+
+          .qr-scanner {
+            max-width: 220px;
+          }
+
+          .scan-instruction {
+            font-size: 0.85rem;
+            margin: 0;
+          }
+
+          .btn-cancel,
+          .btn-back-small {
+            width: 100%;
+            justify-content: center;
+            padding: 10px 12px;
+            font-size: 0.8rem;
+            min-height: 40px;
+          }
+
+          .error-box {
+            padding: 12px 12px;
+            max-width: 100%;
+            font-size: 0.85rem;
+            border-radius: 8px;
+          }
+
+          .btn-cancel svg,
+          .btn-back-small svg {
+            width: 16px !important;
+            height: 16px !important;
+          }
         }
       `}</style>
     </div>

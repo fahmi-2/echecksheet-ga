@@ -844,6 +844,122 @@ export function GaInfJalanContent() {
             </div>
           </div>
         )}
+
+        <style jsx>{`
+          @media (max-width: 1200px) {
+            div[style*="paddingLeft"] {
+              padding-left: 80px !important;
+            }
+          }
+
+          @media (max-width: 768px) {
+            div[style*="paddingLeft"] {
+              padding-left: 25px !important;
+              padding-right: 15px !important;
+              padding-top: 20px !important;
+              padding-bottom: 20px !important;
+            }
+
+            div[style*="gridTemplateColumns"] {
+              grid-template-columns: 1fr !important;
+              gap: 8px !important;
+            }
+
+            h1 {
+              font-size: 20px !important;
+              margin-bottom: 6px !important;
+            }
+
+            p {
+              font-size: 12px !important;
+            }
+
+            table {
+              font-size: 12px !important;
+              min-width: 600px;
+              overflow-x: auto;
+              -webkit-overflow-scrolling: touch;
+            }
+
+            table th,
+            table td {
+              padding: 8px 6px !important;
+              border: 1px solid #ddd !important;
+            }
+
+            input[type="search"],
+            input[type="text"],
+            select {
+              font-size: 14px !important;
+              min-height: 36px !important;
+              width: 100% !important;
+              padding: 8px 8px !important;
+            }
+
+            button {
+              font-size: 13px !important;
+              min-height: 36px !important;
+              padding: 8px 12px !important;
+            }
+
+            div[style*="display: flex"] {
+              flex-direction: column !important;
+              gap: 10px !important;
+            }
+          }
+
+          @media (max-width: 480px) {
+            div[style*="paddingLeft"] {
+              padding-left: 15px !important;
+              padding-right: 12px !important;
+              padding-top: 16px !important;
+              padding-bottom: 16px !important;
+            }
+
+            h1 {
+              font-size: 18px !important;
+              margin-bottom: 4px !important;
+            }
+
+            p {
+              font-size: 11px !important;
+            }
+
+            table {
+              font-size: 10px !important;
+              min-width: 500px;
+              overflow-x: auto;
+              -webkit-overflow-scrolling: touch;
+            }
+
+            table th,
+            table td {
+              padding: 6px 4px !important;
+              border: 1px solid #ddd !important;
+            }
+
+            input[type="search"],
+            input[type="text"],
+            select {
+              font-size: 14px !important;
+              min-height: 34px !important;
+              width: 100% !important;
+              padding: 6px 6px !important;
+            }
+
+            button {
+              font-size: 12px !important;
+              min-height: 40px !important;
+              padding: 8px 10px !important;
+              width: 100% !important;
+            }
+
+            div[style*="display: flex"] {
+              flex-direction: column !important;
+              gap: 8px !important;
+            }
+          }
+        `}</style>
       </div>
     </div>
   );

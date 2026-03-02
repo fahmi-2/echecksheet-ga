@@ -1,4 +1,11 @@
 // app/api/apar/submit/route.ts
+declare const process: {
+  env: {
+    NODE_ENV: string;
+    NEXT_PUBLIC_BASE_URL?: string;
+    [key: string]: string | undefined;
+  };
+};
 import { NextRequest, NextResponse } from 'next/server';
 import pool from '../../../../lib/db';
 
@@ -28,7 +35,7 @@ interface AparItem {
 
 interface SubmitData {
   date: string;
-  slug: string; // ✅ GUNAKAN SLUG (bukan area)
+  slug: string;
   checker: string;
   checkerNik?: string;
   items: AparItem[];
@@ -37,8 +44,8 @@ interface SubmitData {
 export async function POST(request: NextRequest) {
   try {
     const data: SubmitData = await request.json();
-
-    // ✅ VALIDASI: Gunakan slug, bukan area
+    
+    // Validasi data
     if (!data.date || !data.slug || !data.checker || !data.items || data.items.length === 0) {
       return NextResponse.json(
         { success: false, message: 'Data tidak lengkap: date, slug, checker, dan items wajib diisi' },
@@ -47,73 +54,80 @@ export async function POST(request: NextRequest) {
     }
 
     // Validasi semua item harus diisi
-    for (const item of data.items) {
+    for (const [index, item] of data.items.entries()) {
       for (let i = 1; i <= 12; i++) {
         const checkValue = item[`check${i}` as keyof AparItem] as string;
         if (!checkValue || !['O', 'X'].includes(checkValue)) {
           return NextResponse.json(
-            { success: false, message: `Check item ${i} harus diisi dengan 'O' atau 'X'` },
+            { success: false, message: `Check item ${i} pada baris ${index + 1} harus diisi dengan 'O' atau 'X'` },
             { status: 400 }
           );
         }
       }
     }
 
-    const connection = await pool.getConnection();
+    const client = await pool.connect();
     
     try {
-      await connection.beginTransaction();
+      await client.query('BEGIN');
+      console.log('🔄 Transaction started');
 
-      // Generate unique ID menggunakan slug
+      // Generate unique ID
       const recordId = `apar-${data.slug}-${Date.now()}`;
 
-      // ✅ INSERT: Simpan slug di kolom area (karena kolom area di DB menyimpan slug)
-      await connection.query(
+      // ✅ FIX: Hapus created_at dari INSERT (karena sudah DEFAULT)
+      await client.query(
         `INSERT INTO apar_records (
-          id, date, area, checker, checker_nik, submitted_at, created_at
-        ) VALUES (?, ?, ?, ?, ?, NOW(), NOW())`,
+          id, date, area, checker, checker_nik, submitted_at
+        ) VALUES ($1, $2, $3, $4, $5, CURRENT_TIMESTAMP)`,
         [recordId, data.date, data.slug, data.checker, data.checkerNik || null]
       );
 
-      // Insert items ke apar_items
+      // ✅ FIX: Hapus created_at dari INSERT items, sesuaikan kolom & values
       for (const item of data.items) {
-        await connection.query(
+        await client.query(
           `INSERT INTO apar_items (
             record_id, no, jenis_apar, lokasi, no_apar, exp_date,
             check1, check2, check3, check4, check5, check6,
             check7, check8, check9, check10, check11, check12,
-            keterangan, tindakan_perbaikan, pic, foto, created_at
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())`,
+            keterangan, tindakan_perbaikan, pic, foto
+          ) VALUES (
+            $1, $2, $3, $4, $5, $6,
+            $7, $8, $9, $10, $11, $12,
+            $13, $14, $15, $16, $17, $18,
+            $19, $20, $21, $22
+          )`,
           [
-            recordId,
-            item.no,
-            item.jenisApar,
-            item.lokasi,
-            item.noApar,
-            item.expDate,
-            item.check1,
-            item.check2,
-            item.check3,
-            item.check4,
-            item.check5,
-            item.check6,
-            item.check7,
-            item.check8,
-            item.check9,
-            item.check10,
-            item.check11,
-            item.check12,
-            item.keterangan || null,
-            item.tindakanPerbaikan || null,
-            item.pic,
-            item.foto || null
+            recordId,           // $1
+            item.no,            // $2
+            item.jenisApar,     // $3
+            item.lokasi,        // $4
+            item.noApar,        // $5
+            item.expDate,       // $6
+            item.check1,        // $7
+            item.check2,        // $8
+            item.check3,        // $9
+            item.check4,        // $10
+            item.check5,        // $11
+            item.check6,        // $12
+            item.check7,        // $13
+            item.check8,        // $14
+            item.check9,        // $15
+            item.check10,       // $16
+            item.check11,       // $17
+            item.check12,       // $18
+            item.keterangan || null,        // $19
+            item.tindakanPerbaikan || null, // $20
+            item.pic,           // $21
+            item.foto || null   // $22
           ]
         );
       }
 
-      await connection.commit();
-      
-      // Cek apakah ada item dengan status NG (X)
+      await client.query('COMMIT');
+      console.log('✅ Transaction committed');
+
+      // Cek apakah ada item NG
       const hasNg = data.items.some(
         (item) =>
           item.check1 === 'X' || item.check2 === 'X' || item.check3 === 'X' ||
@@ -122,33 +136,29 @@ export async function POST(request: NextRequest) {
           item.check10 === 'X' || item.check11 === 'X' || item.check12 === 'X'
       );
 
-      console.log('✅ Data berhasil disimpan:', { id: recordId, hasNg });
-
       return NextResponse.json(
         {
           success: true,
           message: 'Data berhasil disimpan',
-          data: {
-            id: recordId,
-            hasNg: hasNg
-          }
+          data: { id: recordId, hasNg }
         },
-        { status: 200 }
+        { status: 201 }
       );
     } catch (error) {
-      await connection.rollback();
+      await client.query('ROLLBACK');
       console.error('Transaction error:', error);
       throw error;
     } finally {
-      connection.release();
+      client.release();
+      console.log('🔓 Connection released');
     }
   } catch (error) {
     console.error('Submit APAR error:', error);
     return NextResponse.json(
-      { 
-        success: false, 
+      {
+        success: false,
         message: 'Terjadi kesalahan server',
-        error: (error as any).message
+        error: process.env.NODE_ENV === 'development' ? (error as Error).message : undefined
       },
       { status: 500 }
     );

@@ -1,87 +1,57 @@
 // app/api/fire-alarm/delete/route.ts
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 import pool from '../../../../lib/db';
-import { unlink } from 'fs/promises';
-import { join } from 'path';
 
-export async function DELETE(request: NextRequest) {
+export async function DELETE(request: Request) {
   try {
-    const { searchParams } = new URL(request.url);
-    const id = searchParams.get('id');
+    const { id } = await request.json();
 
     if (!id) {
       return NextResponse.json(
-        { success: false, message: 'ID diperlukan' },
+        { success: false, message: 'ID record wajib disertakan' },
         { status: 400 }
       );
     }
 
-    const connection = await pool.getConnection();
-    
+    const client = await pool.connect();
     try {
-      await connection.beginTransaction();
+      await client.query('BEGIN');
 
-      // Ambil semua foto yang akan dihapus
-      const [items] = await connection.query(
-        `SELECT foto FROM fire_alarm_items WHERE record_id = ? AND foto IS NOT NULL`,
-        [id]
-      );
-      const itemsArray = items as any[];
-
-      // Hapus file foto dari storage
-      for (const item of itemsArray) {
-        if (item.foto) {
-          try {
-            // Extract path dari URL (hapus base URL jika ada)
-            const fotoPath = item.foto.replace(process.env.NEXT_PUBLIC_BASE_URL || '', '');
-            const filePath = join(process.cwd(), 'public', fotoPath);
-            await unlink(filePath);
-          } catch (err) {
-            console.warn('Gagal menghapus file:', err);
-            // Lanjutkan meskipun gagal hapus file
-          }
-        }
-      }
-
-      // Delete record (items akan terhapus otomatis karena ON DELETE CASCADE)
-      const [result] = await connection.query(
-        `DELETE FROM fire_alarm_records WHERE id = ?`,
+      // Hapus items terlebih dahulu (karena foreign key constraint)
+      await client.query(
+        'DELETE FROM fire_alarm_items WHERE record_id = $1',
         [id]
       );
 
-      const resultObject = result as any;
+      // Hapus record utama
+      const deleteResult = await client.query(
+        'DELETE FROM fire_alarm_records WHERE id = $1 RETURNING *',
+        [id]
+      );
 
-      if (resultObject.affectedRows === 0) {
-        await connection.rollback();
+      if (deleteResult.rowCount === 0) {
         return NextResponse.json(
-          { success: false, message: 'Data tidak ditemukan' },
+          { success: false, message: 'Record tidak ditemukan' },
           { status: 404 }
         );
       }
 
-      await connection.commit();
-      
-      return NextResponse.json(
-        {
-          success: true,
-          message: 'Data Fire Alarm berhasil dihapus'
-        },
-        { status: 200 }
-      );
+      await client.query('COMMIT');
+      return NextResponse.json({
+        success: true,
+        message: 'Record berhasil dihapus'
+      });
     } catch (error) {
-      await connection.rollback();
+      await client.query('ROLLBACK');
+      console.error('Delete transaction error:', error);
       throw error;
     } finally {
-      connection.release();
+      client.release();
     }
   } catch (error) {
-    console.error('Delete fire alarm error:', error);
+    console.error('Delete error:', error);
     return NextResponse.json(
-      { 
-        success: false, 
-        message: 'Terjadi kesalahan server',
-        error: (error as any).message
-      },
+      { success: false, message: 'Gagal menghapus record' },
       { status: 500 }
     );
   }

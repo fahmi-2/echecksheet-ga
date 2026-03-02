@@ -28,7 +28,7 @@ export async function POST(request: NextRequest) {
     if (result.rows.length === 0) {
       console.log('❌ Username not found:', username.trim());
       return NextResponse.json(
-        { error: 'Username tidak ditemukan!' },
+        { error: 'Username atau password salah!' }, // Lebih aman: jangan bedakan username vs password
         { status: 401 }
       );
     }
@@ -50,8 +50,9 @@ export async function POST(request: NextRequest) {
     
     if (!isPasswordValid) {
       console.log('❌ Invalid password for user:', user.username);
+      // ⚠️ SECURITY: Jangan bedakan error "username tidak ditemukan" vs "password salah"
       return NextResponse.json(
-        { error: 'Password salah!' },
+        { error: 'Username atau password salah!' },
         { status: 401 }
       );
     }
@@ -70,11 +71,22 @@ export async function POST(request: NextRequest) {
           department: user.department,
           role: user.role,
         },
+        // ⚠️ SECURITY: Jangan return token di sini! Generate token di client atau di route terpisah
       },
       { status: 200 }
     );
-  } catch (error) {
+  } catch (error: any) {
     console.error('❌ Login error:', error);
+    
+    // PostgreSQL specific error handling
+    if (error.code === '28P01') {
+      // Invalid password for PostgreSQL connection
+      return NextResponse.json(
+        { error: 'Kesalahan koneksi database. Hubungi administrator.' },
+        { status: 500 }
+      );
+    }
+    
     return NextResponse.json(
       { error: 'Terjadi kesalahan server. Silakan coba lagi.' },
       { status: 500 }

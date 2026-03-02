@@ -4,7 +4,7 @@
 import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
 import { useAuth } from "@/lib/auth-context"
-import { Sidebar } from "@/components/Sidebar";
+import { Sidebar } from "@/components/Sidebar"
 import Link from "next/link"
 import { QrCode } from "lucide-react"
 
@@ -138,42 +138,23 @@ export default function StatusGA() {
       <style jsx>{`
         .page-content {
           max-width: 1400px;
-          margin: 0 00 0 120px;
+          margin: 0 0 0 120px;
           padding: 32px 24px;
           background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
           min-height: 100vh;
         }
 
         .header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 48px;
-  padding-bottom: 24px;
-  border-bottom: 3px solid rgba(255, 255, 255, 0.1);
-  flex-wrap: wrap;
-  gap: 16px;
-}
-.page-title {
-  margin: 0;
-  color: white; /* ✅ Warna putih */
-  font-size: 2.5rem;
-  font-weight: 700;
-  letter-spacing: -0.5px;
-  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3); /* ✅ Tambahkan shadow agar lebih jelas */
-}
-
-        .header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 48px;
-  padding-bottom: 24px;
-  border-bottom: 3px solid rgba(255, 255, 255, 0.1);
-  flex-wrap: wrap;
-  gap: 16px;
-  background: linear-gradient(135deg, #0d47a1 0%, #1565c0 100%); /* ✅ Pastikan background biru */
-}
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          margin-bottom: 48px;
+          padding: 24px;
+          background: linear-gradient(135deg, #0d47a1 0%, #1565c0 100%);
+          border-radius: 12px;
+          flex-wrap: wrap;
+          gap: 16px;
+        }
 
         .user-info {
           display: flex;
@@ -182,7 +163,7 @@ export default function StatusGA() {
           font-size: 1rem;
           color: white;
           font-weight: 500;
-          margin-left: auto !important;
+          margin-left: auto;
           white-space: nowrap;
           flex-wrap: wrap;
         }
@@ -200,7 +181,8 @@ export default function StatusGA() {
           font-weight: 600;
           font-size: 0.95rem;
           transition: all 0.3s ease;
-          white-space: nowrap;
+          min-height: 44px;
+          min-width: 100px;
         }
 
         .btn-scan-qr:hover {
@@ -345,35 +327,109 @@ export default function StatusGA() {
           transform: translateX(0);
         }
 
+        @media (max-width: 1200px) {
+          .page-content {
+            margin-left: 100px;
+            padding: 24px 20px;
+          }
+        }
+
         @media (max-width: 768px) {
           .page-content {
+            margin-left: 0;
             padding: 24px 16px;
           }
-          .header h1 { font-size: 1.8rem; }
-          .checklist-grid { grid-template-columns: 1fr; gap: 16px; }
-          .category-section { padding: 20px; border-radius: 12px; border-left: 4px solid #1e88e5; }
-          .category-title { font-size: 1.3rem; margin-bottom: 20px; }
-          .card-title { font-size: 0.95rem; }
-          .card-desc { font-size: 0.85rem; margin-left: 40px; }
-          .checklist-card { padding: 16px; }
-          .card-icon { font-size: 1.4rem; }
-        }
-@media (max-width: 768px) {
-  .header {
-    flex-direction: column;
-    align-items: flex-start;
-    text-align: left;
-  }
 
-  .page-title {
-    font-size: 1.8rem;
-    text-align: left;
-  }
+          .header {
+            flex-direction: column;
+            align-items: flex-start;
+            margin-bottom: 32px;
+            padding: 16px;
+          }
+
+          .page-title {
+            font-size: 1.6rem !important;
+          }
+
+          .user-info {
+            width: 100%;
+            margin-left: 0;
+            font-size: 0.9rem;
+          }
+
+          .btn-scan-qr {
+            width: 100%;
+            justify-content: center;
+          }
+
+          .checklist-grid {
+            grid-template-columns: 1fr;
+            gap: 16px;
+          }
+
+          .category-section {
+            padding: 20px;
+            border-radius: 12px;
+            border-left: 4px solid #1e88e5;
+          }
+
+          .category-title {
+            font-size: 1.3rem;
+            margin-bottom: 20px;
+          }
+
+          .card-title {
+            font-size: 0.95rem;
+          }
+
+          .card-desc {
+            font-size: 0.85rem;
+            margin-left: 40px;
+          }
+
+          .checklist-card {
+            padding: 16px;
+          }
+
+          .card-icon {
+            font-size: 1.4rem;
+          }
+        }
+
         @media (max-width: 480px) {
-          .header h1 { font-size: 1.5rem; }
-          .category-title { font-size: 1.1rem; }
-          .card-title { font-size: 0.9rem; }
-          .user-info { font-size: 0.9rem; }
+          .page-content {
+            padding: 12px 8px;
+          }
+
+          .header {
+            padding: 12px;
+            margin-bottom: 20px;
+          }
+
+          .page-title {
+            font-size: 1.3rem !important;
+          }
+
+          .btn-scan-qr {
+            font-size: 0.85rem;
+            padding: 8px 12px;
+          }
+
+          .header h1 {
+            font-size: 1.5rem;
+          }
+
+          .category-title {
+            font-size: 1.1rem;
+          }
+
+          .card-title {
+            font-size: 0.9rem;
+          }
+
+          .user-info {
+            font-size: 0.9rem;
+          }
         }
       `}</style>
     </div>

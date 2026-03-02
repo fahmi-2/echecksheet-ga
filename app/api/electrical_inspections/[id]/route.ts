@@ -1,9 +1,9 @@
+// app/api/electrical_inspections/[id]/route.ts
 import { NextRequest, NextResponse } from 'next/server';
 import pool from '@/lib/db';
-import { RowDataPacket, ResultSetHeader } from 'mysql2';
 
 // Tipe data untuk header
-interface HeaderRow extends RowDataPacket {
+interface HeaderRow {
   id: number;
   type: string;
   tanggal: string;
@@ -15,7 +15,7 @@ interface HeaderRow extends RowDataPacket {
 }
 
 // Tipe data untuk item
-interface ItemRow extends RowDataPacket {
+interface ItemRow {
   id: number;
   inspection_id: number;
   item_no: number;
@@ -42,25 +42,27 @@ export async function GET(
       );
     }
 
+    const numericId = Number(id);
+
     // Get header
-    const [headerRows] = await pool.execute<HeaderRow[]>(
-      'SELECT * FROM electrical_inspections WHERE id = ?',
-      [Number(id)]
+    const headerResult = await pool.query<HeaderRow>(
+      'SELECT * FROM electrical_inspections WHERE id = $1',
+      [numericId]
     );
 
-    if (headerRows.length === 0) {
+    if (headerResult.rows.length === 0) {
       return NextResponse.json(
         { success: false, message: 'Record not found' },
         { status: 404 }
       );
     }
 
-    const header = headerRows[0];
+    const header = headerResult.rows[0];
 
     // Get items
-    const [itemRows] = await pool.execute<ItemRow[]>(
-      'SELECT * FROM electrical_inspection_details WHERE inspection_id = ? ORDER BY item_no ASC',
-      [Number(id)]
+    const itemResult = await pool.query<ItemRow>(
+      'SELECT * FROM electrical_inspection_details WHERE inspection_id = $1 ORDER BY item_no ASC',
+      [numericId]
     );
 
     // Format data untuk response
@@ -70,7 +72,7 @@ export async function GET(
       foto_path: string | null;
     }> = {};
     
-    itemRows.forEach(item => {
+    itemResult.rows.forEach((item: ItemRow) => {
       items[item.item_no] = {
         hasil: item.hasil,
         keterangan: item.keterangan || '',
@@ -121,13 +123,15 @@ export async function DELETE(
       );
     }
 
+    const numericId = Number(id);
+
     // Delete dari database
-    const [result] = await pool.execute<ResultSetHeader>(
-      'DELETE FROM electrical_inspections WHERE id = ?',
-      [Number(id)]
+    const result = await pool.query(
+      'DELETE FROM electrical_inspections WHERE id = $1',
+      [numericId]
     );
 
-    if (result.affectedRows === 0) {
+    if (result.rowCount === 0) {
       return NextResponse.json(
         { success: false, message: 'Record not found' },
         { status: 404 }

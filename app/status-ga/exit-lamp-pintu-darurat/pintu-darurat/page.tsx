@@ -1,4 +1,6 @@
+// app/status-ga/exit-lamp-pintu-darurat/page.tsx
 "use client";
+
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
@@ -23,6 +25,7 @@ export default function PintuDaruratChecklist() {
   const [showPreview, setShowPreview] = useState(false);
   const [hasNg, setHasNg] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [expandedItem, setExpandedItem] = useState<number | null>(null);
 
   // Validasi akses
   useEffect(() => {
@@ -43,8 +46,8 @@ export default function PintuDaruratChecklist() {
       doorCloser: "",
       keterangan: "",
       tindakanPerbaikan: "",
-      pic: user?.fullName || "", // ✅ otomatis isi nama
-      foto: "", // ✅ tambahkan foto
+      pic: user?.fullName || "",
+      foto: "",
     }));
     setItems(initialItems);
   }, [user]);
@@ -55,7 +58,6 @@ export default function PintuDaruratChecklist() {
     setItems(newItems);
   };
 
-  // ✅ Handle upload gambar
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>, index: number) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -66,7 +68,6 @@ export default function PintuDaruratChecklist() {
     reader.readAsDataURL(file);
   };
 
-  // ✅ Fungsi OK All - Mengisi semua item dengan status OK
   const handleOkAll = () => {
     if (!confirm("Apakah Anda yakin ingin mengisi semua item dengan status OK?")) {
       return;
@@ -80,8 +81,8 @@ export default function PintuDaruratChecklist() {
       identitasPintu: "OK",
       idPeringatan: "OK",
       doorCloser: "OK",
-      keterangan: "", // Kosongkan keterangan karena OK
-      tindakanPerbaikan: "" // Kosongkan tindakan perbaikan karena OK
+      keterangan: "",
+      tindakanPerbaikan: ""
     }));
 
     setItems(updatedItems);
@@ -135,52 +136,48 @@ export default function PintuDaruratChecklist() {
   };
 
   const handleSave = async () => {
-  setIsSubmitting(true);
-  
-  try {
-    // ✅ Validasi semua item harus diisi
-    const hasEmpty = items.some(item => {
-      return !item.kondisiPintu || !item.areaSekitar || !item.paluAlatBantu || 
-             !item.identitasPintu || !item.idPeringatan || !item.doorCloser;
-    });
+    setIsSubmitting(true);
     
-    if (hasEmpty) {
-      alert('❌ Semua kolom wajib diisi untuk setiap item!');
+    try {
+      const hasEmpty = items.some(item => {
+        return !item.kondisiPintu || !item.areaSekitar || !item.paluAlatBantu || 
+               !item.identitasPintu || !item.idPeringatan || !item.doorCloser;
+      });
+      
+      if (hasEmpty) {
+        alert('❌ Semua kolom wajib diisi untuk setiap item!');
+        setIsSubmitting(false);
+        return;
+      }
+
+      const response = await fetch('/api/pintu-darurat/submit', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          date,
+          checker: user?.fullName || '',
+          nik: user?.nik || '',
+          department: user?.department || '',
+          items
+        })
+      });
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result.message || 'Gagal menyimpan data');
+      }
+
+      alert('✅ Data berhasil disimpan!');
+      router.push('/status-ga/exit-lamp-pintu-darurat/riwayat/pintu-darurat');
+
+    } catch (error) {
+      console.error('Submit error:', error);
+      alert(`❌ ${(error as Error).message}`);
+    } finally {
       setIsSubmitting(false);
-      return;
     }
-
-    // ✅ Kirim ke API PostgreSQL
-    const response = await fetch('/api/pintu-darurat/submit', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        date,
-        checker: user?.fullName || '',
-        nik: user?.nik || '',
-        department: user?.department || '',
-        items
-      })
-    });
-
-    const result = await response.json();
-
-    if (!response.ok) {
-      throw new Error(result.message || 'Gagal menyimpan data');
-    }
-
-    alert('✅ Data berhasil disimpan!');
-    
-    // ✅ LANGSUNG REDIRECT KE RIWAYAT SETELAH SIMPAN
-    router.push('/status-ga/exit-lamp-pintu-darurat/riwayat/pintu-darurat');
-
-  } catch (error) {
-    console.error('Submit error:', error);
-    alert(`❌ ${(error as Error).message}`);
-  } finally {
-    setIsSubmitting(false);
-  }
-};
+  };
 
   const handleReportNg = () => {
     const ngItems = items
@@ -196,7 +193,7 @@ export default function PintuDaruratChecklist() {
       .map((item) => ({
         name: item.lokasi,
         notes: item.keterangan || "Tidak ada keterangan",
-        foto: item.foto || undefined, // ✅ sertakan foto
+        foto: item.foto || undefined,
       }));
 
     const pelaporanData = {
@@ -221,6 +218,10 @@ export default function PintuDaruratChecklist() {
     setShowPreview(false);
   };
 
+  const toggleExpandItem = (index: number) => {
+    setExpandedItem(expandedItem === index ? null : index);
+  };
+
   if (!user) return null;
 
   return (
@@ -230,7 +231,9 @@ export default function PintuDaruratChecklist() {
       <div className="page-content">
         <div className="header">
           <div className="header-top">
-            <button onClick={() => router.back()} className="btn-back">← Kembali</button>
+            <button onClick={() => router.back()} className="btn-back">
+              ← Kembali
+            </button>
             <h1 className="page-title">🚪 Pintu Darurat</h1>
           </div>
           <p className="subtitle">
@@ -255,145 +258,302 @@ export default function PintuDaruratChecklist() {
               </button>
             </div>
 
-            <table className="checklist-table">
-              <thead>
-                <tr>
-                  <th>No</th>
-                  <th>Lokasi</th>
-                  <th>Kondisi Pintu</th>
-                  <th>Area Sekitar</th>
-                  <th>Palu/Alat Bantu</th>
-                  <th>Identitas Pintu</th>
-                  <th>ID Peringatan</th>
-                  <th>Door Closer</th>
-                  <th>Keterangan N-OK</th>
-                  <th>Tindakan Perbaikan</th>
-                  <th>PIC</th>
-                  <th>Foto</th>
-                </tr>
-              </thead>
-              <tbody>
-                {items.map((item, index) => (
-                  <tr key={index}>
-                    <td className="info-cell">{item.no}</td>
-                    <td className="info-cell">{item.lokasi}</td>
-                    <td>
-                      <select
-                        value={item.kondisiPintu}
-                        onChange={(e) => handleInputChange(index, "kondisiPintu", e.target.value)}
-                        className="status-select"
-                      >
-                        <option value="">Pilih</option>
-                        <option value="OK">OK</option>
-                        <option value="NG">NG</option>
-                      </select>
-                    </td>
-                    <td>
-                      <select
-                        value={item.areaSekitar}
-                        onChange={(e) => handleInputChange(index, "areaSekitar", e.target.value)}
-                        className="status-select"
-                      >
-                        <option value="">Pilih</option>
-                        <option value="OK">OK</option>
-                        <option value="NG">NG</option>
-                      </select>
-                    </td>
-                    <td>
-                      <select
-                        value={item.paluAlatBantu}
-                        onChange={(e) => handleInputChange(index, "paluAlatBantu", e.target.value)}
-                        className="status-select"
-                      >
-                        <option value="">Pilih</option>
-                        <option value="OK">OK</option>
-                        <option value="NG">NG</option>
-                      </select>
-                    </td>
-                    <td>
-                      <select
-                        value={item.identitasPintu}
-                        onChange={(e) => handleInputChange(index, "identitasPintu", e.target.value)}
-                        className="status-select"
-                      >
-                        <option value="">Pilih</option>
-                        <option value="OK">OK</option>
-                        <option value="NG">NG</option>
-                      </select>
-                    </td>
-                    <td>
-                      <select
-                        value={item.idPeringatan}
-                        onChange={(e) => handleInputChange(index, "idPeringatan", e.target.value)}
-                        className="status-select"
-                      >
-                        <option value="">Pilih</option>
-                        <option value="OK">OK</option>
-                        <option value="NG">NG</option>
-                      </select>
-                    </td>
-                    <td>
-                      <select
-                        value={item.doorCloser}
-                        onChange={(e) => handleInputChange(index, "doorCloser", e.target.value)}
-                        className="status-select"
-                      >
-                        <option value="">Pilih</option>
-                        <option value="OK">OK</option>
-                        <option value="NG">NG</option>
-                      </select>
-                    </td>
-                    <td>
-                      <input
-                        type="text"
-                        value={item.keterangan}
-                        onChange={(e) => handleInputChange(index, "keterangan", e.target.value)}
-                        placeholder="Wajib diisi jika NG"
-                        className="notes-input"
-                      />
-                    </td>
-                    <td>
-                      <input
-                        type="text"
-                        value={item.tindakanPerbaikan}
-                        onChange={(e) => handleInputChange(index, "tindakanPerbaikan", e.target.value)}
-                        placeholder="Tindakan perbaikan..."
-                        className="notes-input"
-                      />
-                    </td>
-                    <td>
-                      <div className="info-cell">{item.pic}</div>
-                    </td>
-                    <td>
-                      <div className="image-upload">
-                        {item.foto ? (
-                          <div className="image-preview">
-                            <img src={item.foto} alt="Preview" className="uploaded-image" />
-                            <button
-                              type="button"
-                              onClick={() => handleInputChange(index, "foto", "")}
-                              className="remove-btn"
-                            >
-                              ✕
-                            </button>
-                          </div>
-                        ) : (
-                          <label className="file-label">
-                            📷 Unggah
-                            <input
-                              type="file"
-                              accept="image/*"
-                              onChange={(e) => handleImageUpload(e, index)}
-                              className="file-input"
-                            />
-                          </label>
-                        )}
-                      </div>
-                    </td>
+            {/* ✅ DESKTOP: Table View */}
+            <div className="desktop-view">
+              <table className="checklist-table">
+                <thead>
+                  <tr>
+                    <th>No</th>
+                    <th>Lokasi</th>
+                    <th>Kondisi Pintu</th>
+                    <th>Area Sekitar</th>
+                    <th>Palu/Alat Bantu</th>
+                    <th>Identitas Pintu</th>
+                    <th>ID Peringatan</th>
+                    <th>Door Closer</th>
+                    <th>Keterangan N-OK</th>
+                    <th>Tindakan Perbaikan</th>
+                    <th>PIC</th>
+                    <th>Foto</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {items.map((item, index) => (
+                    <tr key={index}>
+                      <td className="info-cell">{item.no}</td>
+                      <td className="info-cell">{item.lokasi}</td>
+                      <td>
+                        <select
+                          value={item.kondisiPintu}
+                          onChange={(e) => handleInputChange(index, "kondisiPintu", e.target.value)}
+                          className="status-select"
+                        >
+                          <option value="">Pilih</option>
+                          <option value="OK">OK</option>
+                          <option value="NG">NG</option>
+                        </select>
+                      </td>
+                      <td>
+                        <select
+                          value={item.areaSekitar}
+                          onChange={(e) => handleInputChange(index, "areaSekitar", e.target.value)}
+                          className="status-select"
+                        >
+                          <option value="">Pilih</option>
+                          <option value="OK">OK</option>
+                          <option value="NG">NG</option>
+                        </select>
+                      </td>
+                      <td>
+                        <select
+                          value={item.paluAlatBantu}
+                          onChange={(e) => handleInputChange(index, "paluAlatBantu", e.target.value)}
+                          className="status-select"
+                        >
+                          <option value="">Pilih</option>
+                          <option value="OK">OK</option>
+                          <option value="NG">NG</option>
+                        </select>
+                      </td>
+                      <td>
+                        <select
+                          value={item.identitasPintu}
+                          onChange={(e) => handleInputChange(index, "identitasPintu", e.target.value)}
+                          className="status-select"
+                        >
+                          <option value="">Pilih</option>
+                          <option value="OK">OK</option>
+                          <option value="NG">NG</option>
+                        </select>
+                      </td>
+                      <td>
+                        <select
+                          value={item.idPeringatan}
+                          onChange={(e) => handleInputChange(index, "idPeringatan", e.target.value)}
+                          className="status-select"
+                        >
+                          <option value="">Pilih</option>
+                          <option value="OK">OK</option>
+                          <option value="NG">NG</option>
+                        </select>
+                      </td>
+                      <td>
+                        <select
+                          value={item.doorCloser}
+                          onChange={(e) => handleInputChange(index, "doorCloser", e.target.value)}
+                          className="status-select"
+                        >
+                          <option value="">Pilih</option>
+                          <option value="OK">OK</option>
+                          <option value="NG">NG</option>
+                        </select>
+                      </td>
+                      <td>
+                        <input
+                          type="text"
+                          value={item.keterangan}
+                          onChange={(e) => handleInputChange(index, "keterangan", e.target.value)}
+                          placeholder="Wajib diisi jika NG"
+                          className="notes-input"
+                        />
+                      </td>
+                      <td>
+                        <input
+                          type="text"
+                          value={item.tindakanPerbaikan}
+                          onChange={(e) => handleInputChange(index, "tindakanPerbaikan", e.target.value)}
+                          placeholder="Tindakan perbaikan..."
+                          className="notes-input"
+                        />
+                      </td>
+                      <td>
+                        <div className="info-cell">{item.pic}</div>
+                      </td>
+                      <td>
+                        <div className="image-upload">
+                          {item.foto ? (
+                            <div className="image-preview">
+                              <img src={item.foto} alt="Preview" className="uploaded-image" />
+                              <button
+                                type="button"
+                                onClick={() => handleInputChange(index, "foto", "")}
+                                className="remove-btn"
+                              >
+                                ✕
+                              </button>
+                            </div>
+                          ) : (
+                            <label className="file-label">
+                              📷 Unggah
+                              <input
+                                type="file"
+                                accept="image/*"
+                                onChange={(e) => handleImageUpload(e, index)}
+                                className="file-input"
+                              />
+                            </label>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            {/* ✅ MOBILE: Card View */}
+            <div className="mobile-view">
+              {items.map((item, index) => (
+                <div key={index} className="checklist-card">
+                  <div className="card-header" onClick={() => toggleExpandItem(index)}>
+                    <div className="card-no">{item.no}</div>
+                    <div className="card-info">
+                      <div className="card-lokasi">{item.lokasi}</div>
+                    </div>
+                    <div className={`expand-icon ${expandedItem === index ? 'expanded' : ''}`}>
+                      ▼
+                    </div>
+                  </div>
+
+                  {expandedItem === index && (
+                    <div className="card-body">
+                      <div className="form-group">
+                        <label>Kondisi Pintu</label>
+                        <select
+                          value={item.kondisiPintu}
+                          onChange={(e) => handleInputChange(index, "kondisiPintu", e.target.value)}
+                          className="status-select"
+                        >
+                          <option value="">Pilih</option>
+                          <option value="OK">OK</option>
+                          <option value="NG">NG</option>
+                        </select>
+                      </div>
+
+                      <div className="form-group">
+                        <label>Area Sekitar</label>
+                        <select
+                          value={item.areaSekitar}
+                          onChange={(e) => handleInputChange(index, "areaSekitar", e.target.value)}
+                          className="status-select"
+                        >
+                          <option value="">Pilih</option>
+                          <option value="OK">OK</option>
+                          <option value="NG">NG</option>
+                        </select>
+                      </div>
+
+                      <div className="form-group">
+                        <label>Palu/Alat Bantu</label>
+                        <select
+                          value={item.paluAlatBantu}
+                          onChange={(e) => handleInputChange(index, "paluAlatBantu", e.target.value)}
+                          className="status-select"
+                        >
+                          <option value="">Pilih</option>
+                          <option value="OK">OK</option>
+                          <option value="NG">NG</option>
+                        </select>
+                      </div>
+
+                      <div className="form-group">
+                        <label>Identitas Pintu</label>
+                        <select
+                          value={item.identitasPintu}
+                          onChange={(e) => handleInputChange(index, "identitasPintu", e.target.value)}
+                          className="status-select"
+                        >
+                          <option value="">Pilih</option>
+                          <option value="OK">OK</option>
+                          <option value="NG">NG</option>
+                        </select>
+                      </div>
+
+                      <div className="form-group">
+                        <label>ID Peringatan</label>
+                        <select
+                          value={item.idPeringatan}
+                          onChange={(e) => handleInputChange(index, "idPeringatan", e.target.value)}
+                          className="status-select"
+                        >
+                          <option value="">Pilih</option>
+                          <option value="OK">OK</option>
+                          <option value="NG">NG</option>
+                        </select>
+                      </div>
+
+                      <div className="form-group">
+                        <label>Door Closer</label>
+                        <select
+                          value={item.doorCloser}
+                          onChange={(e) => handleInputChange(index, "doorCloser", e.target.value)}
+                          className="status-select"
+                        >
+                          <option value="">Pilih</option>
+                          <option value="OK">OK</option>
+                          <option value="NG">NG</option>
+                        </select>
+                      </div>
+
+                      <div className="form-group">
+                        <label>Keterangan N-OK</label>
+                        <input
+                          type="text"
+                          value={item.keterangan}
+                          onChange={(e) => handleInputChange(index, "keterangan", e.target.value)}
+                          placeholder="Wajib diisi jika NG"
+                          className="notes-input"
+                        />
+                      </div>
+
+                      <div className="form-group">
+                        <label>Tindakan Perbaikan</label>
+                        <input
+                          type="text"
+                          value={item.tindakanPerbaikan}
+                          onChange={(e) => handleInputChange(index, "tindakanPerbaikan", e.target.value)}
+                          placeholder="Tindakan perbaikan..."
+                          className="notes-input"
+                        />
+                      </div>
+
+                      <div className="form-group">
+                        <label>PIC</label>
+                        <div className="info-cell">{item.pic}</div>
+                      </div>
+
+                      <div className="form-group">
+                        <label>Foto</label>
+                        <div className="image-upload">
+                          {item.foto ? (
+                            <div className="image-preview">
+                              <img src={item.foto} alt="Preview" className="uploaded-image" />
+                              <button
+                                type="button"
+                                onClick={() => handleInputChange(index, "foto", "")}
+                                className="remove-btn"
+                              >
+                                ✕
+                              </button>
+                            </div>
+                          ) : (
+                            <label className="file-label file-label-large">
+                              📷 Unggah Foto
+                              <input
+                                type="file"
+                                accept="image/*"
+                                onChange={(e) => handleImageUpload(e, index)}
+                                className="file-input"
+                              />
+                            </label>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
 
             <div className="form-actions">
               <button onClick={() => router.back()} className="btn-cancel">
@@ -407,7 +567,9 @@ export default function PintuDaruratChecklist() {
         ) : (
           <div className="card-container preview-mode">
             <h2 className="preview-title">🔍 Preview Data</h2>
-            <div className="preview-table">
+
+            {/* ✅ DESKTOP: Preview Table */}
+            <div className="desktop-preview">
               <table className="simple-table">
                 <thead>
                   <tr>
@@ -460,6 +622,88 @@ export default function PintuDaruratChecklist() {
               </table>
             </div>
 
+            {/* ✅ MOBILE: Preview Cards */}
+            <div className="mobile-preview">
+              {items.map((item, index) => {
+                const hasNgItem =
+                  item.kondisiPintu === "NG" ||
+                  item.areaSekitar === "NG" ||
+                  item.paluAlatBantu === "NG" ||
+                  item.identitasPintu === "NG" ||
+                  item.idPeringatan === "NG" ||
+                  item.doorCloser === "NG";
+
+                return (
+                  <div key={index} className={`preview-card ${hasNgItem ? 'preview-card-ng' : ''}`}>
+                    <div className="preview-card-header">
+                      <span className="preview-card-no">#{item.no}</span>
+                      <span className={`preview-card-status ${hasNgItem ? 'status-ng' : 'status-ok'}`}>
+                        {hasNgItem ? 'NG' : 'OK'}
+                      </span>
+                    </div>
+                    <div className="preview-card-body">
+                      <div className="preview-row">
+                        <span className="preview-label">Lokasi:</span>
+                        <span className="preview-value">{item.lokasi}</span>
+                      </div>
+                      <div className="preview-row">
+                        <span className="preview-label">Kondisi Pintu:</span>
+                        <span className={`preview-value ${item.kondisiPintu === 'NG' ? 'ng' : 'ok'}`}>
+                          {item.kondisiPintu}
+                        </span>
+                      </div>
+                      <div className="preview-row">
+                        <span className="preview-label">Area Sekitar:</span>
+                        <span className={`preview-value ${item.areaSekitar === 'NG' ? 'ng' : 'ok'}`}>
+                          {item.areaSekitar}
+                        </span>
+                      </div>
+                      <div className="preview-row">
+                        <span className="preview-label">Palu/Alat Bantu:</span>
+                        <span className={`preview-value ${item.paluAlatBantu === 'NG' ? 'ng' : 'ok'}`}>
+                          {item.paluAlatBantu}
+                        </span>
+                      </div>
+                      <div className="preview-row">
+                        <span className="preview-label">Identitas Pintu:</span>
+                        <span className={`preview-value ${item.identitasPintu === 'NG' ? 'ng' : 'ok'}`}>
+                          {item.identitasPintu}
+                        </span>
+                      </div>
+                      <div className="preview-row">
+                        <span className="preview-label">ID Peringatan:</span>
+                        <span className={`preview-value ${item.idPeringatan === 'NG' ? 'ng' : 'ok'}`}>
+                          {item.idPeringatan}
+                        </span>
+                      </div>
+                      <div className="preview-row">
+                        <span className="preview-label">Door Closer:</span>
+                        <span className={`preview-value ${item.doorCloser === 'NG' ? 'ng' : 'ok'}`}>
+                          {item.doorCloser}
+                        </span>
+                      </div>
+                      {item.keterangan && (
+                        <div className="preview-row">
+                          <span className="preview-label">Keterangan:</span>
+                          <span className="preview-value">{item.keterangan}</span>
+                        </div>
+                      )}
+                      {item.foto && (
+                        <div className="preview-row">
+                          <span className="preview-label">Foto:</span>
+                          <img
+                            src={item.foto}
+                            alt="Foto"
+                            className="preview-card-image"
+                          />
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
             <div className="preview-actions">
               <button onClick={handleCancelPreview} className="cancel-btn" disabled={isSubmitting}>
                 ← Kembali ke Form
@@ -494,11 +738,19 @@ export default function PintuDaruratChecklist() {
       `}</style>
 
       <style jsx>{`
+        .app-page {
+          width: 100%;
+          min-height: 100vh;
+          display: flex;
+        }
+
         .page-content {
-          max-width: 1200px;
-          margin: 0 auto;
+          flex: 1;
+          width: calc(100% - 280px);
+          margin-left: 280px;
           padding: 24px;
           color: #1e293b;
+          overflow-x: hidden;
         }
 
         .header-top {
@@ -526,6 +778,7 @@ export default function PintuDaruratChecklist() {
           cursor: pointer;
           transition: all 0.3s ease;
           font-size: 0.95rem;
+          min-height: 44px;
         }
 
         .btn-back:hover {
@@ -558,6 +811,8 @@ export default function PintuDaruratChecklist() {
           box-shadow: 0 6px 20px rgba(0, 0, 0, 0.15);
           padding: 24px;
           overflow-x: auto;
+          -webkit-overflow-scrolling: touch;
+          width: 100%;
           color: white;
         }
 
@@ -586,6 +841,7 @@ export default function PintuDaruratChecklist() {
           display: flex;
           align-items: center;
           gap: 8px;
+          min-height: 48px;
         }
 
         .btn-ok-all:hover {
@@ -598,12 +854,26 @@ export default function PintuDaruratChecklist() {
           transform: translateY(0);
         }
 
+        /* Desktop View */
+        .desktop-view,
+        .desktop-preview {
+          display: block;
+          overflow-x: auto;
+          -webkit-overflow-scrolling: touch;
+        }
+
+        .mobile-view,
+        .mobile-preview {
+          display: none;
+        }
+
         .checklist-table,
         .simple-table {
           width: 100%;
           border-collapse: collapse;
           margin-bottom: 24px;
           color: #333;
+          min-width: 1200px;
         }
 
         .checklist-table th,
@@ -622,6 +892,7 @@ export default function PintuDaruratChecklist() {
           position: sticky;
           top: 0;
           color: white;
+          z-index: 10;
         }
 
         .status-select,
@@ -633,6 +904,7 @@ export default function PintuDaruratChecklist() {
           font-size: 0.9rem;
           background: rgba(255, 255, 255, 0.9);
           color: #333;
+          min-height: 44px;
         }
 
         .status-select:focus,
@@ -648,23 +920,189 @@ export default function PintuDaruratChecklist() {
           font-weight: 500;
         }
 
+        /* Mobile Card Styles */
+        .checklist-card,
+        .preview-card {
+          background: rgba(255, 255, 255, 0.1);
+          border-radius: 12px;
+          margin-bottom: 16px;
+          overflow: hidden;
+          border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+
+        .preview-card-ng {
+          border-color: rgba(244, 67, 54, 0.5);
+          background: rgba(244, 67, 54, 0.1);
+        }
+
+        .card-header,
+        .preview-card-header {
+          display: flex;
+          align-items: center;
+          gap: 12px;
+          padding: 16px;
+          cursor: pointer;
+          background: rgba(0, 0, 0, 0.1);
+          transition: background 0.2s;
+          min-height: 44px;
+        }
+
+        .card-header:hover,
+        .preview-card-header:hover {
+          background: rgba(0, 0, 0, 0.2);
+        }
+
+        .card-no,
+        .preview-card-no {
+          width: 40px;
+          height: 40px;
+          background: #1976d2;
+          color: white;
+          border-radius: 50%;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          font-weight: 700;
+          font-size: 1.1rem;
+          flex-shrink: 0;
+        }
+
+        .preview-card-status {
+          margin-left: auto;
+          padding: 4px 12px;
+          border-radius: 20px;
+          font-weight: 600;
+          font-size: 0.8rem;
+        }
+
+        .preview-card-status.ok {
+          background: rgba(76, 175, 80, 0.3);
+          color: #c8e6c9;
+        }
+
+        .preview-card-status.ng {
+          background: rgba(244, 67, 54, 0.3);
+          color: #ffcdd2;
+        }
+
+        .card-info {
+          flex: 1;
+          min-width: 0;
+        }
+
+        .card-lokasi {
+          font-size: 1rem;
+          font-weight: 600;
+          color: white;
+          word-break: break-word;
+        }
+
+        .expand-icon {
+          font-size: 1.2rem;
+          color: rgba(255, 255, 255, 0.8);
+          transition: transform 0.3s ease;
+        }
+
+        .expand-icon.expanded {
+          transform: rotate(180deg);
+        }
+
+        .card-body,
+        .preview-card-body {
+          padding: 16px;
+          background: rgba(0, 0, 0, 0.1);
+        }
+
+        .form-group {
+          margin-bottom: 16px;
+        }
+
+        .form-group:last-child {
+          margin-bottom: 0;
+        }
+
+        .form-group label {
+          display: block;
+          margin-bottom: 6px;
+          font-size: 0.9rem;
+          color: rgba(255, 255, 255, 0.9);
+          font-weight: 500;
+        }
+
+        .preview-row {
+          display: flex;
+          justify-content: space-between;
+          align-items: flex-start;
+          padding: 8px 0;
+          border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+          gap: 12px;
+        }
+
+        .preview-row:last-child {
+          border-bottom: none;
+        }
+
+        .preview-label {
+          font-size: 0.85rem;
+          color: rgba(255, 255, 255, 0.8);
+          font-weight: 500;
+          min-width: 120px;
+          flex-shrink: 0;
+        }
+
+        .preview-value {
+          font-size: 0.9rem;
+          color: white;
+          word-break: break-word;
+          text-align: right;
+          flex: 1;
+        }
+
+        .preview-value.ok {
+          color: #c8e6c9;
+          font-weight: 600;
+        }
+
+        .preview-value.ng {
+          color: #ffcdd2;
+          font-weight: 600;
+        }
+
+        .preview-card-image {
+          width: 60px;
+          height: 60px;
+          object-fit: cover;
+          border-radius: 6px;
+          border: 2px solid white;
+          cursor: pointer;
+        }
+
         /* Upload & Preview Image */
         .image-upload {
           display: flex;
           justify-content: center;
           align-items: center;
-          min-height: 40px;
+          min-height: 44px;
         }
 
         .file-label {
           display: inline-block;
-          padding: 6px 12px;
+          padding: 10px 16px;
           background: rgba(255, 255, 255, 0.9);
           color: #333;
           border-radius: 6px;
-          font-size: 0.85rem;
+          font-size: 0.9rem;
           cursor: pointer;
           transition: background 0.2s;
+          min-height: 44px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+        }
+
+        .file-label-large {
+          width: 100%;
+          padding: 12px 16px;
         }
 
         .file-label:hover {
@@ -690,6 +1128,11 @@ export default function PintuDaruratChecklist() {
           border: 2px solid white;
         }
 
+        .preview-image {
+          max-width: 80px;
+          max-height: 80px;
+        }
+
         .remove-btn {
           position: absolute;
           top: -8px;
@@ -698,14 +1141,21 @@ export default function PintuDaruratChecklist() {
           color: white;
           border: 2px solid white;
           border-radius: 50%;
-          width: 20px;
-          height: 20px;
-          font-size: 12px;
+          width: 24px;
+          height: 24px;
+          font-size: 14px;
           cursor: pointer;
           display: flex;
           align-items: center;
           justify-content: center;
           padding: 0;
+          min-height: 24px;
+          min-width: 24px;
+        }
+
+        .remove-btn:hover {
+          background: #d32f2f;
+          transform: scale(1.1);
         }
 
         .form-actions,
@@ -714,6 +1164,7 @@ export default function PintuDaruratChecklist() {
           gap: 16px;
           justify-content: flex-end;
           margin-top: 20px;
+          flex-wrap: wrap;
         }
 
         .btn-cancel,
@@ -721,13 +1172,15 @@ export default function PintuDaruratChecklist() {
         .cancel-btn,
         .save-btn,
         .report-btn {
-          padding: 10px 20px;
+          padding: 12px 24px;
           border: none;
           border-radius: 8px;
           font-weight: 600;
           cursor: pointer;
-          font-size: 0.95rem;
+          font-size: 1rem;
           transition: all 0.2s ease;
+          min-height: 48px;
+          min-width: 120px;
         }
 
         .btn-cancel,
@@ -739,6 +1192,12 @@ export default function PintuDaruratChecklist() {
         .btn-cancel:hover,
         .cancel-btn:hover {
           background: rgba(255, 255, 255, 0.3);
+        }
+
+        .btn-cancel:disabled,
+        .cancel-btn:disabled {
+          opacity: 0.5;
+          cursor: not-allowed;
         }
 
         .btn-submit {
@@ -759,6 +1218,11 @@ export default function PintuDaruratChecklist() {
           background: #1b5e20;
         }
 
+        .save-btn:disabled {
+          opacity: 0.5;
+          cursor: not-allowed;
+        }
+
         .report-btn {
           background: #d32f2f;
           color: white;
@@ -766,6 +1230,11 @@ export default function PintuDaruratChecklist() {
 
         .report-btn:hover {
           background: #b71c1c;
+        }
+
+        .report-btn:disabled {
+          opacity: 0.5;
+          cursor: not-allowed;
         }
 
         .preview-title {
@@ -786,35 +1255,76 @@ export default function PintuDaruratChecklist() {
         .ng-actions {
           display: flex;
           gap: 12px;
+          flex-wrap: wrap;
         }
 
-        @media (max-width: 768px) {
+        /* ✅ TABLET RESPONSIVE */
+        @media (max-width: 1024px) {
+          .page-content {
+            padding: 20px 16px;
+          }
+
+          .page-title {
+            font-size: 1.6rem;
+          }
+
           .checklist-table,
           .simple-table {
-            font-size: 0.8rem;
+            min-width: 1000px;
+            font-size: 0.85rem;
           }
 
           .checklist-table th,
           .checklist-table td,
           .simple-table th,
           .simple-table td {
-            padding: 8px 4px;
+            padding: 10px 8px;
+          }
+        }
+
+        /* ✅ MOBILE RESPONSIVE */
+        @media (max-width: 768px) {
+          .page-content {
+            width: 100%;
+            margin-left: 0;
+            padding: 16px 12px;
           }
 
-          .form-actions,
-          .preview-actions,
-          .ng-actions {
+          .header-top {
             flex-direction: column;
+            align-items: flex-start;
             gap: 12px;
           }
 
-          .page-title {
-            font-size: 1.5rem;
+          .btn-back {
+            width: 100%;
+            justify-content: flex-start;
           }
 
-          .image-preview {
-            width: 40px;
-            height: 40px;
+          .page-title {
+            font-size: 1.4rem;
+            margin: 8px 0 0 0;
+          }
+
+          .subtitle {
+            font-size: 0.9rem;
+            margin-top: 6px;
+          }
+
+          .card-container {
+            padding: 12px;
+            border-radius: 8px;
+          }
+
+          /* Hide desktop table, show mobile cards */
+          .desktop-view,
+          .desktop-preview {
+            display: none;
+          }
+
+          .mobile-view,
+          .mobile-preview {
+            display: block;
           }
 
           .quick-actions {
@@ -824,6 +1334,190 @@ export default function PintuDaruratChecklist() {
           .btn-ok-all {
             width: 100%;
             justify-content: center;
+          }
+
+          .form-actions,
+          .preview-actions,
+          .ng-actions {
+            flex-direction: column;
+            gap: 12px;
+          }
+
+          .btn-cancel,
+          .btn-submit,
+          .cancel-btn,
+          .save-btn,
+          .report-btn {
+            width: 100%;
+          }
+
+          .checklist-table,
+          .simple-table {
+            min-width: 800px;
+            font-size: 0.8rem;
+          }
+
+          .checklist-table th,
+          .checklist-table td,
+          .simple-table th,
+          .simple-table td {
+            padding: 8px 6px;
+          }
+
+          .status-select,
+          .notes-input {
+            font-size: 0.9rem;
+            min-height: 44px;
+          }
+
+          .image-preview {
+            width: 50px;
+            height: 50px;
+          }
+
+          .preview-image {
+            max-width: 70px;
+            max-height: 70px;
+          }
+
+          .card-no,
+          .preview-card-no {
+            width: 36px;
+            height: 36px;
+            font-size: 1rem;
+          }
+
+          .card-lokasi {
+            font-size: 0.95rem;
+          }
+
+          .preview-label {
+            min-width: 100px;
+            font-size: 0.8rem;
+          }
+
+          .preview-value {
+            font-size: 0.85rem;
+          }
+
+          .preview-card-image {
+            width: 50px;
+            height: 50px;
+          }
+        }
+
+        /* ✅ SMALL MOBILE */
+        @media (max-width: 480px) {
+          .page-content {
+            padding: 12px 8px;
+          }
+
+          .page-title {
+            font-size: 1.2rem;
+          }
+
+          .subtitle {
+            font-size: 0.8rem;
+            margin-top: 4px;
+          }
+
+          .card-container {
+            padding: 8px;
+            border-radius: 6px;
+          }
+
+          .card-header,
+          .preview-card-header {
+            padding: 12px;
+          }
+
+          .card-no,
+          .preview-card-no {
+            width: 32px;
+            height: 32px;
+            font-size: 0.9rem;
+          }
+
+          .card-body,
+          .preview-card-body {
+            padding: 12px;
+          }
+
+          .form-group label {
+            font-size: 0.85rem;
+          }
+
+          .status-select,
+          .notes-input {
+            font-size: 0.85rem;
+            min-height: 44px;
+          }
+
+          .file-label {
+            padding: 10px 14px;
+            font-size: 0.85rem;
+            min-height: 44px;
+          }
+
+          .file-label-large {
+            padding: 12px 14px;
+          }
+
+          .image-preview {
+            width: 45px;
+            height: 45px;
+          }
+
+          .preview-image {
+            max-width: 60px;
+            max-height: 60px;
+          }
+
+          .btn-cancel,
+          .btn-submit,
+          .cancel-btn,
+          .save-btn,
+          .report-btn {
+            min-height: 52px;
+            font-size: 0.95rem;
+            padding: 14px 20px;
+          }
+
+          .checklist-table,
+          .simple-table {
+            min-width: 700px;
+            font-size: 0.75rem;
+          }
+
+          .checklist-table th,
+          .checklist-table td,
+          .simple-table th,
+          .simple-table td {
+            padding: 6px 4px;
+          }
+
+          .preview-title {
+            font-size: 1.2rem;
+            margin: 0 0 12px;
+          }
+
+          .preview-label {
+            min-width: 90px;
+            font-size: 0.75rem;
+          }
+
+          .preview-value {
+            font-size: 0.8rem;
+          }
+
+          .preview-card-image {
+            width: 45px;
+            height: 45px;
+          }
+
+          .btn-ok-all {
+            min-height: 52px;
+            font-size: 0.95rem;
           }
         }
       `}</style>

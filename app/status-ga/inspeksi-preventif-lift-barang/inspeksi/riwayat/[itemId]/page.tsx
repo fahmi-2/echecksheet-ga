@@ -1,306 +1,995 @@
+// app/status-ga/inspeksi-preventif-lift-barang/inspeksi/riwayat/[itemId]/page.tsx
 "use client";
 
-import { useEffect, useState } from "react";
-import { useRouter, useParams } from "next/navigation";
+import { useEffect, useState, use } from "react";
+import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
 import { Sidebar } from "@/components/Sidebar";
+import { ArrowLeft, Calendar, Clock, User, CheckCircle, XCircle, FileText, Wrench, Camera } from "lucide-react";
 
-type HistoryEntry = {
+// ✅ Data item langsung di dalam file
+const inspectionItems = [
+  { id: "1", label: "PONDASI / BAUT PENGIKAT" },
+  { id: "2", label: "KOLOM / RANGKA" },
+  { id: "3", label: "SANGKAR" },
+  { id: "4", label: "BEAM DUDUKAN MOTOR HOIST" },
+  { id: "5", label: "REL PEMANDU" },
+  { id: "6", label: "RODA PENGGERAK (NAIK - TURUN)" },
+  { id: "7", label: "RODA IDLE" },
+  { id: "8", label: "PEREDAM / PENYANGGA" },
+  { id: "9", label: "MOTOR HOIST & GEAR BOX" },
+  { id: "10", label: "PULLY / CAKRA" },
+  { id: "11", label: "KAIT UTAMA" },
+  { id: "12", label: "TALI KABEL BAJA" },
+  { id: "13", label: "TOMBOL PUSH BUTTON" },
+  { id: "14", label: "SAFETY DEVICE" },
+  { id: "15", label: "KOMPONEN LISTRIK" },
+  { id: "16", label: "KETERSEDIAAN APAR DI DEKAT LIFT" },
+];
+
+// ✅ Helper untuk mendapatkan nama item
+const getItemNameById = (id: string): string => {
+  const item = inspectionItems.find(i => i.id === id);
+  return item?.label || `Item ${id}`;
+};
+
+// ✅ Helper khusus untuk sub-item
+const getSubItemLabel = (subItemId: string): string => {
+  const suffix = subItemId.charAt(subItemId.length - 1);
+  
+  switch (suffix.toUpperCase()) {
+    case "A": return "KOROSI";
+    case "B": return "KERETAKAN";
+    case "C": return "PERUBAHAN BENTUK";
+    case "D": return "KETEBALAN";
+    case "E": return "KELONGGARAN";
+    case "F": return "KETIDAKRATAAN";
+    default: return `Sub-Item ${suffix}`;
+  }
+};
+
+interface InspectionRecord {
   id: string;
-  itemId: string;
   date: string;
   inspector: string;
-  data: Record<string, any>;
-  photos: string[]; // Tambahkan properti photos
-};
+  inspectorNik: string;
+  submittedAt: string;
+  items: Record<string, {
+    status: string;
+    keterangan: string;
+    solusi: string;
+    foto_path: string | null;
+  }>;
+}
 
-const itemTitles: Record<string, string> = {
-  "1": "PONDASI / BAUT PENGIKAT",
-  "2": "KOLOM / RANGKA",
-  "3": "SANGKAR",
-  "4": "BEAM DUDUKAN MOTOR HOIST",
-  "5": "REL PEMANDU",
-  "6": "RODA PENGGERAK (NAIK - TURUN)",
-  "7": "RODA IDLE",
-  "8": "PEREDAM / PENYANGGA",
-  "9": "MOTOR HOIST & GEAR BOX",
-  "10": "PULLY / CAKRA",
-  "11": "KAIT UTAMA",
-  "12": "TALI KABEL BAJA",
-  "13": "TOMBOL PUSH BUTTON",
-  "14": "SAFETY DEVICE",
-  "15": "KOMPONEN LISTRIK",
-  "16": "KETERSEDIAAN APAR DI DEKAT LIFT",
-};
-
-export default function RiwayatInspeksiPerItemPage() {
+export default function RiwayatInspeksiPerItemPage({ params }: { params: Promise<{ itemId: string }> }) {
+  const { itemId } = use(params);
+  
+  const itemDisplayName = getItemNameById(itemId);
+  
   const router = useRouter();
-  const params = useParams();
   const { user } = useAuth();
-
-  // Ambil itemId - akan undefined pada render pertama, tapi tersedia setelah hydration
-  const itemId = params?.itemId as string | undefined;
-
-  const [history, setHistory] = useState<HistoryEntry[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const [records, setRecords] = useState<InspectionRecord[]>([]);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    // Tunggu sampai user dan itemId tersedia
-    if (!user || !itemId) {
-      // Beri sedikit delay untuk memastikan hydration selesai
-      const timer = setTimeout(() => {
-        if (!user) {
-          router.push("/home");
-          return;
-        }
-        
-        if (!itemId) {
-          setError("Item tidak ditemukan");
-          setIsLoading(false);
-          return;
-        }
-        
-        loadHistory(itemId);
-      }, 100);
-      
-      return () => clearTimeout(timer);
+    if (!user || user.role !== "inspector-ga") {
+      router.push("/home");
+      return;
     }
+
+    const fetchHistory = async () => {
+      try {
+        setLoading(true);
+        setError(null);
+
+        const response = await fetch(
+          `/api/lift-barang/inspeksi/history?item_id=${itemId}&limit=20`
+        );
+
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+
+        const result = await response.json();
+
+        if (!result.success) {
+          throw new Error(result.message || 'Gagal mengambil data');
+        }
+
+        const safeRecords = Array.isArray(result.data?.records) ? result.data.records : [];
+        const validatedRecords: InspectionRecord[] = safeRecords.map((record: any): InspectionRecord => ({
+          ...record,
+          items: record.items && typeof record.items === 'object' && record.items !== null
+            ? record.items
+            : {}
+        }));
+        
+        setRecords(validatedRecords);
+      } catch (err) {
+        console.error('❌ Fetch history error:', err);
+        setError(err instanceof Error ? err.message : 'Terjadi kesalahan tidak terduga');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchHistory();
+  }, [itemId, user, router]);
+
+  if (!user) return null;
+
+  const getItemsArray = (items: Record<string, any>) => {
+    if (!items || typeof items !== 'object' || Array.isArray(items)) return [];
     
-    loadHistory(itemId);
-  }, [user, itemId, router]);
-
-  const loadHistory = async (id: string) => {
-    try {
-      if (user?.role !== "inspector-ga") {
-        router.push("/home");
-        return;
-      }
-
-      if (!itemTitles[id]) {
-        setError("Item tidak valid");
-        setIsLoading(false);
-        return;
-      }
-
-      // Fetch history from API
-      const response = await fetch(`/api/lift-barang/inspeksi/history?itemId=${id}`);
-      const result = await response.json();
-
-      if (response.ok && result.success) {
-        // Transform API data to match HistoryEntry format
-        const transformedHistory: HistoryEntry[] = result.data.map((entry: any) => {
-          
-          return {
-            id: entry.id,
-            itemId: id,
-            date: entry.inspection_date,
-            inspector: entry.inspector,
-            data: entry.data,
-          };
-        });
-
-        setHistory(transformedHistory);
-      } else {
-        setError(result.message || "Gagal memuat riwayat");
-      }
-    } catch (e) {
-      console.error("Error loading history:", e);
-      setError("Gagal memuat riwayat");
-    } finally {
-      setIsLoading(false);
-    }
+    return Object.entries(items).map(([subItemId, itemData]) => ({
+      sub_item_id: subItemId,
+      ...itemData
+    }));
   };
-
-  if (!user) return <div>Loading...</div>;
-  if (user.role !== "inspector-ga") return null;
-
-  if (isLoading) {
-    return <div className="loading">Loading riwayat...</div>;
-  }
-
-  if (error) {
-    return (
-      <div className="error">
-        <p>{error}</p>
-        <button onClick={() => router.back()} className="back-btn">
-          ← Kembali
-        </button>
-      </div>
-    );
-  }
-
-  // Pastikan itemId tersedia di sini
-  const finalItemId = itemId!;
-  const itemName = itemTitles[finalItemId] || `Item ${finalItemId}`;
 
   return (
     <div className="app-page">
       <Sidebar userName={user.fullName} />
 
       <div className="page-content">
-        <button
-          onClick={() => router.back()}
-          className="back-btn"
-        >
-          ← Kembali ke Daftar
-        </button>
+        {/* Header */}
+        <div className="header">
+          <button onClick={() => router.push("/status-ga/inspeksi-preventif-lift-barang/inspeksi")} className="btn-back">
+            <ArrowLeft size={20} />
+          </button>
+          <div className="header-title">
+            <h1>Riwayat Inspeksi</h1>
+            <p>{itemDisplayName}</p>
+          </div>
+        </div>
 
-        <h1>📋 Riwayat Inspeksi: {itemName}</h1>
-        
-        {history.length === 0 ? (
-          <p>Tidak ada riwayat inspeksi untuk {itemName}.</p>
-        ) : (
-          <table className="history-table">
-            <thead>
-              <tr>
-                <th>Tanggal</th>
-                <th>Inspector</th>
-                <th>Status</th>
-                <th>Aksi</th>
-              </tr>
-            </thead>
-            <tbody>
-              {history.map((entry) => {
-                const hasNG = Object.values(entry.data).some(
-                  (item: any) => item?.status === "NG"
-                );
-                return (
-                  <tr key={entry.id}>
-                    <td>{entry.date}</td>
-                    <td>{entry.inspector}</td>
-                    <td>
-                      <span className={hasNG ? "status-ng" : "status-ok"}>
-                        {hasNG ? "NG" : "OK"}
-                      </span>
-                    </td>
-                    <td>
-                      <button
-                        onClick={() =>
-                          router.push(
-                            `/status-ga/inspeksi-preventif-lift-barang/inspeksi/form/${entry.itemId}?view=${entry.id}`
-                          )
-                        }
-                        className="btn-view"
-                      >
-                        Lihat Detail
-                      </button>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
+        {/* Error State */}
+        {error && (
+          <div className="alert error">
+            <div className="alert-content">
+              <XCircle size={20} />
+              <span>{error}</span>
+            </div>
+            <button onClick={() => window.location.reload()} className="btn-retry">
+              Coba Lagi
+            </button>
+          </div>
         )}
+
+        {/* Loading State */}
+        {loading ? (
+          <div className="loading">
+            <div className="spinner"></div>
+            <p>Memuat riwayat...</p>
+          </div>
+        ) : records.length === 0 ? (
+          <div className="empty">
+            <div className="empty-icon">📋</div>
+            <h3>Belum Ada Riwayat</h3>
+            <p>Belum ada data inspeksi untuk {itemDisplayName.toLowerCase()}</p>
+            <button 
+              onClick={() => router.push(`/status-ga/inspeksi-preventif-lift-barang/inspeksi/form/${itemId}`)}
+              className="btn-primary"
+            >
+              Input Inspeksi {itemDisplayName}
+            </button>
+          </div>
+        ) : (
+          <div className="records">
+            {records.map((record: InspectionRecord) => {
+              const itemsArray = getItemsArray(record.items);
+              const ngCount = itemsArray.filter((item: any) => item.status === 'NG').length;
+              const okCount = itemsArray.length - ngCount;
+
+              return (
+                <div key={record.id} className="card">
+                  {/* Card Header */}
+                  <div className="card-header">
+                    <div className="meta">
+                      <div className="meta-item">
+                        <Calendar size={16} />
+                        <span>{new Date(record.date).toLocaleDateString('id-ID', { 
+                          day: 'numeric', 
+                          month: 'short', 
+                          year: 'numeric' 
+                        })}</span>
+                      </div>
+                      <div className="meta-item">
+                        <Clock size={16} />
+                        <span>{new Date(record.submittedAt).toLocaleTimeString('id-ID', { 
+                          hour: '2-digit', 
+                          minute: '2-digit' 
+                        })}</span>
+                      </div>
+                    </div>
+                    <div className="inspector">
+                      <User size={16} />
+                      <span>{record.inspector}</span>
+                      <span className="nik">{record.inspectorNik}</span>
+                    </div>
+                  </div>
+
+                  {/* Summary Stats */}
+                  <div className="stats">
+                    <div className="stat ok">
+                      <CheckCircle size={18} />
+                      <span>{okCount} OK</span>
+                    </div>
+                    <div className="stat ng">
+                      <XCircle size={18} />
+                      <span>{ngCount} NG</span>
+                    </div>
+                  </div>
+
+                  {/* Items List */}
+                  <div className="items">
+                    {itemsArray.map((item: any, index: number) => (
+                      <div key={index} className={`item ${item.status === 'NG' ? 'item-ng' : 'item-ok'}`}>
+                        <div className="item-header">
+                          <span className="item-label">{getSubItemLabel(item.sub_item_id)}</span>
+                          <span className={`badge ${item.status === 'NG' ? 'badge-ng' : 'badge-ok'}`}>
+                            {item.status}
+                          </span>
+                        </div>
+
+                        {item.status === 'NG' && (
+                          <div className="item-details">
+                            {item.keterangan && (
+                              <div className="detail">
+                                <FileText size={14} />
+                                <span>{item.keterangan}</span>
+                              </div>
+                            )}
+                            {item.solusi && (
+                              <div className="detail">
+                                <Wrench size={14} />
+                                <span>{item.solusi}</span>
+                              </div>
+                            )}
+                            {item.foto_path && (
+                              <div className="detail-photo">
+                                <Camera size={14} />
+                                <img 
+                                  src={item.foto_path.startsWith('http') ? item.foto_path : `${process.env.NEXT_PUBLIC_BASE_URL || ''}${item.foto_path}`} 
+                                  alt="Dokumentasi" 
+                                  className="photo"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    const modal = document.createElement('div');
+                                    modal.className = 'photo-modal';
+                                    modal.innerHTML = `
+                                      <div class="photo-modal-content">
+                                        <img src="${e.currentTarget.src}" alt="Dokumentasi" />
+                                      </div>
+                                    `;
+                                    modal.onclick = () => modal.remove();
+                                    document.body.appendChild(modal);
+                                  }}
+                                />
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}  
       </div>
 
       <style jsx>{`
-        .loading, .error {
+        .app-page {
           display: flex;
-          flex-direction: column;
-          justify-content: center;
-          align-items: center;
           min-height: 100vh;
-          font-size: 1.2rem;
-          color: #666;
+          background: #f5f7fa;
         }
-        .error {
-          color: #f44336;
-        }
+
         .page-content {
+          flex: 1;
+          padding: 1.5rem;
           max-width: 1200px;
           margin: 0 auto;
-          padding: 24px;
-          background: #fafafa;
-        }
-        .back-btn {
-          background: white;
-          border: 1.5px solid #e0e0e0;
-          padding: 10px 16px;
-          border-radius: 8px;
-          cursor: pointer;
-          margin-bottom: 24px;
-          display: inline-block;
-          font-weight: 600;
-          color: #1565c0;
-          transition: all 0.3s ease;
-        }
-        .back-btn:hover {
-          background: #f5f5f5;
-          border-color: #1565c0;
-          transform: translateX(-2px);
-          box-shadow: 0 2px 6px rgba(21, 101, 192, 0.15);
-        }
-        h1 {
-          color: #0d47a1;
-          margin-bottom: 24px;
-          font-size: 1.8rem;
-          font-weight: 700;
-        }
-        .history-table {
           width: 100%;
-          border-collapse: collapse;
+        }
+
+        /* Header */
+        .header {
+          display: flex;
+          align-items: center;
+          gap: 1rem;
+          margin-bottom: 2rem;
+        }
+
+        .btn-back {
           background: white;
-          border-radius: 12px;
-          overflow: hidden;
-          box-shadow: 0 2px 12px rgba(0,0,0,0.08);
+          border: 1px solid #e2e8f0;
+          border-radius: 0.5rem;
+          padding: 0.625rem;
+          cursor: pointer;
+          transition: all 0.2s;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          color: #64748b;
+          min-width: 44px;
+          min-height: 44px;
         }
-        .history-table th,
-        .history-table td {
-          padding: 16px;
-          text-align: left;
-          border-bottom: 1px solid #f0f0f0;
+
+        .btn-back:hover {
+          background: #f8fafc;
+          border-color: #cbd5e1;
+          color: #334155;
         }
-        .history-table th {
-          background: linear-gradient(135deg, #1e88e5 0%, #1565c0 100%);
+
+        .header-title {
+          flex: 1;
+          min-width: 0;
+        }
+
+        .header-title h1 {
+          font-size: 1.5rem;
           font-weight: 600;
-          color: white;
+          color: #1e293b;
+          margin: 0;
+          line-height: 1.2;
+          word-break: break-word;
         }
-        .history-table tbody tr {
-          transition: background-color 0.2s ease;
+
+        .header-title p {
+          font-size: 0.875rem;
+          color: #64748b;
+          margin: 0.25rem 0 0 0;
+          word-break: break-word;
         }
-        .history-table tbody tr:hover {
-          background-color: #f8f9fa;
+
+        /* Alert */
+        .alert {
+          background: white;
+          border-radius: 0.75rem;
+          padding: 1rem;
+          margin-bottom: 1.5rem;
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 1rem;
+          flex-wrap: wrap;
         }
-        .status-ok {
-          color: #2e7d32;
-          font-weight: bold;
-          background: #e8f5e9;
-          padding: 6px 12px;
-          border-radius: 6px;
-          display: inline-block;
-          border-left: 3px solid #2e7d32;
+
+        .alert.error {
+          border-left: 4px solid #ef4444;
         }
-        .status-ng {
-          color: #c62828;
-          font-weight: bold;
-          background: #ffebee;
-          padding: 6px 12px;
-          border-radius: 6px;
-          display: inline-block;
-          border-left: 3px solid #c62828;
+
+        .alert-content {
+          display: flex;
+          align-items: center;
+          gap: 0.75rem;
+          color: #dc2626;
+          flex: 1;
+          min-width: 0;
         }
-        .btn-view {
-          padding: 10px 18px;
-          background: linear-gradient(135deg, #1e88e5 0%, #1565c0 100%);
+
+        .alert-content span {
+          word-break: break-word;
+        }
+
+        .btn-retry {
+          background: #ef4444;
           color: white;
           border: none;
-          border-radius: 6px;
+          border-radius: 0.5rem;
+          padding: 0.5rem 1rem;
+          font-size: 0.875rem;
+          font-weight: 500;
           cursor: pointer;
+          transition: all 0.2s;
+          min-height: 44px;
+          white-space: nowrap;
+        }
+
+        .btn-retry:hover {
+          background: #dc2626;
+        }
+
+        /* Loading */
+        .loading {
+          text-align: center;
+          padding: 4rem 1rem;
+        }
+
+        .spinner {
+          width: 40px;
+          height: 40px;
+          border: 3px solid #e2e8f0;
+          border-top-color: #3b82f6;
+          border-radius: 50%;
+          animation: spin 0.8s linear infinite;
+          margin: 0 auto 1rem;
+        }
+
+        @keyframes spin {
+          to { transform: rotate(360deg); }
+        }
+
+        .loading p {
+          color: #64748b;
+          font-size: 0.875rem;
+        }
+
+        /* Empty State */
+        .empty {
+          text-align: center;
+          padding: 4rem 1rem;
+          background: white;
+          border-radius: 1rem;
+        }
+
+        .empty-icon {
+          font-size: 4rem;
+          margin-bottom: 1rem;
+        }
+
+        .empty h3 {
+          font-size: 1.25rem;
           font-weight: 600;
-          font-size: 0.9rem;
-          transition: all 0.3s ease;
-          box-shadow: 0 2px 8px rgba(30, 136, 229, 0.15);
+          color: #1e293b;
+          margin: 0 0 0.5rem 0;
         }
-        .btn-view:hover {
-          background: linear-gradient(135deg, #1565c0 0%, #0d47a1 100%);
-          box-shadow: 0 4px 12px rgba(30, 136, 229, 0.25);
-          transform: translateY(-2px);
+
+        .empty p {
+          color: #64748b;
+          margin: 0 0 1.5rem 0;
         }
-        .btn-view:active {
-          transform: translateY(0);
+
+        .btn-primary {
+          background: #3b82f6;
+          color: white;
+          border: none;
+          border-radius: 0.5rem;
+          padding: 0.75rem 1.5rem;
+          font-weight: 500;
+          cursor: pointer;
+          transition: all 0.2s;
+          min-height: 44px;
         }
-        
+
+        .btn-primary:hover {
+          background: #2563eb;
+          transform: translateY(-1px);
+        }
+
+        /* Records */
+        .records {
+          display: grid;
+          gap: 1.25rem;
+        }
+
+        /* Card */
+        .card {
+          background: white;
+          border-radius: 1rem;
+          overflow: hidden;
+          box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+          transition: all 0.2s;
+        }
+
+        .card:hover {
+          box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+        }
+
+        .card-header {
+          padding: 1.25rem;
+          border-bottom: 1px solid #f1f5f9;
+        }
+
+        .meta {
+          display: flex;
+          gap: 1.5rem;
+          margin-bottom: 0.75rem;
+          flex-wrap: wrap;
+        }
+
+        .meta-item {
+          display: flex;
+          align-items: center;
+          gap: 0.5rem;
+          color: #64748b;
+          font-size: 0.875rem;
+        }
+
+        .inspector {
+          display: flex;
+          align-items: center;
+          gap: 0.5rem;
+          color: #1e293b;
+          font-size: 0.875rem;
+          font-weight: 500;
+          flex-wrap: wrap;
+        }
+
+        .nik {
+          color: #64748b;
+          font-weight: 400;
+        }
+
+        /* Stats */
+        .stats {
+          display: flex;
+          gap: 0.75rem;
+          padding: 0 1.25rem 1.25rem;
+          flex-wrap: wrap;
+        }
+
+        .stat {
+          display: flex;
+          align-items: center;
+          gap: 0.5rem;
+          padding: 0.5rem 0.875rem;
+          border-radius: 0.5rem;
+          font-size: 0.875rem;
+          font-weight: 500;
+        }
+
+        .stat.ok {
+          background: #f0fdf4;
+          color: #16a34a;
+        }
+
+        .stat.ng {
+          background: #fef2f2;
+          color: #dc2626;
+        }
+
+        /* Items */
+        .items {
+          display: grid;
+          gap: 0.5rem;
+          padding: 0 1.25rem 1.25rem;
+        }
+
+        .item {
+          border-radius: 0.5rem;
+          padding: 0.875rem;
+          transition: all 0.2s;
+        }
+
+        .item-ok {
+          background: #f8fafc;
+          border: 1px solid #e2e8f0;
+        }
+
+        .item-ng {
+          background: #fef2f2;
+          border: 1px solid #fecaca;
+        }
+
+        .item-header {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          gap: 0.75rem;
+          flex-wrap: wrap;
+        }
+
+        .item-label {
+          font-weight: 500;
+          color: #1e293b;
+          font-size: 0.875rem;
+          word-break: break-word;
+          flex: 1;
+          min-width: 0;
+        }
+
+        .badge {
+          padding: 0.25rem 0.625rem;
+          border-radius: 9999px;
+          font-size: 0.75rem;
+          font-weight: 600;
+          text-transform: uppercase;
+          letter-spacing: 0.025em;
+          white-space: nowrap;
+          flex-shrink: 0;
+        }
+
+        .badge-ok {
+          background: #dcfce7;
+          color: #16a34a;
+        }
+
+        .badge-ng {
+          background: #fee2e2;
+          color: #dc2626;
+        }
+
+        .item-details {
+          display: grid;
+          gap: 0.625rem;
+          margin-top: 0.875rem;
+          padding-top: 0.875rem;
+          border-top: 1px dashed #fecaca;
+        }
+
+        .detail {
+          display: flex;
+          align-items: flex-start;
+          gap: 0.5rem;
+          font-size: 0.8125rem;
+          line-height: 1.5;
+          color: #475569;
+          word-break: break-word;
+        }
+
+        .detail span {
+          flex: 1;
+          min-width: 0;
+        }
+
+        .detail-photo {
+          display: flex;
+          align-items: center;
+          gap: 0.5rem;
+          margin-top: 0.25rem;
+          flex-wrap: wrap;
+        }
+
+        .photo {
+          width: 80px;
+          height: 80px;
+          object-fit: cover;
+          border-radius: 0.5rem;
+          border: 2px solid #e2e8f0;
+          cursor: pointer;
+          transition: all 0.2s;
+          flex-shrink: 0;
+        }
+
+        .photo:hover {
+          transform: scale(1.05);
+          box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        }
+
+        /* Photo Modal */
+        :global(.photo-modal) {
+          position: fixed;
+          top: 0;
+          left: 0;
+          right: 0;
+          bottom: 0;
+          background: rgba(0,0,0,0.9);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          z-index: 9999;
+          padding: 1rem;
+          cursor: pointer;
+        }
+
+        :global(.photo-modal-content) {
+          max-width: 90vw;
+          max-height: 90vh;
+        }
+
+        :global(.photo-modal-content img) {
+          max-width: 100%;
+          max-height: 90vh;
+          border-radius: 0.5rem;
+        }
+
+        /* ✅ TABLET RESPONSIVE (768px - 1024px) */
+        @media (max-width: 1024px) {
+          .page-content {
+            padding: 1.25rem;
+            max-width: 100%;
+          }
+
+          .header-title h1 {
+            font-size: 1.375rem;
+          }
+
+          .meta {
+            gap: 1rem;
+          }
+        }
+
+        /* ✅ MOBILE RESPONSIVE (481px - 768px) */
+        @media (max-width: 768px) {
+          .page-content {
+            padding: 1rem;
+          }
+
+          .header {
+            gap: 0.75rem;
+            margin-bottom: 1.5rem;
+          }
+
+          .btn-back {
+            min-width: 44px;
+            min-height: 44px;
+            padding: 0.5rem;
+          }
+
+          .header-title h1 {
+            font-size: 1.25rem;
+          }
+
+          .header-title p {
+            font-size: 0.8125rem;
+          }
+
+          .card-header {
+            padding: 1rem;
+          }
+
+          .meta {
+            flex-direction: column;
+            gap: 0.5rem;
+          }
+
+          .meta-item {
+            font-size: 0.8125rem;
+          }
+
+          .inspector {
+            margin-top: 0.5rem;
+            font-size: 0.8125rem;
+          }
+
+          .stats {
+            padding: 0 1rem 1rem;
+            gap: 0.5rem;
+          }
+
+          .stat {
+            padding: 0.5rem 0.75rem;
+            font-size: 0.8125rem;
+          }
+
+          .items {
+            padding: 0 1rem 1rem;
+            gap: 0.5rem;
+          }
+
+          .item {
+            padding: 0.75rem;
+          }
+
+          .item-header {
+            flex-direction: column;
+            align-items: flex-start;
+            gap: 0.5rem;
+          }
+
+          .item-label {
+            font-size: 0.8125rem;
+          }
+
+          .badge {
+            padding: 0.25rem 0.5rem;
+            font-size: 0.6875rem;
+          }
+
+          .item-details {
+            margin-top: 0.75rem;
+            padding-top: 0.75rem;
+          }
+
+          .detail {
+            font-size: 0.75rem;
+            gap: 0.375rem;
+          }
+
+          .photo {
+            width: 70px;
+            height: 70px;
+          }
+
+          .alert {
+            padding: 0.875rem;
+            flex-direction: column;
+            align-items: stretch;
+          }
+
+          .btn-retry {
+            width: 100%;
+            text-align: center;
+          }
+
+          .empty {
+            padding: 3rem 1rem;
+          }
+
+          .empty-icon {
+            font-size: 3rem;
+          }
+
+          .empty h3 {
+            font-size: 1.125rem;
+          }
+
+          .empty p {
+            font-size: 0.875rem;
+          }
+
+          .btn-primary {
+            width: 100%;
+            padding: 0.875rem 1.25rem;
+          }
+        }
+
+        /* ✅ SMALL MOBILE (≤ 480px) */
+        @media (max-width: 480px) {
+          .page-content {
+            padding: 0.75rem;
+          }
+
+          .header {
+            gap: 0.5rem;
+            margin-bottom: 1.25rem;
+          }
+
+          .btn-back {
+            min-width: 310px;
+            min-height: 40px;
+            padding: 0.375rem;
+          }
+
+          .header-title h1 {
+            font-size: 1.125rem;
+          }
+
+          .header-title p {
+            font-size: 0.75rem;
+          }
+
+          .card-header {
+            padding: 0.875rem;
+          }
+
+          .meta-item {
+            font-size: 0.75rem;
+          }
+
+          .inspector {
+            font-size: 0.75rem;
+          }
+
+          .stats {
+            padding: 0 0.875rem 0.875rem;
+            flex-direction: column;
+          }
+
+          .stat {
+            width: 100%;
+            justify-content: center;
+            padding: 0.625rem 0.75rem;
+          }
+
+          .items {
+            padding: 0 0.875rem 0.875rem;
+          }
+
+          .item {
+            padding: 0.625rem;
+          }
+
+          .item-label {
+            font-size: 0.75rem;
+          }
+
+          .badge {
+            padding: 0.1875rem 0.5rem;
+            font-size: 0.625rem;
+          }
+
+          .item-details {
+            margin-top: 0.625rem;
+            padding-top: 0.625rem;
+          }
+
+          .detail {
+            font-size: 0.6875rem;
+            gap: 0.25rem;
+          }
+
+          .detail svg {
+            flex-shrink: 0;
+            width: 12px;
+            height: 12px;
+          }
+
+          .photo {
+            width: 60px;
+            height: 60px;
+          }
+
+          .loading {
+            padding: 3rem 1rem;
+          }
+
+          .spinner {
+            width: 35px;
+            height: 35px;
+          }
+
+          .loading p {
+            font-size: 0.8125rem;
+          }
+
+          .empty {
+            padding: 2.5rem 0.875rem;
+          }
+
+          .empty-icon {
+            font-size: 2.5rem;
+          }
+
+          .empty h3 {
+            font-size: 1rem;
+          }
+
+          .empty p {
+            font-size: 0.8125rem;
+          }
+
+          .btn-primary {
+            padding: 0.75rem 1rem;
+            font-size: 0.875rem;
+          }
+
+          .alert {
+            padding: 0.75rem;
+          }
+
+          .alert-content {
+            font-size: 0.8125rem;
+          }
+
+          .btn-retry {
+            padding: 0.5rem 0.875rem;
+            font-size: 0.8125rem;
+          }
+
+          :global(.photo-modal-content img) {
+            max-height: 80vh;
+          }
+        }
+
+        /* ✅ EXTRA SMALL MOBILE (≤ 360px) */
+        @media (max-width: 360px) {
+          .page-content {
+            padding: 0.5rem;
+          }
+
+          .header-title h1 {
+            font-size: 1rem;
+          }
+
+          .header-title p {
+            font-size: 0.6875rem;
+          }
+
+          .item-label {
+            font-size: 0.6875rem;
+          }
+
+          .badge {
+            font-size: 0.5625rem;
+            padding: 0.125rem 0.375rem;
+          }
+
+          .photo {
+            width: 50px;
+            height: 50px;
+          }
+
+          .detail {
+            font-size: 0.625rem;
+          }
+        }
       `}</style>
     </div>
   );

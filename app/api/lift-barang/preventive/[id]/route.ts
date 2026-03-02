@@ -1,9 +1,8 @@
+// app/api/lift-barang/preventive/[id]/route.ts
 import { NextRequest, NextResponse } from 'next/server';
-import { RowDataPacket } from 'mysql2';
 import pool from '@/lib/db';
 
-// Tipe data untuk header
-interface HeaderRow extends RowDataPacket {
+interface HeaderRow {
   id: number;
   inspection_date: string;
   inspector: string;
@@ -13,8 +12,7 @@ interface HeaderRow extends RowDataPacket {
   updated_at: string;
 }
 
-// Tipe data untuk item
-interface ItemRow extends RowDataPacket {
+interface ItemRow {
   id: number;
   header_id: number;
   item_id: number;
@@ -29,25 +27,13 @@ interface ItemRow extends RowDataPacket {
   updated_at: string;
 }
 
-function getItemName(id: number): string {
-  const items: Record<number, string> = {
-    1: "Hook Lift",
-    2: "Sling / Wire Rope",
-    3: "Holder Plate / Cantolan Hook",
-    4: "Roda Penggerak naik turun",
-    5: "Limit Switch"
-  };
-  return items[id] || `Item ${id}`;
-}
-
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { id } = params;
-    
-    // Validasi ID
+    const { id } = await params;
+
     if (!id || isNaN(Number(id))) {
       return NextResponse.json(
         { success: false, message: 'Invalid ID' },
@@ -55,35 +41,32 @@ export async function GET(
       );
     }
 
-    // Get header
-    const [headerRows] = await pool.execute<HeaderRow[]>(
-      'SELECT * FROM preventive_header WHERE id = ?',
+    const headerRows = await pool.query(
+      'SELECT * FROM preventive_header WHERE id = $1',
       [Number(id)]
     );
 
-    if (headerRows.length === 0) {
+    if (headerRows.rowCount === 0) {
       return NextResponse.json(
         { success: false, message: 'Record not found' },
         { status: 404 }
       );
     }
 
-    const header = headerRows[0];
+    const header = headerRows.rows[0] as HeaderRow;
 
-    // Get items
-    const [itemRows] = await pool.execute<ItemRow[]>(
-      'SELECT * FROM preventive_items WHERE header_id = ?',
+    const itemRows = await pool.query(
+      'SELECT * FROM preventive_items WHERE header_id = $1',
       [Number(id)]
     );
 
-    // Format data untuk response
     const items: Record<number, {
       status: string;
       keterangan: string;
       foto_path: string | null;
     }> = {};
-    
-    itemRows.forEach(item => {
+
+    itemRows.rows.forEach((item: ItemRow) => {
       items[item.item_id] = {
         status: item.status,
         keterangan: item.keterangan || '',
@@ -106,12 +89,15 @@ export async function GET(
     });
 
   } catch (error) {
-    console.error('Error fetching preventive record:', error);
+    console.error('❌ Error fetching preventive record:', error);
     return NextResponse.json(
-      { 
-        success: false, 
+      {
+        success: false,
         message: 'Internal server error',
-        error: process.env.NODE_ENV === 'development' ? (error as Error).message : undefined
+        error: process.env.NODE_ENV === 'development' ? {
+          message: (error as Error).message,
+          stack: (error as Error).stack?.split('\n').slice(0, 10)
+        } : undefined
       },
       { status: 500 }
     );
@@ -120,12 +106,11 @@ export async function GET(
 
 export async function PUT(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { id } = params;
-    
-    // Validasi ID
+    const { id } = await params;
+
     if (!id || isNaN(Number(id))) {
       return NextResponse.json(
         { success: false, message: 'Invalid ID' },
@@ -136,7 +121,6 @@ export async function PUT(
     const body = await request.json();
     const { items, additional_notes } = body;
 
-    // Validasi items jika ada
     if (items) {
       if (typeof items !== 'object') {
         return NextResponse.json(
@@ -145,10 +129,9 @@ export async function PUT(
         );
       }
 
-      // Validasi setiap item
       for (const [key, value] of Object.entries(items)) {
         const item = value as any;
-        
+
         if (item.status && !['OK', 'NG'].includes(item.status)) {
           return NextResponse.json(
             { success: false, message: `Item ${key}: Status harus 'OK' atau 'NG'` },
@@ -156,7 +139,6 @@ export async function PUT(
           );
         }
 
-        // Validasi keterangan untuk status NG
         if (item.status === 'NG' && (!item.keterangan || !item.keterangan.trim())) {
           return NextResponse.json(
             { success: false, message: `Item ${key}: Keterangan wajib diisi untuk status NG` },
@@ -166,103 +148,143 @@ export async function PUT(
       }
     }
 
-    // Update header
-    let updateHeaderQuery = `
-      UPDATE preventive_header
-      SET updated_at = CURRENT_TIMESTAMP
-    `;
-    const updateHeaderParams: any[] = [];
+    const client = await pool.connect();
 
-    if (additional_notes !== undefined) {
-      updateHeaderQuery += ', additional_notes = ?';
-      updateHeaderParams.push(additional_notes);
-    }
+    try {
+      await client.query('BEGIN');
 
-    updateHeaderQuery += ' WHERE id = ?';
-    updateHeaderParams.push(Number(id));
+      let updateHeaderQuery = `
+        UPDATE preventive_header
+        SET updated_at = CURRENT_TIMESTAMP
+      `;
+      const updateHeaderParams: any[] = [];
 
-    const [headerResult] = await pool.execute(updateHeaderQuery, updateHeaderParams);
+      if (additional_notes !== undefined) {
+        updateHeaderQuery += ', additional_notes = $' + (updateHeaderParams.length + 1);
+        updateHeaderParams.push(additional_notes);
+      }
 
-    if ((headerResult as any).affectedRows === 0) {
-      return NextResponse.json(
-        { success: false, message: 'Record not found' },
-        { status: 404 }
-      );
-    }
+      updateHeaderQuery += ' WHERE id = $' + (updateHeaderParams.length + 1);
+      updateHeaderParams.push(Number(id));
 
-    // Update items
-    if (items) {
-      const itemUpdates = Object.entries(items).map(async ([id, itemData]) => {
-        const item = itemData as any;
-        
-        return pool.execute(
-          `UPDATE preventive_items 
-           SET status = ?, keterangan = ?, foto_path = ?
-           WHERE header_id = ? AND item_id = ?`,
-          [
-            item.status,
-            item.keterangan || '',
-            item.foto_path || null,
-            Number(id),
-            Number(id)
-          ]
+      const headerResult = await client.query(updateHeaderQuery, updateHeaderParams);
+
+      if (headerResult.rowCount === 0) {
+        await client.query('ROLLBACK');
+        return NextResponse.json(
+          { success: false, message: 'Record not found' },
+          { status: 404 }
         );
+      }
+
+      if (items) {
+        const itemUpdates = Object.entries(items).map(async ([itemKey, itemData]) => {
+          const item = itemData as any;
+
+          return client.query(
+            `UPDATE preventive_items
+             SET status = $1, keterangan = $2, foto_path = $3
+             WHERE header_id = $4 AND item_id = $5`,
+            [
+              item.status,
+              item.keterangan || '',
+              item.foto_path || null,
+              Number(id),
+              Number(itemKey)
+            ]
+          );
+        });
+
+        await Promise.all(itemUpdates);
+      }
+
+      await client.query('COMMIT');
+
+      const headerRows = await client.query(
+        'SELECT * FROM preventive_header WHERE id = $1',
+        [Number(id)]
+      );
+
+      const headerRecord = headerRows.rows[0] as HeaderRow;
+
+      const itemRows = await client.query(
+        'SELECT * FROM preventive_items WHERE header_id = $1',
+        [Number(id)]
+      );
+
+      const formattedItems: Record<number, {
+        status: string;
+        keterangan: string;
+        foto_path: string | null;
+      }> = {};
+
+      itemRows.rows.forEach((item: ItemRow) => {
+        formattedItems[item.item_id] = {
+          status: item.status,
+          keterangan: item.keterangan || '',
+          foto_path: item.foto_path
+        };
       });
 
-      await Promise.all(itemUpdates);
+      return NextResponse.json({
+        success: true,
+        message: 'Record updated successfully',
+        data: {
+          id: headerRecord.id.toString(),
+          date: headerRecord.inspection_date,
+          inspector: headerRecord.inspector,
+          inspector_nik: headerRecord.inspector_nik,
+          items: formattedItems,
+          additionalNotes: headerRecord.additional_notes,
+          created_at: headerRecord.created_at,
+          updated_at: headerRecord.updated_at
+        }
+      });
+
+    } catch (transactionError) {
+      await client.query('ROLLBACK');
+      console.error('❌ Transaction error:', transactionError);
+
+      if (transactionError instanceof Error) {
+        if (transactionError.message.includes('column') && transactionError.message.includes('does not exist')) {
+          return NextResponse.json(
+            {
+              success: false,
+              message: 'Struktur tabel tidak sesuai. Periksa kolom di tabel preventive_header/preventive_items',
+              error: transactionError.message
+            },
+            { status: 500 }
+          );
+        }
+
+        if (transactionError.message.includes('violates foreign key constraint')) {
+          return NextResponse.json(
+            {
+              success: false,
+              message: 'Error relasi database. Pastikan data referensi valid',
+              error: transactionError.message
+            },
+            { status: 500 }
+          );
+        }
+      }
+
+      throw transactionError;
+    } finally {
+      client.release();
+      console.log('🔓 Connection released');
     }
 
-    // Ambil data yang diperbarui
-    const [headerRows] = await pool.execute<HeaderRow[]>(
-      'SELECT * FROM preventive_header WHERE id = ?',
-      [Number(id)]
-    );
-    
-    const headerRecord = headerRows[0];
-
-    // Ambil item
-    const [itemRows] = await pool.execute<ItemRow[]>(
-      'SELECT * FROM preventive_items WHERE header_id = ?',
-      [Number(id)]
-    );
-
-    // Format data untuk response
-    const formattedItems: Record<number, {
-      status: string;
-      keterangan: string;
-      foto_path: string | null;
-    }> = {};
-    
-    itemRows.forEach(item => {
-      formattedItems[item.item_id] = {
-        status: item.status,
-        keterangan: item.keterangan || '',
-        foto_path: item.foto_path
-      };
-    });
-
-    return NextResponse.json({
-      success: true,
-      message: 'Record updated successfully',
-      data: {
-        id: headerRecord.id.toString(),
-        date: headerRecord.inspection_date,
-        inspector: headerRecord.inspector,
-        inspector_nik: headerRecord.inspector_nik,
-        items: formattedItems,
-        additionalNotes: headerRecord.additional_notes,
-        created_at: headerRecord.created_at,
-        updated_at: headerRecord.updated_at
-      }
-    });
-
   } catch (error) {
-    console.error('Error updating preventive record:', error);
+    console.error('❌ Error updating preventive record:', error);
     return NextResponse.json(
-      { 
-        success: false, 
+      {
+        success: false,
         message: 'Internal server error',
-        error: process.env.NODE_ENV === 'development' ? (error as Error).message : undefined
+        error: process.env.NODE_ENV === 'development' ? {
+          message: (error as Error).message,
+          stack: (error as Error).stack?.split('\n').slice(0, 10)
+        } : undefined
       },
       { status: 500 }
     );
@@ -271,12 +293,11 @@ export async function PUT(
 
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { id } = params;
-    
-    // Validasi ID
+    const { id } = await params;
+
     if (!id || isNaN(Number(id))) {
       return NextResponse.json(
         { success: false, message: 'Invalid ID' },
@@ -284,32 +305,70 @@ export async function DELETE(
       );
     }
 
-    // Delete dari database
-    const [result] = await pool.execute(
-      'DELETE FROM preventive_header WHERE id = ?',
-      [Number(id)]
-    );
+    const client = await pool.connect();
 
-    if ((result as any).affectedRows === 0) {
-      return NextResponse.json(
-        { success: false, message: 'Record not found' },
-        { status: 404 }
+    try {
+      await client.query('BEGIN');
+
+      await client.query(
+        'DELETE FROM preventive_items WHERE header_id = $1',
+        [Number(id)]
       );
+
+      const deleteResult = await client.query(
+        'DELETE FROM preventive_header WHERE id = $1',
+        [Number(id)]
+      );
+
+      if (deleteResult.rowCount === 0) {
+        await client.query('ROLLBACK');
+        return NextResponse.json(
+          { success: false, message: 'Record not found' },
+          { status: 404 }
+        );
+      }
+
+      await client.query('COMMIT');
+
+      return NextResponse.json({
+        success: true,
+        message: 'Record deleted successfully',
+        data: { id }
+      });
+
+    } catch (transactionError) {
+      await client.query('ROLLBACK');
+      console.error('❌ Transaction error:', transactionError);
+
+      if (transactionError instanceof Error) {
+        if (transactionError.message.includes('violates foreign key constraint')) {
+          return NextResponse.json(
+            {
+              success: false,
+              message: 'Error relasi database. Pastikan tidak ada data yang terkait.',
+              error: transactionError.message
+            },
+            { status: 500 }
+          );
+        }
+      }
+
+      throw transactionError;
+    } finally {
+      client.release();
+      console.log('🔓 Connection released');
     }
 
-    return NextResponse.json({
-      success: true,
-      message: 'Record deleted successfully',
-      data: { id }
-    });
-
   } catch (error) {
-    console.error('Error deleting preventive record:', error);
+    console.error('❌ Error deleting preventive record:', error);
     return NextResponse.json(
-      { 
-        success: false, 
+      {
+        success: false,
         message: 'Internal server error',
-        error: process.env.NODE_ENV === 'development' ? (error as Error).message : undefined
+        error: process.env.NODE_ENV === 'development' ? {
+          message: (error as Error).message,
+          stack: (error as Error).stack?.split('\n').slice(0, 10)
+        } : undefined
       },
       { status: 500 }
     );

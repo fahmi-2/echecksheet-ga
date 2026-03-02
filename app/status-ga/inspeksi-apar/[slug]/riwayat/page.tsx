@@ -17,22 +17,22 @@ const areaNames: Record<string, string> = {
   "exim": "EXIM",
   "area-genba-a": "AREA GENBA A",
   "area-mezzanine-genba-a": "AREA MEZZANINE GENBA A",
-  "jig-proto-1-area-receiving": "JIG PROTO 1 AREA RECEIVING (SEBELAH PINTU MASUK) FABRIKASI JP SISI BARAT",
+  "jig-proto-1-area-receiving": "JIG PROTO 1 AREA RECEIVING",
   "stock-control-area": "STOCK CONTROL AREA",
-  "jig-proto-2-cnc-room": "JIG PROTO 2 CNC ROOM FABRIKASI C/B JP",
-  "area-training-dining-mtc": "AREA TRAINING A& DINING ROOM , MTC OFFICE",
+  "jig-proto-2-cnc-room": "JIG PROTO 2 CNC ROOM",
+  "area-training-dining-mtc": "AREA TRAINING & DINING ROOM",
   "genba-c": "GENBA C",
   "area-pump-room-warehouse": "AREA PUMP ROOM & WAREHOUSE",
-  "power-house-genba-a": "POWER HOUSE (UNTUK GENBA A)",
-  "power-house-genba-c": "POWER HOUSE (UNTUK GENBA C)",
+  "power-house-genba-a": "POWER HOUSE (GENBA A)",
+  "power-house-genba-c": "POWER HOUSE (GENBA C)",
   "area-tps-b3": "AREA TPS B3",
   "new-building-warehouse": "NEW BUILDING WAREHOUSE",
   "genba-b": "GENBA B",
-  "power-house-workshop": "POWER HOUSE AREA DAN WORKSHOP",
+  "power-house-workshop": "POWER HOUSE & WORKSHOP",
   "area-segitiga-ga": "AREA SEGITIGA GA",
   "area-parkir-motor": "AREA PARKIR MOTOR",
   "forklift": "FORKLIFT",
-  "samping-pagar-rak-helm": "SAMPING PAGAR SEBELAH RAK HELM",
+  "samping-pagar-rak-helm": "SAMPING PAGAR RAK HELM",
   "belakang-kantin": "BELAKANG KANTIN",
   "ir-room": "IR ROOM",
   "area-auditorium-outdoor": "AREA AUDITORIUM OUTDOOR",
@@ -43,18 +43,18 @@ const areaNames: Record<string, string> = {
 };
 
 const checkItems = [
-  { label: "Masa Berlaku", help: "Lihat identitas APAR apakah masih berlaku atau tidak" },
-  { label: "Tekanan", help: "Pastikan jarum penunjuk tekanan APAR tepat di warna hijau" },
-  { label: "Isi Tabung", help: "Pastikan isi APAR tidak menggumpal dengan menggoyangkan, mengocok tabung dan menimbang APAR" },
-  { label: "Selang", help: "Pastikan selang APAR tidak rusak & tidak tersumbat benda apapun" },
-  { label: "Segel", help: "Periksa segel APAR apakah dalam kondisi terkunci ataukah dalam kondisi terbuka" },
-  { label: "Kondisi Tabung & Kebersihan tabung", help: "Pastikan area APAR tidak terhalang benda apapun" },
-  { label: "Gantungan Apar", help: "Pastikan masing-masing Gantungan APAR Tidak Rusak" },
-  { label: "Lay out APAR", help: "Pastikan masing-masing APAR ada Lay out nya" },
-  { label: "Papan Petunjuk & Nomor Apar", help: "Pastikan terpasang dan mudah dilihat" },
-  { label: "OS & C/S", help: "Pastikan Operation standart & Check Sheet terpasang rapi dan jelas dan update" },
-  { label: "Area Sekitar", help: "Pastikan Jalan/akses APAR mudah dan dapat dijangkau oleh tim" },
-  { label: "Posisi APAR tidak bergeser", help: "Pastikan APAR tetap pada posisi semula dan tidak bergeser" },
+  { label: "Masa Berlaku", short: "Masa", help: "Lihat identitas APAR apakah masih berlaku" },
+  { label: "Tekanan", short: "Tekanan", help: "Jarum tekanan di warna hijau" },
+  { label: "Isi Tabung", short: "Isi", help: "Isi APAR tidak menggumpal" },
+  { label: "Selang", short: "Selang", help: "Selang tidak rusak" },
+  { label: "Segel", short: "Segel", help: "Segel terkunci" },
+  { label: "Kondisi Tabung", short: "Tabung", help: "Area APAR tidak terhalang" },
+  { label: "Gantungan", short: "Gantung", help: "Gantungan tidak rusak" },
+  { label: "Lay out", short: "Layout", help: "APAR ada lay out" },
+  { label: "Papan Petunjuk", short: "Papan", help: "Terpasang dan mudah dilihat" },
+  { label: "OS & C/S", short: "OS/CS", help: "Terpasang rapi dan update" },
+  { label: "Area Sekitar", short: "Area", help: "Akses APAR mudah" },
+  { label: "Posisi APAR", short: "Posisi", help: "APAR tidak bergeser" },
 ];
 
 interface AparItem {
@@ -104,6 +104,8 @@ export default function RiwayatApar() {
   const [filterDateTo, setFilterDateTo] = useState("");
   const [filterLocation, setFilterLocation] = useState("");
   const [previewImage, setPreviewImage] = useState<string | null>(null);
+  const [expandedRecord, setExpandedRecord] = useState<string | null>(null);
+  const [expandedItem, setExpandedItem] = useState<string | null>(null);
 
   // Validasi akses
   useEffect(() => {
@@ -117,7 +119,6 @@ export default function RiwayatApar() {
     try {
       setLoading(true);
 
-      // Build query params
       const queryParams = new URLSearchParams();
       queryParams.append('slug', slug);
       if (filterDateFrom) queryParams.append('date_from', filterDateFrom);
@@ -130,7 +131,6 @@ export default function RiwayatApar() {
       if (response.ok) {
         const data = await response.json();
         if (data.success) {
-          // ✅ Format data dari API ke format frontend
           const formattedRecords = data.data.map((record: any) => ({
             id: record.id,
             date: record.date,
@@ -185,7 +185,6 @@ export default function RiwayatApar() {
     }
   }, [slug, filterDateFrom, filterDateTo]);
 
-  // Ambil daftar lokasi unik
   const locations = Array.from(
     new Set(
       records
@@ -195,7 +194,6 @@ export default function RiwayatApar() {
     )
   ).sort();
 
-  // Filter berdasarkan lokasi
   useEffect(() => {
     if (!filterLocation) {
       setFilteredRecords(records);
@@ -207,30 +205,28 @@ export default function RiwayatApar() {
     setFilteredRecords(filtered);
   }, [filterLocation, records]);
 
-  // ✅ FUNGSI AMAN - TAMBAHKAN PENGECEKAN NULL/UNDEFINED
-const parseExpDate = (dateStr: string | null | undefined): Date | null => {
-  // ✅ Tambahkan pengecekan awal
-  if (!dateStr || typeof dateStr !== 'string') {
+  const parseExpDate = (dateStr: string | null | undefined): Date | null => {
+    if (!dateStr || typeof dateStr !== 'string') {
+      return null;
+    }
+    
+    let parsed = parse(dateStr, "dd/MM/yyyy", new Date());
+    if (isValid(parsed)) return parsed;
+    
+    parsed = parse(dateStr, "dd/MM/yy", new Date());
+    if (isValid(parsed)) return parsed;
+    
     return null;
-  }
-  
-  let parsed = parse(dateStr, "dd/MM/yyyy", new Date());
-  if (isValid(parsed)) return parsed;
-  
-  parsed = parse(dateStr, "dd/MM/yy", new Date());
-  if (isValid(parsed)) return parsed;
-  
-  return null;
-};
+  };
 
-const isExpired = (expDateString: string | null | undefined): boolean => {
-  const expDate = parseExpDate(expDateString);
-  return expDate ? isBefore(expDate, new Date()) : false;
-};
+  const isExpired = (expDateString: string | null | undefined): boolean => {
+    const expDate = parseExpDate(expDateString);
+    return expDate ? isBefore(expDate, new Date()) : false;
+  };
 
   const openImagePreview = (src: string) => {
     if (src) {
-      const imageUrl = src.startsWith('') 
+      const imageUrl = src.startsWith('data:') 
         ? src 
         : `${process.env.NEXT_PUBLIC_BASE_URL || ''}${src}`;
       setPreviewImage(imageUrl);
@@ -250,16 +246,37 @@ const isExpired = (expDateString: string | null | undefined): boolean => {
       });
 
       if (response.ok) {
-        // Reload data
         await loadData();
         alert('Data berhasil dihapus!');
       } else {
         const error = await response.json();
-        alert('Gagal menghapus  ' + error.message);
+        alert('Gagal menghapus data: ' + error.message);
       }
     } catch (error) {
       console.error('Delete error:', error);
       alert('Terjadi kesalahan saat menghapus data');
+    }
+  };
+
+  const toggleExpandRecord = (recordId: string) => {
+    setExpandedRecord(expandedRecord === recordId ? null : recordId);
+  };
+
+  const toggleExpandItem = (itemId: string) => {
+    setExpandedItem(expandedItem === itemId ? null : itemId);
+  };
+
+  const formatDate = (dateString: string) => {
+    try {
+      const date = new Date(dateString);
+      return date.toLocaleDateString('id-ID', {
+        weekday: 'long',
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric'
+      });
+    } catch {
+      return dateString;
     }
   };
 
@@ -278,7 +295,7 @@ const isExpired = (expDateString: string | null | undefined): boolean => {
             aria-label="Kembali"
           >
             <ArrowLeft size={18} />
-            <span>Kembali</span>
+            <span className="btn-back-text">Kembali</span>
           </button>
           <h1 className="page-title">📍 Riwayat Inspeksi APAR - {areaNames[slug]}</h1>
         </div>
@@ -345,76 +362,205 @@ const isExpired = (expDateString: string | null | undefined): boolean => {
               <div className="empty-state">Belum ada data Inspeksi APAR.</div>
             ) : (
               <div className="data-tables">
-                {filteredRecords.map((record) => (
-                  <div key={record.id} className="data-section">
-                    <div className="section-header">
-                      <span>Tanggal: {record.date}</span>
-                      <span>Petugas: {record.checker}</span>
-                      <div className="section-actions">
-                        <button
-                          onClick={() => handleDelete(record.id)}
-                          className="delete-btn"
-                          title="Hapus data"
-                        >
-                          🗑️
-                        </button>
+                {/* ✅ DESKTOP: Table View */}
+                <div className="desktop-view">
+                  {filteredRecords.map((record) => (
+                    <div key={record.id} className="data-section">
+                      <div className="section-header">
+                        <span>📅 {formatDate(record.date)}</span>
+                        <span>👤 {record.checker}</span>
+                        <div className="section-actions">
+                          <button
+                            onClick={() => handleDelete(record.id)}
+                            className="delete-btn"
+                            title="Hapus data"
+                          >
+                            🗑️
+                          </button>
+                        </div>
+                      </div>
+                      <div className="table-wrapper">
+                        <table className="apd-table">
+                          <thead>
+                            <tr>
+                              <th>No</th>
+                              <th>Jenis APAR</th>
+                              <th>Lokasi</th>
+                              <th>No. APAR</th>
+                              <th>Exp. Date</th>
+                              {checkItems.map((item, idx) => (
+                                <th key={idx} title={item.help} className="check-th">
+                                  {item.short}
+                                </th>
+                              ))}
+                              <th>Keterangan</th>
+                              <th>Foto</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {record.items.map((item) => (
+                              <tr key={`${record.id}-${item.no}`}>
+                                <td>{item.no}</td>
+                                <td>{item.jenisApar}</td>
+                                <td>{item.lokasi}</td>
+                                <td>{item.noApar}</td>
+                                <td className={isExpired(item.expDate) ? "status-expired" : ""}>
+                                  {item.expDate}
+                                </td>
+                                {checkItems.map((_, idx) => (
+                                  <td key={idx} className={item[`check${idx + 1}` as keyof AparItem] === "X" ? "status-ng" : ""}>
+                                    {item[`check${idx + 1}` as keyof AparItem] || "-"}
+                                  </td>
+                                ))}
+                                <td>{item.keterangan || "-"}</td>
+                                <td>
+                                  {item.foto ? (
+                                    <img
+                                      src={item.foto}
+                                      alt="Foto"
+                                      className="history-image clickable"
+                                      onClick={() => openImagePreview(item.foto!)}
+                                    />
+                                  ) : (
+                                    "-"
+                                  )}
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
                       </div>
                     </div>
-                    <div className="table-wrapper">
-                      <table className="apd-table">
-                        <thead>
-                          <tr>
-                            <th>No</th>
-                            <th>Jenis APAR</th>
-                            <th>Lokasi</th>
-                            <th>No. APAR</th>
-                            <th>Exp. Date</th>
-                            {checkItems.map((item, idx) => (
-                              <th key={idx} title={item.help}>
-                                {item.label}
-                              </th>
-                            ))}
-                            <th>Keterangan</th>
-                            <th>Foto</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {record.items.map((item) => (
-                            <tr key={`${record.id}-${item.no}`}>
-                              <td>{item.no}</td>
-                              <td>{item.jenisApar}</td>
-                              <td>{item.lokasi}</td>
-                              <td>{item.noApar}</td>
-                              <td className={isExpired(item.expDate) ? "status-expired" : ""}>
-                                {item.expDate}
-                              </td>
-                              {checkItems.map((_, idx) => (
-                                <td key={idx} className={item[`check${idx + 1}` as keyof AparItem] === "X" ? "status-ng" : ""}>
-                                  {item[`check${idx + 1}` as keyof AparItem] || "-"}
-                                </td>
-                              ))}
-                              <td>{item.keterangan || "-"}</td>
-                              <td>
-                                {item.foto ? (
-                                  <img
-                                    src={item.foto.startsWith('') 
-                                      ? item.foto 
-                                      : `${process.env.NEXT_PUBLIC_BASE_URL || ''}${item.foto}`}
-                                    alt="Foto"
-                                    className="history-image clickable"
-                                    onClick={() => openImagePreview(item.foto!)}
-                                  />
-                                ) : (
-                                  "-"
-                                )}
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
+                  ))}
+                </div>
+
+                {/* ✅ MOBILE: Card View */}
+                <div className="mobile-view">
+                  {filteredRecords.map((record) => (
+                    <div key={record.id} className="record-card">
+                      <div className="card-header" onClick={() => toggleExpandRecord(record.id)}>
+                        <div className="card-date">
+                          <span className="calendar-icon">📅</span>
+                          <span>{formatDate(record.date)}</span>
+                        </div>
+                        <div className="card-checker">
+                          <span className="user-icon">👤</span>
+                          <span>{record.checker}</span>
+                        </div>
+                        <div className={`expand-icon ${expandedRecord === record.id ? 'expanded' : ''}`}>
+                          ▼
+                        </div>
+                      </div>
+                      
+                      {expandedRecord === record.id && (
+                        <div className="card-body">
+                          <div className="card-actions">
+                            <button
+                              onClick={() => handleDelete(record.id)}
+                              className="delete-btn-mobile"
+                            >
+                              🗑️ Hapus Data
+                            </button>
+                          </div>
+                          
+                          <div className="items-list">
+                            {record.items.map((item) => {
+                              const itemId = `${record.id}-${item.no}`;
+                              const hasNg = Array.from({ length: 12 }, (_, i) => 
+                                item[`check${i + 1}` as keyof AparItem] === "X"
+                              ).some(Boolean);
+                              
+                              return (
+                                <div key={itemId} className="item-card">
+                                  <div className="item-header" onClick={() => toggleExpandItem(itemId)}>
+                                    <div className="item-info">
+                                      <span className="item-no">#{item.no}</span>
+                                      <span className="item-lokasi">{item.lokasi}</span>
+                                    </div>
+                                    <div className="item-status">
+                                      {hasNg ? (
+                                        <span className="status-badge ng">NG</span>
+                                      ) : (
+                                        <span className="status-badge ok">OK</span>
+                                      )}
+                                    </div>
+                                    <div className={`expand-icon ${expandedItem === itemId ? 'expanded' : ''}`}>
+                                      ▼
+                                    </div>
+                                  </div>
+                                  
+                                  {expandedItem === itemId && (
+                                    <div className="item-body">
+                                      <div className="info-grid">
+                                        <div className="info-row">
+                                          <span className="info-label">Jenis APAR:</span>
+                                          <span className="info-value">{item.jenisApar}</span>
+                                        </div>
+                                        <div className="info-row">
+                                          <span className="info-label">No. APAR:</span>
+                                          <span className="info-value">{item.noApar}</span>
+                                        </div>
+                                        <div className="info-row">
+                                          <span className="info-label">Exp. Date:</span>
+                                          <span className={`info-value ${isExpired(item.expDate) ? 'expired' : ''}`}>
+                                            {item.expDate} {isExpired(item.expDate) && '⚠️'}
+                                          </span>
+                                        </div>
+                                      </div>
+
+                                      <div className="checklist-section">
+                                        <h4 className="section-title">✅ Checklist Inspeksi</h4>
+                                        <div className="check-grid">
+                                          {checkItems.map((checkItem, idx) => {
+                                            const checkValue = item[`check${idx + 1}` as keyof AparItem] as string;
+                                            return (
+                                              <div key={idx} className={`check-item ${checkValue === 'X' ? 'ng' : 'ok'}`}>
+                                                <span className="check-label" title={checkItem.help}>
+                                                  {checkItem.short}
+                                                </span>
+                                                <span className={`check-value ${checkValue === 'X' ? 'ng' : 'ok'}`}>
+                                                  {checkValue || '-'}
+                                                </span>
+                                              </div>
+                                            );
+                                          })}
+                                        </div>
+                                      </div>
+
+                                      {item.keterangan && (
+                                        <div className="info-row full">
+                                          <span className="info-label">Keterangan:</span>
+                                          <span className="info-value">{item.keterangan}</span>
+                                        </div>
+                                      )}
+
+                                      {item.foto && (
+                                        <div className="info-row full">
+                                          <span className="info-label">Foto:</span>
+                                          <img
+                                            src={item.foto}
+                                            alt="Foto"
+                                            className="item-photo"
+                                            onClick={() => openImagePreview(item.foto!)}
+                                          />
+                                        </div>
+                                      )}
+
+                                      <div className="info-row">
+                                        <span className="info-label">PIC:</span>
+                                        <span className="info-value">{item.pic}</span>
+                                      </div>
+                                    </div>
+                                  )}
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      )}
                     </div>
-                  </div>
-                ))}
+                  ))}
+                </div>
               </div>
             )}
           </div>
@@ -446,7 +592,7 @@ const isExpired = (expDateString: string | null | undefined): boolean => {
           color: #1e293b;
         }
 
-        /* Header Banner Biru Gradasi */
+        /* Header Banner */
         .header-banner {
           background: linear-gradient(135deg, #1976d2 0%, #0d47a1 100%);
           color: white;
@@ -457,13 +603,14 @@ const isExpired = (expDateString: string | null | undefined): boolean => {
           display: flex;
           align-items: center;
           gap: 16px;
+          flex-wrap: wrap;
         }
 
         .btn-back {
           display: flex;
           align-items: center;
           gap: 8px;
-          padding: 6px 12px;
+          padding: 8px 16px;
           background: rgba(255, 255, 255, 0.2);
           color: white;
           border: none;
@@ -472,18 +619,23 @@ const isExpired = (expDateString: string | null | undefined): boolean => {
           font-weight: 600;
           font-size: 0.9rem;
           transition: background 0.2s;
+          min-height: 44px;
         }
 
         .btn-back:hover {
           background: rgba(255, 255, 255, 0.3);
         }
 
+        .btn-back-text {
+          display: inline;
+        }
+
         .page-title {
           margin: 0;
-          font-size: 1.6rem;
+          font-size: 1.4rem;
           font-weight: 700;
           flex: 1;
-          text-align: center;
+          word-break: break-word;
         }
 
         /* Filter */
@@ -518,6 +670,7 @@ const isExpired = (expDateString: string | null | undefined): boolean => {
           border-radius: 8px;
           font-size: 0.95rem;
           min-width: 160px;
+          min-height: 44px;
         }
 
         .clear-filter {
@@ -529,6 +682,7 @@ const isExpired = (expDateString: string | null | undefined): boolean => {
           cursor: pointer;
           font-size: 0.9rem;
           font-weight: 600;
+          min-height: 44px;
         }
 
         .clear-filter:hover {
@@ -544,6 +698,9 @@ const isExpired = (expDateString: string | null | undefined): boolean => {
           font-weight: 600;
           margin-left: auto;
           white-space: nowrap;
+          min-height: 44px;
+          display: flex;
+          align-items: center;
         }
 
         .btn-add:hover {
@@ -596,10 +753,19 @@ const isExpired = (expDateString: string | null | undefined): boolean => {
           gap: 24px;
         }
 
+        .desktop-view {
+          display: block;
+        }
+
+        .mobile-view {
+          display: none;
+        }
+
         .data-section {
           border: 1px solid #e2e8f0;
           border-radius: 10px;
           overflow: hidden;
+          margin-bottom: 24px;
         }
 
         .section-header {
@@ -611,6 +777,8 @@ const isExpired = (expDateString: string | null | undefined): boolean => {
           font-size: 0.9rem;
           color: #475569;
           font-weight: 600;
+          flex-wrap: wrap;
+          gap: 8px;
         }
 
         .section-actions {
@@ -625,6 +793,11 @@ const isExpired = (expDateString: string | null | undefined): boolean => {
           cursor: pointer;
           color: #f44336;
           transition: transform 0.2s;
+          min-width: 44px;
+          min-height: 44px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
         }
 
         .delete-btn:hover {
@@ -633,12 +806,14 @@ const isExpired = (expDateString: string | null | undefined): boolean => {
 
         .table-wrapper {
           overflow-x: auto;
+          -webkit-overflow-scrolling: touch;
         }
 
         .apd-table {
           width: 100%;
           border-collapse: collapse;
           font-size: 0.85rem;
+          min-width: 1200px;
         }
 
         .apd-table th,
@@ -654,6 +829,12 @@ const isExpired = (expDateString: string | null | undefined): boolean => {
           color: #1e293b;
           position: sticky;
           top: 0;
+          z-index: 10;
+          white-space: nowrap;
+        }
+
+        .check-th {
+          text-align: center;
         }
 
         .status-ng {
@@ -662,6 +843,7 @@ const isExpired = (expDateString: string | null | undefined): boolean => {
           font-weight: 600;
           border-radius: 4px;
           padding: 2px 6px;
+          text-align: center;
         }
 
         .status-expired {
@@ -682,6 +864,278 @@ const isExpired = (expDateString: string | null | undefined): boolean => {
 
         .history-image:hover {
           transform: scale(1.1);
+        }
+
+        /* Mobile Card Styles */
+        .record-card {
+          background: white;
+          border: 1px solid #e2e8f0;
+          border-radius: 12px;
+          margin-bottom: 16px;
+          overflow: hidden;
+          box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+        }
+
+        .card-header {
+          display: flex;
+          align-items: center;
+          gap: 12px;
+          padding: 16px;
+          cursor: pointer;
+          background: #f8fafc;
+          transition: background 0.2s;
+          min-height: 44px;
+        }
+
+        .card-header:hover {
+          background: #f1f5f9;
+        }
+
+        .card-date {
+          display: flex;
+          align-items: center;
+          gap: 6px;
+          font-size: 0.9rem;
+          color: #1e88e5;
+          font-weight: 600;
+        }
+
+        .card-checker {
+          display: flex;
+          align-items: center;
+          gap: 6px;
+          font-size: 0.9rem;
+          color: #64748b;
+          flex: 1;
+        }
+
+        .expand-icon {
+          font-size: 1.2rem;
+          color: #94a3b8;
+          transition: transform 0.3s ease;
+        }
+
+        .expand-icon.expanded {
+          transform: rotate(180deg);
+        }
+
+        .card-body {
+          padding: 16px;
+          background: #fafbfc;
+        }
+
+        .card-actions {
+          margin-bottom: 16px;
+        }
+
+        .delete-btn-mobile {
+          width: 100%;
+          padding: 12px 16px;
+          background: #fee2e2;
+          color: #dc2626;
+          border: none;
+          border-radius: 8px;
+          font-weight: 600;
+          cursor: pointer;
+          font-size: 0.95rem;
+          min-height: 48px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          gap: 8px;
+        }
+
+        .delete-btn-mobile:hover {
+          background: #fecaca;
+        }
+
+        .items-list {
+          display: flex;
+          flex-direction: column;
+          gap: 16px;
+        }
+
+        .item-card {
+          background: white;
+          border: 1px solid #e2e8f0;
+          border-radius: 8px;
+          overflow: hidden;
+        }
+
+        .item-header {
+          display: flex;
+          align-items: center;
+          gap: 12px;
+          padding: 12px 16px;
+          cursor: pointer;
+          background: #f8fafc;
+          transition: background 0.2s;
+          min-height: 44px;
+        }
+
+        .item-header:hover {
+          background: #f1f5f9;
+        }
+
+        .item-info {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          flex: 1;
+        }
+
+        .item-no {
+          background: #1e88e5;
+          color: white;
+          padding: 4px 12px;
+          border-radius: 20px;
+          font-weight: 700;
+          font-size: 0.85rem;
+        }
+
+        .item-lokasi {
+          font-size: 0.95rem;
+          font-weight: 600;
+          color: #1e293b;
+          word-break: break-word;
+        }
+
+        .item-status {
+          flex-shrink: 0;
+        }
+
+        .status-badge {
+          padding: 4px 12px;
+          border-radius: 20px;
+          font-weight: 600;
+          font-size: 0.8rem;
+        }
+
+        .status-badge.ok {
+          background: #d1fae5;
+          color: #065f46;
+        }
+
+        .status-badge.ng {
+          background: #fee2e2;
+          color: #dc2626;
+        }
+
+        .item-body {
+          padding: 16px;
+          background: #fafbfc;
+        }
+
+        .info-grid {
+          display: flex;
+          flex-direction: column;
+          gap: 12px;
+          margin-bottom: 16px;
+        }
+
+        .info-row {
+          display: flex;
+          align-items: flex-start;
+          gap: 8px;
+          font-size: 0.9rem;
+        }
+
+        .info-row.full {
+          flex-direction: column;
+          gap: 4px;
+        }
+
+        .info-label {
+          color: #64748b;
+          font-weight: 500;
+          min-width: 100px;
+          flex-shrink: 0;
+        }
+
+        .info-value {
+          color: #1e293b;
+          font-weight: 400;
+          word-break: break-word;
+        }
+
+        .info-value.expired {
+          color: #dc2626;
+          font-weight: 600;
+        }
+
+        .checklist-section {
+          margin-bottom: 16px;
+        }
+
+        .section-title {
+          font-size: 1rem;
+          font-weight: 600;
+          color: #1e293b;
+          margin-bottom: 12px;
+          padding-bottom: 8px;
+          border-bottom: 2px solid #e2e8f0;
+        }
+
+        .check-grid {
+          display: grid;
+          grid-template-columns: repeat(2, 1fr);
+          gap: 8px;
+        }
+
+        .check-item {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          padding: 8px 12px;
+          background: white;
+          border-radius: 6px;
+          border: 1px solid #e2e8f0;
+        }
+
+        .check-item.ok {
+          border-color: #10b981;
+          background: #f0fdf4;
+        }
+
+        .check-item.ng {
+          border-color: #dc2626;
+          background: #fef2f2;
+        }
+
+        .check-label {
+          font-size: 0.85rem;
+          color: #64748b;
+          font-weight: 500;
+        }
+
+        .check-value {
+          font-weight: 600;
+          padding: 2px 8px;
+          border-radius: 4px;
+        }
+
+        .check-value.ok {
+          color: #059669;
+          background: #d1fae5;
+        }
+
+        .check-value.ng {
+          color: #dc2626;
+          background: #fee2e2;
+        }
+
+        .item-photo {
+          width: 80px;
+          height: 80px;
+          object-fit: cover;
+          border-radius: 8px;
+          border: 2px solid #e2e8f0;
+          cursor: pointer;
+          transition: transform 0.2s;
+        }
+
+        .item-photo:hover {
+          transform: scale(1.05);
         }
 
         /* Image Modal */
@@ -737,39 +1191,238 @@ const isExpired = (expDateString: string | null | undefined): boolean => {
           border-radius: 8px;
         }
 
-        @media (max-width: 768px) {
-          .header-banner {
-            flex-direction: column;
-            text-align: center;
-            gap: 12px;
+        /* ✅ TABLET RESPONSIVE */
+        @media (max-width: 1024px) {
+          .page-content {
+            padding: 20px 16px;
           }
 
           .page-title {
-            font-size: 1.4rem;
+            font-size: 1.2rem;
+          }
+
+          .apd-table {
+            min-width: 1000px;
+            font-size: 0.8rem;
+          }
+
+          .apd-table th,
+          .apd-table td {
+            padding: 8px 6px;
+          }
+        }
+
+        /* ✅ MOBILE RESPONSIVE */
+        @media (max-width: 768px) {
+          .page-content {
+            padding: 16px 12px;
+            margin-left: 0;
+          }
+
+          .header-banner {
+            padding: 12px 16px;
+            flex-direction: column;
+            align-items: flex-start;
+            gap: 12px;
+          }
+
+          .btn-back {
+            width: 100%;
+            justify-content: center;
+          }
+
+          .btn-back-text {
+            display: inline;
+          }
+
+          .page-title {
+            font-size: 1.1rem;
+            width: 100%;
+            text-align: center;
           }
 
           .date-filter {
             flex-direction: column;
             align-items: stretch;
+            gap: 12px;
+            padding: 12px;
+          }
+
+          .filter-group {
+            width: 100%;
+          }
+
+          .date-input,
+          .location-select {
+            width: 100%;
+            min-width: 100%;
+            font-size: 0.9rem;
+          }
+
+          .clear-filter,
+          .btn-add {
+            width: 100%;
+            justify-content: center;
           }
 
           .btn-add {
             margin-left: 0;
-            align-self: flex-start;
+          }
+
+          .riwayat-container {
+            padding: 16px 12px;
+          }
+
+          /* Hide desktop table, show mobile cards */
+          .desktop-view {
+            display: none;
+          }
+
+          .mobile-view {
+            display: block;
           }
 
           .apd-table {
+            min-width: 800px;
             font-size: 0.75rem;
           }
 
           .apd-table th,
           .apd-table td {
-            padding: 6px;
+            padding: 6px 4px;
           }
 
           .history-image {
-            width: 40px;
-            height: 40px;
+            width: 45px;
+            height: 45px;
+          }
+
+          .item-photo {
+            width: 70px;
+            height: 70px;
+          }
+
+          .check-grid {
+            grid-template-columns: repeat(2, 1fr);
+          }
+
+          .info-label {
+            min-width: 80px;
+            font-size: 0.85rem;
+          }
+
+          .item-lokasi {
+            font-size: 0.9rem;
+          }
+        }
+
+        /* ✅ SMALL MOBILE */
+        @media (max-width: 480px) {
+          .page-content {
+            padding: 12px 8px;
+          }
+
+          .header-banner {
+            padding: 10px 12px;
+          }
+
+          .page-title {
+            font-size: 1rem;
+          }
+
+          .date-filter {
+            padding: 10px;
+            gap: 10px;
+          }
+
+          .filter-group label {
+            font-size: 0.85rem;
+          }
+
+          .date-input,
+          .location-select {
+            font-size: 0.85rem;
+            padding: 8px 10px;
+          }
+
+          .clear-filter,
+          .btn-add {
+            font-size: 0.85rem;
+            padding: 10px 14px;
+          }
+
+          .riwayat-container {
+            padding: 12px 8px;
+          }
+
+          .card-header {
+            padding: 12px;
+          }
+
+          .card-date,
+          .card-checker {
+            font-size: 0.85rem;
+          }
+
+          .card-body {
+            padding: 12px;
+          }
+
+          .item-header {
+            padding: 10px 12px;
+          }
+
+          .item-no {
+            padding: 3px 10px;
+            font-size: 0.8rem;
+          }
+
+          .item-lokasi {
+            font-size: 0.85rem;
+          }
+
+          .item-body {
+            padding: 12px;
+          }
+
+          .section-title {
+            font-size: 0.95rem;
+          }
+
+          .check-grid {
+            grid-template-columns: 1fr;
+          }
+
+          .check-item {
+            padding: 6px 10px;
+          }
+
+          .check-label {
+            font-size: 0.8rem;
+          }
+
+          .info-row {
+            font-size: 0.85rem;
+          }
+
+          .info-label {
+            min-width: 70px;
+            font-size: 0.8rem;
+          }
+
+          .item-photo {
+            width: 60px;
+            height: 60px;
+          }
+
+          .apd-table {
+            min-width: 700px;
+            font-size: 0.7rem;
+          }
+
+          .apd-table th,
+          .apd-table td {
+            padding: 4px 3px;
           }
         }
       `}</style>

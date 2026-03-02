@@ -1,3 +1,4 @@
+// app/api/exit-lamp/submit/route.ts
 import { NextRequest, NextResponse } from 'next/server';
 import pool from '../../../../lib/db';
 
@@ -25,7 +26,7 @@ interface SubmitData {
 export async function POST(request: NextRequest) {
   try {
     const data: SubmitData = await request.json();
-
+    
     // ✅ Validasi data
     if (!data.date || !data.checker || !data.items || data.items.length === 0) {
       return NextResponse.json(
@@ -45,12 +46,15 @@ export async function POST(request: NextRequest) {
     }
 
     // ✅ Cek duplikat tanggal
-    const [existingRows]: any = await pool.query(
-      'SELECT id FROM exit_lamp_checklists WHERE checklist_date = ?',
-      [data.date]
-    );
+    const countQuery = `
+      SELECT COUNT(*) as total
+      FROM exit_lamp_checklists
+      WHERE checklist_date = $1
+    `;
+    const countResult = await pool.query(countQuery, [data.date]);
+    const total = parseInt(countResult.rows[0].total);
     
-    if (existingRows.length > 0) {
+    if (total > 0) {
       return NextResponse.json(
         { success: false, message: 'Data untuk tanggal ini sudah ada' },
         { status: 409 }
@@ -58,42 +62,40 @@ export async function POST(request: NextRequest) {
     }
 
     // ✅ Start transaction
-    const connection = await pool.getConnection();
-    
+    const client = await pool.connect();
     try {
-      await connection.beginTransaction();
-
-      // ✅ Insert header ke exit_lamp_checklists (TANPA id manual)
-      const [headerResult]: any = await connection.query(
+      await client.query('BEGIN');
+      
+      // ✅ Insert header ke exit_lamp_checklists
+      const headerResult = await client.query(
         `INSERT INTO exit_lamp_checklists (
           checklist_date, checker_name, checker_nik, checker_dept, submitted_at, created_at
-        ) VALUES (?, ?, ?, ?, NOW(), NOW())`,
+        ) VALUES ($1, $2, $3, $4, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+        RETURNING id`,
         [data.date, data.checker, data.nik || null, data.department || null]
       );
-
+      
       // ✅ DAPATKAN auto-generated ID dari database
-      const checklistId = headerResult.insertId;  // ✅ INI YANG BENAR!
-
+      const checklistId = headerResult.rows[0].id;
       console.log('✅ Generated checklist ID:', checklistId);
 
       // ✅ Insert items ke exit_lamp_checklist_items
       for (const item of data.items) {
         // Dapatkan location_id dari tabel locations
-        const [locRows]: any = await connection.query(
-          'SELECT id FROM locations WHERE code = ? AND type = ?',
+        const locResult = await client.query(
+          'SELECT id FROM locations WHERE code = $1 AND type = $2',
           [item.id, 'exit-lamp']
         );
-        
-        const locationId = locRows[0]?.id || null;
+        const locationId = locResult.rows.length > 0 ? locResult.rows[0].id : null;
 
-        await connection.query(
+        await client.query(
           `INSERT INTO exit_lamp_checklist_items (
             checklist_id, location_id, location_code, location_name,
             kondisi_lampu, indikator_lampu, kebersihan,
             keterangan, tindakan_perbaikan, pic, foto_data, created_at
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())`,
+          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, CURRENT_TIMESTAMP)`,
           [
-            checklistId,  // ✅ Gunakan integer ID yang benar
+            checklistId,
             locationId,
             item.id,
             item.lokasi,
@@ -108,13 +110,13 @@ export async function POST(request: NextRequest) {
         );
       }
 
-      await connection.commit();
-      
+      await client.query('COMMIT');
+
       // ✅ Cek apakah ada item NG
       const hasNg = data.items.some(
-        item => item.kondisiLampu === 'NG' || 
-                item.indikatorLampu === 'NG' || 
-                item.kebersihan === 'NG'
+        item => item.kondisiLampu === 'NG' ||
+          item.indikatorLampu === 'NG' ||
+          item.kebersihan === 'NG'
       );
 
       console.log('✅ Exit Lamp data saved:', { checklistId, hasNg, itemsCount: data.items.length });
@@ -123,38 +125,42 @@ export async function POST(request: NextRequest) {
         {
           success: true,
           message: 'Data berhasil disimpan',
-          id: checklistId,  // ✅ Return integer ID
+          id: checklistId,
           hasNg,
           itemsCount: data.items.length
         },
         { status: 201 }
       );
     } catch (error) {
-      await connection.rollback();
+      await client.query('ROLLBACK');
+      console.error('❌ Transaction error:', error);
       throw error;
     } finally {
-      connection.release();
+      client.release();
     }
   } catch (error) {
-    console.error('Submit Exit Lamp error:', error);
+    console.error('❌ Submit Exit Lamp error:', error);
     return NextResponse.json(
-      { 
-        success: false, 
+      {
+        success: false,
         message: 'Terjadi kesalahan server',
-        error: (error as any).message
+        error: process.env.NODE_ENV === 'development' ? {
+          message: (error as Error).message,
+          stack: (error as Error).stack?.split('\n').slice(0, 5)
+        } : undefined
       },
       { status: 500 }
     );
   }
 }
 
-// ✅ Health check
+// ✅ Health check endpoint
 export async function GET() {
   try {
-    const [rows]: any = await pool.query('SELECT NOW() as time');
+    const result = await pool.query('SELECT NOW() as time');
     return NextResponse.json({
       status: 'ok',
-      time: rows[0].time,
+      time: result.rows[0].time,
       message: 'Exit Lamp API is running'
     });
   } catch (error) {

@@ -1080,6 +1080,106 @@ export function EChecksheetHydrantForm() {
             </div>
           )}
         </div>
+
+        <style jsx>{`
+          @media (max-width: 1200px) {
+            div[style*="paddingLeft: 96px"] {
+              padding-left: 80px;
+              padding-right: 16px;
+            }
+          }
+
+          @media (max-width: 768px) {
+            div[style*="paddingLeft: 96px"] {
+              padding-left: 0;
+              padding-right: 12px;
+              padding-top: 16px;
+              padding-bottom: 16px;
+            }
+
+            table {
+              font-size: 12px !important;
+            }
+
+            table th,
+            table td {
+              padding: 8px 6px !important;
+            }
+
+            input[type="date"],
+            input[type="text"],
+            input[type="number"],
+            select {
+              font-size: 14px !important;
+              padding: 8px !important;
+              min-height: 36px !important;
+            }
+
+            button {
+              min-height: 40px !important;
+              padding: 8px 16px !important;
+              font-size: 13px !important;
+            }
+
+            h1 {
+              font-size: 20px !important;
+            }
+
+            div[style*="display: grid"] {
+              grid-template-columns: 1fr !important;
+              gap: 12px !important;
+            }
+          }
+
+          @media (max-width: 480px) {
+            div[style*="paddingLeft: 96px"] {
+              padding: 8px 4px;
+            }
+
+            table {
+              font-size: 10px !important;
+              min-width: 500px;
+              display: block;
+              overflow-x: auto;
+              -webkit-overflow-scrolling: touch;
+            }
+
+            table th,
+            table td {
+              padding: 6px 4px !important;
+            }
+
+            input[type="date"],
+            input[type="text"],
+            input[type="number"],
+            select {
+              font-size: 14px !important;
+              padding: 6px !important;
+              min-height: 34px !important;
+              width: 100% !important;
+            }
+
+            button {
+              width: 100% !important;
+              min-height: 40px !important;
+              padding: 8px 12px !important;
+              font-size: 12px !important;
+            }
+
+            h1 {
+              font-size: 16px !important;
+            }
+
+            div[style*="display: grid"] {
+              grid-template-columns: 1fr !important;
+              gap: 8px !important;
+            }
+
+            div[style*="display: flex"][style*="gap"] {
+              flex-direction: column !important;
+            }
+          }
+        `}</style>
       </div>
     </div>
   );
