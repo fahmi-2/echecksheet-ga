@@ -94,7 +94,7 @@ export default function FormStopKontak() {
         tanggal: meta.tanggal,
         area: meta.area,
         pic: meta.pic,
-        data: checkData,
+        items: checkData,
         additional_notes: ""
       };
 
@@ -373,6 +373,7 @@ export default function FormStopKontak() {
           transition: all 0.3s ease;
           background: white;
           min-height: 44px;
+          color : #1e293b;
         }
 
         .form-input:focus {

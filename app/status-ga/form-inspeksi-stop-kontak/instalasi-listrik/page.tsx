@@ -449,6 +449,7 @@ export default function FormInstalasiListrik() {
           transition: all 0.3s ease;
           background: white;
           min-height: 44px;
+          color : #1e293b;
         }
 
         .form-input:focus {

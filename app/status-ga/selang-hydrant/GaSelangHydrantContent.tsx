@@ -162,7 +162,7 @@ export function GaSelangHydrantContent() {
     
     console.log('🔍 Searching for area to auto-open:', openAreaParam);
     const found = areas.find((item) => {
-      const parts = item.name.split(' \u0007 ');
+      const parts = item.name.split(' • ');
       return parts[0] === openAreaParam;
     });
 
@@ -239,7 +239,7 @@ export function GaSelangHydrantContent() {
 
   // Filter data berdasarkan search
   const filteredData = areas.filter(item => {
-    const parts = item.name.split(' \u0007 ');
+    const parts = item.name.split(' • ');
     const lokasi = parts[0] || '';
     const zona = parts[1] || '';
     const jenisHydrant = parts[2] || '';
@@ -508,7 +508,7 @@ export function GaSelangHydrantContent() {
                   </tr>
                 ) : (
                   filteredData.map((area, idx) => {
-                    const parts = area.name.split(' \u0007 ');
+                    const parts = area.name.split(' • ');
                     const lokasi = parts[0] || '';
                     const zona = parts[1] || '';
                     const jenisHydrant = parts[2] || '';

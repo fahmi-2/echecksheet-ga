@@ -8,7 +8,11 @@ import { Sidebar } from "@/components/Sidebar";
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
 
+// ─────────────────────────────────────────────────────────────
+// 📋 TYPE DEFINITIONS
+// ─────────────────────────────────────────────────────────────
 interface PintuDaruratItem {
+  itemId?: number | null;      // ✅ Untuk edit (dari database)
   no: number;
   lokasi: string;
   kondisiPintu: string;
@@ -21,15 +25,27 @@ interface PintuDaruratItem {
   tindakanPerbaikan: string;
   pic: string;
   foto: string;
+  _action?: 'create' | 'update' | 'delete';  // ✅ Untuk edit
 }
 
 interface PintuDaruratRecord {
-  id: string;
+  id: number;                   // ✅ Number untuk edit
   date: string;
-  category: string;
-  items: PintuDaruratItem[];
   checker: string;
+  nik?: string;
+  department?: string;
   submittedAt: string;
+  items: PintuDaruratItem[];
+}
+
+interface EditFormData {
+  checklistId: number;          // ✅ Untuk API edit
+  date: string;
+  checker: string;
+  nik?: string;
+  department?: string;
+  items: PintuDaruratItem[];
+  replaceItems?: boolean;
 }
 
 export default function RiwayatPintuDarurat() {
@@ -37,12 +53,18 @@ export default function RiwayatPintuDarurat() {
   const { user } = useAuth();
 
   const [records, setRecords] = useState<PintuDaruratRecord[]>([]);
-  const [filteredRecords, setFilteredRecords] = useState<PintuDaruratRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [filterDate, setFilterDate] = useState("");
   const [filterLocation, setFilterLocation] = useState("");
   const [previewImage, setPreviewImage] = useState<string | null>(null);
   const [expandedRecord, setExpandedRecord] = useState<number | null>(null);
+  
+  // ✅ EDIT MODE STATES
+  const [isEditMode, setIsEditMode] = useState(false);
+  const [editData, setEditData] = useState<EditFormData | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [activeTab, setActiveTab] = useState<'header' | 'items'>('header');
+  const [newItemNo, setNewItemNo] = useState(1);
 
   // Validasi akses
   useEffect(() => {
@@ -51,76 +73,89 @@ export default function RiwayatPintuDarurat() {
     }
   }, [user, router]);
 
-  // Load data dari API
-  useEffect(() => {
-    const loadRecords = async () => {
-      try {
-        setLoading(true);
-        
-        const response = await fetch('/api/pintu-darurat/history');
-        
-        if (!response.ok) {
-          const errorText = await response.text();
-          console.error('API Error:', errorText);
-          throw new Error(`HTTP ${response.status}: ${errorText}`);
-        }
-        
-        const data = await response.json();
-        
-        const formattedData = data.map((record: any) => ({
-          id: record.id.toString(),
-          date: record.date,
-          category: "pintu-darurat",
-          checker: record.checker,
-          submittedAt: record.submittedAt,
-          items: record.items.map((item: any, index: number) => ({
-            no: index + 1,
-            lokasi: item.lokasi,
-            kondisiPintu: item.kondisiPintu || '',
-            areaSekitar: item.areaSekitar || '',
-            paluAlatBantu: item.paluAlatBantu || '',
-            identitasPintu: item.identitasPintu || '',
-            idPeringatan: item.idPeringatan || '',
-            doorCloser: item.doorCloser || '',
-            keterangan: item.keterangan || '',
-            tindakanPerbaikan: item.tindakanPerbaikan || '',
-            pic: item.pic || '',
-            foto: item.foto || ''
-          }))
-        }));
-        
-        console.log('✅ Riwayat Pintu Darurat loaded:', formattedData);
-        setRecords(formattedData);
-        setFilteredRecords(formattedData);
-      } catch (error) {
-        console.error('❌ Load error:', error);
-        alert('Gagal memuat riwayat: ' + (error as Error).message);
-      } finally {
-        setLoading(false);
-      }
-    };
+  // ─────────────────────────────────────────────────────────────
+  // 🔧 LOAD DATA FUNCTION (STANDALONE - Bisa dipanggil ulang)
+  // ─────────────────────────────────────────────────────────────
+  // app/status-ga/exit-lamp-pintu-darurat/riwayat/pintu-darurat/page.tsx
+
+const loadRecords = async () => {
+  try {
+    setLoading(true);
+    const response = await fetch(`/api/pintu-darurat/history?t=${Date.now()}`);
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('API Error:', errorText);
+      throw new Error(`HTTP ${response.status}: ${errorText}`);
+    }
+    const data = await response.json();
     
+    // 🔍 Debug log
+    console.log('📦 Raw API data:', data[0]?.items?.slice(0, 2));
+    
+    const formattedData = data.map((record: any, recordIdx: number) => {
+      if (!record.id) {
+        console.warn(`⚠️ Record #${recordIdx} tidak memiliki id:`, record);
+      }
+      
+      return {
+        id: Number(record.id),
+        date: record.date,
+        checker: record.checker,
+        nik: record.nik,
+        department: record.department,
+        submittedAt: record.submittedAt,
+        items: record.items.map((item: any, itemIdx: number) => ({
+          // ✅ WAJIB: Ambil itemId dari API (harus 16, 17, 18... bukan 1, 2, 3...)
+          itemId: Number(item.itemId),
+          no: item.no || itemIdx + 1,
+          lokasi: item.lokasi,
+          kondisiPintu: item.kondisiPintu || 'OK',
+          areaSekitar: item.areaSekitar || 'OK',
+          paluAlatBantu: item.paluAlatBantu || 'OK',
+          identitasPintu: item.identitasPintu || 'OK',
+          idPeringatan: item.idPeringatan || 'OK',
+          doorCloser: item.doorCloser || 'OK',
+          keterangan: item.keterangan || "",
+          tindakanPerbaikan: item.tindakanPerbaikan || "",
+          pic: item.pic || "",
+          foto: item.foto || ""
+        }))
+      };
+    });
+    
+    console.log('✅ Formatted data:', formattedData[0]?.items?.slice(0, 2));
+    setRecords(formattedData);
+  } catch (error) {
+    console.error('❌ Load error:', error);
+    alert('Gagal memuat riwayat: ' + (error as Error).message);
+  } finally {
+    setLoading(false);
+  }
+};
+
+  // Initial Load Only
+  useEffect(() => {
     loadRecords();
   }, []);
 
-  // Terapkan filter
-  useEffect(() => {
-    let filtered = [...records];
-
-    if (filterDate) {
-      filtered = filtered.filter((r) => r.date === filterDate);
+  // ─────────────────────────────────────────────────────────────
+  // 🔍 FILTER
+  // ─────────────────────────────────────────────────────────────
+  const filteredRecords = records.filter((record) => {
+    const filterDateObj = filterDate ? new Date(filterDate) : null;
+    const recordDateObj = new Date(record.date);
+    if (filterDateObj &&
+      (recordDateObj.getFullYear() !== filterDateObj.getFullYear() ||
+        recordDateObj.getMonth() !== filterDateObj.getMonth() ||
+        recordDateObj.getDate() !== recordDateObj.getDate())) {
+      return false;
     }
-
     if (filterLocation) {
-      filtered = filtered.filter((r) =>
-        r.items.some((item) => item.lokasi === filterLocation)
-      );
+      return record.items.some((item) => item.lokasi === filterLocation);
     }
+    return true;
+  });
 
-    setFilteredRecords(filtered);
-  }, [filterDate, filterLocation, records]);
-
-  // Ambil daftar lokasi unik
   const locations = Array.from(
     new Set(records.flatMap((r) => r.items.map((i) => i.lokasi)))
   ).sort();
@@ -135,6 +170,215 @@ export default function RiwayatPintuDarurat() {
 
   const toggleExpandRecord = (recordIndex: number) => {
     setExpandedRecord(expandedRecord === recordIndex ? null : recordIndex);
+  };
+
+  // ─────────────────────────────────────────────────────────────
+  // ✏️ EDIT FUNCTIONS
+  // ─────────────────────────────────────────────────────────────
+  const formatDateForInput = (dateString: string) => {
+    try {
+      const date = new Date(dateString);
+      return date.toISOString().split('T')[0];
+    } catch {
+      return '';
+    }
+  };
+
+  const generateNextNo = (items: PintuDaruratItem[]) => {
+    const maxNo = Math.max(0, ...items.map(i => i.no || 0));
+    return maxNo + 1;
+  };
+
+  const openEditModal = (record: PintuDaruratRecord) => {
+    // 🔍 Debug log
+    console.log('🔍 Opening edit for:', {
+      recordId: record.id,
+      recordIdType: typeof record.id,
+      recordIdValue: Number(record.id),
+      itemsCount: record.items.length
+    });
+
+    // ✅ VALIDASI: Pastikan record.id valid
+    if (!record.id || isNaN(Number(record.id))) {
+      console.error('❌ Invalid record ID:', record);
+      alert('❌ Error: Record ID tidak valid. Silakan refresh halaman.');
+      return;
+    }
+
+    setEditData({
+      // ✅ PAKSA KONVERSI KE NUMBER
+      checklistId: Number(record.id),
+      date: formatDateForInput(record.date),
+      checker: record.checker,
+      nik: record.nik || '',
+      department: record.department || '',
+      items: record.items.map((item, index) => ({
+        ...item,
+        // ✅ Pastikan itemId number
+        itemId: item.itemId ? Number(item.itemId) : index + 1,
+        _action: 'update'  // ✅ Default action untuk existing items
+      })),
+      // ✅ Ubah ke false untuk incremental update
+      replaceItems: false
+    });
+    setIsEditMode(true);
+    setActiveTab('header');
+    setNewItemNo(generateNextNo(record.items) + 1);
+  };
+
+  const closeEditModal = () => {
+    setIsEditMode(false);
+    setEditData(null);
+    setNewItemNo(1);
+  };
+
+  const handleHeaderChange = (field: keyof EditFormData, value: string) => {
+    if (!editData) return;
+    setEditData(prev => prev ? { ...prev, [field]: value } : null);
+  };
+
+  const handleItemChange = (index: number, field: keyof PintuDaruratItem, value: string) => {
+    if (!editData) return;
+    const updatedItems = [...editData.items];
+    updatedItems[index] = {
+      ...updatedItems[index],
+      [field]: value,
+      _action: updatedItems[index]._action === 'create' ? 'create' : 'update'
+    };
+    setEditData(prev => prev ? { ...prev, items: updatedItems } : null);
+  };
+
+  const handleAddItem = () => {
+    if (!editData) return;
+    const itemToAdd: PintuDaruratItem = {
+      no: newItemNo,
+      lokasi: `Lokasi Baru ${newItemNo}`,
+      kondisiPintu: 'OK',
+      areaSekitar: 'OK',
+      paluAlatBantu: 'OK',
+      identitasPintu: 'OK',
+      idPeringatan: 'OK',
+      doorCloser: 'OK',
+      keterangan: '',
+      tindakanPerbaikan: '',
+      pic: editData.checker,
+      foto: '',
+      _action: 'create'
+    };
+    setEditData(prev => prev ? { ...prev, items: [...prev.items, itemToAdd] } : null);
+    setNewItemNo(prev => prev + 1);
+  };
+
+  const handleRemoveItem = (index: number) => {
+    if (!editData) return;
+    const updatedItems = [...editData.items];
+    const item = updatedItems[index];
+    
+    // ✅ Jika item sudah ada di DB (punya itemId), tandai untuk di-delete
+    if (item.itemId) {
+      updatedItems[index] = { 
+        ...item, 
+        _action: 'delete'  // ✅ Backend akan proses delete
+      };
+    } 
+    // ✅ Jika item baru (belum ada itemId), hapus dari array
+    else {
+      updatedItems.splice(index, 1);
+    }
+    
+    setEditData(prev => prev ? { ...prev, items: updatedItems } : null);
+  };
+
+  const handleFotoUpload = (index: number, file: File) => {
+    if (!editData) return;
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      const updatedItems = [...editData.items];
+      updatedItems[index] = {
+        ...updatedItems[index],
+        foto: reader.result as string,
+        _action: updatedItems[index]._action === 'create' ? 'create' : 'update'
+      };
+      setEditData(prev => prev ? { ...prev, items: updatedItems } : null);
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleSubmitEdit = async () => {
+    if (!editData) return;
+    
+    if (!editData.date || !editData.checker) {
+      alert('Harap lengkapi field Header: Tanggal dan Checker');
+      setActiveTab('header');
+      return;
+    }
+
+    // ✅ JANGAN filter delete & JANGAN hapus itemId/_action
+    const itemsToSubmit = editData.items.map(item => ({
+      itemId: item.itemId,              // ✅ WAJIB KIRIM
+      no: item.no,
+      lokasi: item.lokasi,
+      kondisiPintu: item.kondisiPintu,
+      areaSekitar: item.areaSekitar,
+      paluAlatBantu: item.paluAlatBantu,
+      identitasPintu: item.identitasPintu,
+      idPeringatan: item.idPeringatan,
+      doorCloser: item.doorCloser,
+      keterangan: item.keterangan || '',
+      tindakanPerbaikan: item.tindakanPerbaikan || '',
+      pic: item.pic || '',
+      foto: item.foto || '',
+      _action: item._action || 'update' // ✅ WAJIB KIRIM
+    }));
+
+    // 🔍 Debug log
+    console.log('📤 Sending payload:', {
+      checklistId: editData.checklistId,
+      checklistIdType: typeof editData.checklistId,
+      itemsCount: itemsToSubmit.length,
+      firstItem: itemsToSubmit[0]
+    });
+
+    setIsSubmitting(true);
+    try {
+      const response = await fetch('/api/pintu-darurat/edit', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          // ✅ KIRIM checklistId (backend butuh ini!)
+          checklistId: Number(editData.checklistId),
+          date: editData.date,
+          checker: editData.checker,
+          nik: editData.nik,
+          department: editData.department,
+          items: itemsToSubmit,
+          replaceItems: false  // ✅ Incremental update
+        })
+      });
+      
+      const result = await response.json();
+      console.log('📥 API Response:', result);
+      
+      if (result.success) {
+        alert('✅ Data berhasil diupdate!');
+        closeEditModal();
+        
+        // ✅ FORCE RELOAD DENGAN DELAY
+        console.log('🔄 Reloading data...');
+        await new Promise(resolve => setTimeout(resolve, 500));
+        await loadRecords();
+        console.log('✅ Data reloaded');
+        
+      } else {
+        alert('❌ Gagal update: ' + result.message);
+        console.error('API Error:', result);
+      }
+    } catch (error) {
+      console.error('✗ Edit error:', error);
+      alert('Terjadi kesalahan saat menyimpan perubahan');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   if (!user) return null;
@@ -219,6 +463,16 @@ export default function RiwayatPintuDarurat() {
                     <div className="section-header">
                       <span>📅 Tanggal: {new Date(record.date).toLocaleDateString('id-ID')}</span>
                       <span>👤 Petugas: {record.checker}</span>
+                      {record.department && <span>🏢 Dept: {record.department}</span>}
+                      <div className="section-actions">
+                        <button
+                          onClick={() => openEditModal(record)}
+                          className="edit-btn"
+                          title="Edit data"
+                        >
+                          ✏️
+                        </button>
+                      </div>
                     </div>
                     <div className="table-wrapper">
                       <table className="apd-table">
@@ -237,7 +491,7 @@ export default function RiwayatPintuDarurat() {
                           </tr>
                         </thead>
                         <tbody>
-                          {record.items.map((item) => {
+                          {record.items.map((item, index) => {
                             const hasNg = 
                               item.kondisiPintu === "NG" ||
                               item.areaSekitar === "NG" ||
@@ -247,8 +501,8 @@ export default function RiwayatPintuDarurat() {
                               item.doorCloser === "NG";
                             
                             return (
-                              <tr key={`${record.id}-${item.no}`} className={hasNg ? 'row-ng' : ''}>
-                                <td>{item.no}</td>
+                              <tr key={`${record.id}-${index}`} className={hasNg ? 'row-ng' : ''}>
+                                <td>{index + 1}</td>
                                 <td>{item.lokasi}</td>
                                 <td className={item.kondisiPintu === "NG" ? "status-ng" : ""}>
                                   {item.kondisiPintu || "-"}
@@ -320,6 +574,14 @@ export default function RiwayatPintuDarurat() {
 
                     {expandedRecord === recordIndex && (
                       <div className="card-body">
+                        <div className="card-actions">
+                          <button
+                            onClick={() => openEditModal(record)}
+                            className="edit-btn-mobile"
+                          >
+                            ✏️ Edit Data
+                          </button>
+                        </div>
                         {record.items.map((item, itemIndex) => {
                           const hasNg = 
                             item.kondisiPintu === "NG" ||
@@ -332,7 +594,7 @@ export default function RiwayatPintuDarurat() {
                           return (
                             <div key={`${record.id}-${itemIndex}`} className={`item-card ${hasNg ? 'item-card-ng' : ''}`}>
                               <div className="item-header">
-                                <span className="item-no">#{item.no}</span>
+                                <span className="item-no">#{itemIndex + 1}</span>
                                 <span className={`item-status ${hasNg ? 'status-ng' : 'status-ok'}`}>
                                   {hasNg ? 'NG' : 'OK'}
                                 </span>
@@ -424,6 +686,214 @@ export default function RiwayatPintuDarurat() {
                   (e.target as HTMLImageElement).alt = 'Gambar tidak dapat dimuat';
                 }}
               />
+            </div>
+          </div>
+        )}
+
+        {/* ✅ EDIT MODAL */}
+        {isEditMode && editData && (
+          <div className="modal-overlay" onClick={closeEditModal}>
+            <div className="modal-container" onClick={(e) => e.stopPropagation()}>
+              <div className="modal-header">
+                <h3>✏️ Edit Pintu Darurat</h3>
+                <button className="modal-close" onClick={closeEditModal}>✕</button>
+              </div>
+              <div className="modal-tabs">
+                <button
+                  className={`tab-btn ${activeTab === 'header' ? 'active' : ''}`}
+                  onClick={() => setActiveTab('header')}
+                >
+                  📋 Header
+                </button>
+                <button
+                  className={`tab-btn ${activeTab === 'items' ? 'active' : ''}`}
+                  onClick={() => setActiveTab('items')}
+                >
+                  📦 Items ({editData.items.filter(i => i._action !== 'delete').length})
+                </button>
+              </div>
+              <div className="modal-body">
+                {activeTab === 'header' ? (
+                  <div className="form-section">
+                    <div className="form-grid">
+                      <div className="form-group">
+                        <label>Tanggal *</label>
+                        <input
+                          type="date"
+                          value={editData.date}
+                          onChange={(e) => handleHeaderChange('date', e.target.value)}
+                          className="form-input"
+                          required
+                        />
+                      </div>
+                      <div className="form-group">
+                        <label>Checker *</label>
+                        <input
+                          type="text"
+                          value={editData.checker}
+                          onChange={(e) => handleHeaderChange('checker', e.target.value)}
+                          className="form-input"
+                          required
+                        />
+                      </div>
+                      <div className="form-group">
+                        <label>NIK</label>
+                        <input
+                          type="text"
+                          value={editData.nik || ''}
+                          onChange={(e) => handleHeaderChange('nik', e.target.value)}
+                          className="form-input"
+                          placeholder="Opsional"
+                        />
+                      </div>
+                      <div className="form-group">
+                        <label>Department</label>
+                        <input
+                          type="text"
+                          value={editData.department || ''}
+                          onChange={(e) => handleHeaderChange('department', e.target.value)}
+                          className="form-input"
+                          placeholder="Opsional"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="form-section">
+                    <div className="items-edit-list">
+                      {editData.items.filter(i => i._action !== 'delete').map((item, index) => {
+                        const originalIndex = editData.items.findIndex(i => i.no === item.no && i.lokasi === item.lokasi);
+                        const realIndex = originalIndex >= 0 ? originalIndex : index;
+                        return (
+                          <div key={`${item.no}-${item.lokasi}-${index}`} className="edit-item-card">
+                            <div className="edit-item-header">
+                              <span className="item-badge">#{item.no}</span>
+                              <span className="item-lokasi-edit">{item.lokasi}</span>
+                              <button
+                                className="remove-item-btn"
+                                onClick={() => handleRemoveItem(realIndex)}
+                                title="Hapus item"
+                              >
+                                🗑️
+                              </button>
+                            </div>
+                            <div className="edit-item-fields">
+                              <div className="form-row">
+                                <div className="form-group-small full">
+                                  <label>Lokasi</label>
+                                  <input
+                                    type="text"
+                                    value={item.lokasi}
+                                    onChange={(e) => handleItemChange(realIndex, 'lokasi', e.target.value)}
+                                    className="form-input-small"
+                                  />
+                                </div>
+                              </div>
+                              <div className="status-grid">
+                                {[
+                                  { field: 'kondisiPintu', label: 'Kondisi Pintu' },
+                                  { field: 'areaSekitar', label: 'Area Sekitar' },
+                                  { field: 'paluAlatBantu', label: 'Palu/Alat Bantu' },
+                                  { field: 'identitasPintu', label: 'Identitas Pintu' },
+                                  { field: 'idPeringatan', label: 'ID Peringatan' },
+                                  { field: 'doorCloser', label: 'Door Closer' }
+                                ].map(({ field, label }) => (
+                                  <div key={field} className="status-select-group">
+                                    <label className="status-label">{label}</label>
+                                    <select
+                                      value={item[field as keyof PintuDaruratItem] || 'OK'}
+                                      onChange={(e) => handleItemChange(realIndex, field as keyof PintuDaruratItem, e.target.value)}
+                                      className={`status-select ${item[field as keyof PintuDaruratItem] === 'NG' ? 'ng' : 'ok'}`}
+                                    >
+                                      <option value="OK">✅ OK</option>
+                                      <option value="NG">❌ NG</option>
+                                    </select>
+                                  </div>
+                                ))}
+                              </div>
+                              <div className="form-row">
+                                <div className="form-group-small full">
+                                  <label>Keterangan</label>
+                                  <textarea
+                                    value={item.keterangan || ''}
+                                    onChange={(e) => handleItemChange(realIndex, 'keterangan', e.target.value)}
+                                    className="form-textarea-small"
+                                    rows={2}
+                                    placeholder="Keterangan jika ada NG..."
+                                  />
+                                </div>
+                              </div>
+                              <div className="form-row">
+                                <div className="form-group-small full">
+                                  <label>Tindakan Perbaikan</label>
+                                  <textarea
+                                    value={item.tindakanPerbaikan || ''}
+                                    onChange={(e) => handleItemChange(realIndex, 'tindakanPerbaikan', e.target.value)}
+                                    className="form-textarea-small"
+                                    rows={2}
+                                    placeholder="Tindakan yang dilakukan..."
+                                  />
+                                </div>
+                              </div>
+                              <div className="form-row">
+                                <div className="form-group-small">
+                                  <label>PIC</label>
+                                  <input
+                                    type="text"
+                                    value={item.pic || ''}
+                                    onChange={(e) => handleItemChange(realIndex, 'pic', e.target.value)}
+                                    className="form-input-small"
+                                  />
+                                </div>
+                                <div className="form-group-small">
+                                  <label>Foto</label>
+                                  <input
+                                    type="file"
+                                    accept="image/*"
+                                    onChange={(e) => e.target.files?.[0] && handleFotoUpload(realIndex, e.target.files[0])}
+                                    className="form-file-small"
+                                  />
+                                  {item.foto && (
+                                    <img
+                                      src={item.foto}
+                                      alt="Preview"
+                                      className="item-foto-preview"
+                                      onClick={() => openImagePreview(item.foto)}
+                                    />
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                    <div className="add-item-section">
+                      <button type="button" onClick={handleAddItem} className="btn-add-item">
+                        ➕ Tambah Item Baru
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+              <div className="modal-footer">
+                <button
+                  type="button"
+                  onClick={closeEditModal}
+                  className="btn-modal-cancel"
+                  disabled={isSubmitting}
+                >
+                  Batal
+                </button>
+                <button
+                  type="button"
+                  onClick={handleSubmitEdit}
+                  className="btn-modal-save"
+                  disabled={isSubmitting}
+                >
+                  {isSubmitting ? '💾 Menyimpan...' : '💾 Simpan Perubahan'}
+                </button>
+              </div>
             </div>
           </div>
         )}
@@ -643,6 +1113,29 @@ export default function RiwayatPintuDarurat() {
           gap: 12px;
         }
 
+        .section-actions {
+          display: flex;
+          gap: 8px;
+        }
+
+        .edit-btn {
+          background: none;
+          border: none;
+          font-size: 1.2rem;
+          cursor: pointer;
+          color: #1976d2;
+          transition: transform 0.2s;
+          min-width: 44px;
+          min-height: 44px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+        }
+
+        .edit-btn:hover {
+          transform: scale(1.1);
+        }
+
         .card-header {
           cursor: pointer;
           background: #f8fafc;
@@ -686,6 +1179,32 @@ export default function RiwayatPintuDarurat() {
         .card-body {
           padding: 16px;
           background: #fafbfc;
+        }
+
+        .card-actions {
+          margin-bottom: 16px;
+        }
+
+        .edit-btn-mobile {
+          width: 100%;
+          padding: 12px 16px;
+          background: #dbeafe;
+          color: #1976d2;
+          border: none;
+          border-radius: 8px;
+          font-weight: 600;
+          cursor: pointer;
+          font-size: 0.95rem;
+          min-height: 48px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          gap: 8px;
+          margin-bottom: 8px;
+        }
+
+        .edit-btn-mobile:hover {
+          background: #bfdbfe;
         }
 
         .table-wrapper {
@@ -922,6 +1441,379 @@ export default function RiwayatPintuDarurat() {
           padding: 10px;
         }
 
+        /* ✅ EDIT MODAL STYLES */
+        .modal-overlay {
+          position: fixed;
+          top: 0;
+          left: 0;
+          width: 100vw;
+          height: 100vh;
+          background: rgba(0, 0, 0, 0.6);
+          display: flex;
+          justify-content: center;
+          align-items: center;
+          z-index: 2000;
+          padding: 16px;
+          overflow-y: auto;
+        }
+
+        .modal-container {
+          background: white;
+          border-radius: 16px;
+          width: 100%;
+          max-width: 800px;
+          max-height: 90vh;
+          display: flex;
+          flex-direction: column;
+          box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+          animation: modalSlideIn 0.3s ease;
+        }
+
+        @keyframes modalSlideIn {
+          from { opacity: 0; transform: translateY(-20px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
+
+        .modal-header {
+          padding: 16px 20px;
+          background: linear-gradient(135deg, #1976d2 0%, #0d47a1 100%);
+          color: white;
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          border-radius: 16px 16px 0 0;
+        }
+
+        .modal-header h3 {
+          margin: 0;
+          font-size: 1.2rem;
+          font-weight: 600;
+        }
+
+        .modal-close {
+          background: rgba(255,255,255,0.2);
+          border: none;
+          color: white;
+          width: 32px;
+          height: 32px;
+          border-radius: 50%;
+          font-size: 1.2rem;
+          cursor: pointer;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          transition: background 0.2s;
+        }
+
+        .modal-close:hover {
+          background: rgba(255,255,255,0.3);
+        }
+
+        .modal-tabs {
+          display: flex;
+          padding: 8px 16px;
+          background: #f8fafc;
+          border-bottom: 1px solid #e2e8f0;
+          gap: 4px;
+        }
+
+        .tab-btn {
+          padding: 10px 20px;
+          border: none;
+          background: transparent;
+          border-radius: 8px;
+          font-weight: 600;
+          color: #64748b;
+          cursor: pointer;
+          transition: all 0.2s;
+          font-size: 0.95rem;
+        }
+
+        .tab-btn.active {
+          background: #1976d2;
+          color: white;
+        }
+
+        .tab-btn:hover:not(.active) {
+          background: #e2e8f0;
+        }
+
+        .modal-body {
+          flex: 1;
+          overflow-y: auto;
+          padding: 20px;
+        }
+
+        .form-section {
+          display: flex;
+          flex-direction: column;
+          gap: 20px;
+        }
+
+        .form-grid {
+          display: grid;
+          grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+          gap: 16px;
+        }
+
+        .form-group {
+          display: flex;
+          flex-direction: column;
+          gap: 6px;
+        }
+
+        .form-group label {
+          font-weight: 600;
+          font-size: 0.9rem;
+          color: #334155;
+        }
+
+        .form-input {
+          padding: 10px 12px;
+          border: 1px solid #cbd5e1;
+          border-radius: 8px;
+          font-size: 0.95rem;
+          min-height: 44px;
+          transition: border-color 0.2s;
+        }
+
+        .form-input:focus {
+          outline: none;
+          border-color: #1976d2;
+          box-shadow: 0 0 0 3px rgba(25, 118, 210, 0.1);
+        }
+
+        .items-edit-list {
+          display: flex;
+          flex-direction: column;
+          gap: 12px;
+        }
+
+        .edit-item-card {
+          border: 1px solid #e2e8f0;
+          border-radius: 10px;
+          padding: 14px;
+          background: #fafbfc;
+        }
+
+        .edit-item-header {
+          display: flex;
+          align-items: center;
+          gap: 10px;
+          margin-bottom: 12px;
+          padding-bottom: 10px;
+          border-bottom: 1px solid #e2e8f0;
+        }
+
+        .item-badge {
+          background: #1976d2;
+          color: white;
+          padding: 4px 12px;
+          border-radius: 20px;
+          font-weight: 700;
+          font-size: 0.8rem;
+        }
+
+        .item-lokasi-edit {
+          font-weight: 600;
+          color: #1e293b;
+          flex: 1;
+        }
+
+        .remove-item-btn {
+          background: none;
+          border: none;
+          font-size: 1.2rem;
+          cursor: pointer;
+          color: #f44336;
+          padding: 4px 8px;
+          border-radius: 4px;
+          transition: background 0.2s;
+        }
+
+        .remove-item-btn:hover {
+          background: #fee2e2;
+        }
+
+        .edit-item-fields {
+          display: flex;
+          flex-direction: column;
+          gap: 12px;
+        }
+
+        .form-row {
+          display: flex;
+          gap: 12px;
+          flex-wrap: wrap;
+        }
+
+        .form-group-small {
+          display: flex;
+          flex-direction: column;
+          gap: 4px;
+          flex: 1;
+          min-width: 150px;
+        }
+
+        .form-group-small.full {
+          flex: 1 1 100%;
+        }
+
+        .form-group-small label {
+          font-size: 0.8rem;
+          font-weight: 500;
+          color: #64748b;
+        }
+
+        .form-input-small {
+          padding: 8px 10px;
+          border: 1px solid #cbd5e1;
+          border-radius: 6px;
+          font-size: 0.9rem;
+          min-height: 38px;
+        }
+
+        .form-textarea-small {
+          padding: 8px 10px;
+          border: 1px solid #cbd5e1;
+          border-radius: 6px;
+          font-size: 0.9rem;
+          resize: vertical;
+          font-family: inherit;
+        }
+
+        .form-input-small:focus,
+        .form-textarea-small:focus {
+          outline: none;
+          border-color: #1976d2;
+        }
+
+        .form-file-small {
+          font-size: 0.85rem;
+        }
+
+        .item-foto-preview {
+          width: 50px;
+          height: 50px;
+          object-fit: cover;
+          border-radius: 6px;
+          border: 1px solid #cbd5e1;
+          cursor: pointer;
+          margin-top: 4px;
+        }
+
+        .status-grid {
+          display: grid;
+          grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+          gap: 10px;
+        }
+
+        .status-select-group {
+          display: flex;
+          flex-direction: column;
+          gap: 4px;
+        }
+
+        .status-label {
+          font-size: 0.75rem;
+          font-weight: 500;
+          color: #64748b;
+        }
+
+        .status-select {
+          padding: 6px 10px;
+          border: 1px solid #cbd5e1;
+          border-radius: 6px;
+          font-size: 0.85rem;
+          font-weight: 600;
+          cursor: pointer;
+          background: white;
+        }
+
+        .status-select.ok {
+          color: #059669;
+          border-color: #059669;
+        }
+
+        .status-select.ng {
+          color: #dc2626;
+          border-color: #dc2626;
+        }
+
+        .add-item-section {
+          padding-top: 12px;
+          border-top: 1px dashed #cbd5e1;
+        }
+
+        .btn-add-item {
+          width: 100%;
+          padding: 12px;
+          background: #f1f5f9;
+          color: #1976d2;
+          border: 2px dashed #94a3b8;
+          border-radius: 8px;
+          font-weight: 600;
+          cursor: pointer;
+          transition: all 0.2s;
+          font-size: 0.95rem;
+        }
+
+        .btn-add-item:hover {
+          background: #e2e8f0;
+          border-color: #1976d2;
+        }
+
+        .modal-footer {
+          padding: 16px 20px;
+          background: #f8fafc;
+          border-top: 1px solid #e2e8f0;
+          display: flex;
+          justify-content: flex-end;
+          gap: 12px;
+          border-radius: 0 0 16px 16px;
+        }
+
+        .btn-modal-cancel,
+        .btn-modal-save {
+          padding: 12px 24px;
+          border-radius: 8px;
+          font-weight: 600;
+          font-size: 0.95rem;
+          cursor: pointer;
+          min-height: 44px;
+          min-width: 100px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          transition: all 0.2s;
+        }
+
+        .btn-modal-cancel {
+          background: #f1f5f9;
+          color: #64748b;
+          border: 1px solid #cbd5e1;
+        }
+
+        .btn-modal-cancel:hover:not(:disabled) {
+          background: #e2e8f0;
+        }
+
+        .btn-modal-save {
+          background: #1976d2;
+          color: white;
+          border: none;
+        }
+
+        .btn-modal-save:hover:not(:disabled) {
+          background: #1565c0;
+        }
+
+        .btn-modal-cancel:disabled,
+        .btn-modal-save:disabled {
+          opacity: 0.6;
+          cursor: not-allowed;
+        }
+
         /* ✅ TABLET RESPONSIVE */
         @media (max-width: 1024px) {
           .page-content {
@@ -1061,6 +1953,42 @@ export default function RiwayatPintuDarurat() {
             width: 50px;
             height: 50px;
           }
+
+          /* Modal Mobile */
+          .modal-container {
+            max-height: 95vh;
+            border-radius: 12px;
+          }
+
+          .modal-header {
+            padding: 12px 16px;
+          }
+
+          .modal-header h3 {
+            font-size: 1.1rem;
+          }
+
+          .modal-body {
+            padding: 16px;
+          }
+
+          .form-grid {
+            grid-template-columns: 1fr;
+          }
+
+          .status-grid {
+            grid-template-columns: repeat(2, 1fr);
+          }
+
+          .modal-footer {
+            flex-direction: column-reverse;
+            padding: 12px 16px;
+          }
+
+          .btn-modal-cancel,
+          .btn-modal-save {
+            width: 100%;
+          }
         }
 
         /* ✅ SMALL MOBILE */
@@ -1174,6 +2102,19 @@ export default function RiwayatPintuDarurat() {
           .spinner {
             width: 35px;
             height: 35px;
+          }
+
+          .status-grid {
+            grid-template-columns: 1fr;
+          }
+
+          .form-row {
+            flex-direction: column;
+            gap: 8px;
+          }
+
+          .form-group-small {
+            min-width: 100%;
           }
         }
       `}</style>

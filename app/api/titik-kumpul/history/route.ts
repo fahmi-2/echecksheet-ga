@@ -8,7 +8,7 @@ export async function GET(request: NextRequest) {
     const date = searchParams.get('date');
     const location = searchParams.get('location');
 
-    // ✅ Query Titik Kumpul dengan QUOTE untuk alias camelCase (PostgreSQL)
+    // ✅ Query Titik Kumpul
     let queryTK = `
       SELECT
         c.id,
@@ -17,7 +17,7 @@ export async function GET(request: NextRequest) {
         c.checker_nik as "nik",
         c.checker_dept as "department",
         c.submitted_at as "submittedAt",
-        i.id as "item_id",
+        i.id as "itemId",              -- ✅ WAJIB: Actual database ID (7, 8, 9...)
         i.location_name as "lokasi",
         i.area_aman as "areaAman",
         i.identitas_titik_kumpul as "identitasTitikKumpul",
@@ -31,7 +31,7 @@ export async function GET(request: NextRequest) {
       WHERE 1=1
     `;
 
-    // ✅ Query Jalur Evakuasi dengan QUOTE untuk alias camelCase (PostgreSQL)
+    // ✅ Query Jalur Evakuasi
     let queryJE = `
       SELECT
         c.id,
@@ -40,7 +40,7 @@ export async function GET(request: NextRequest) {
         c.checker_nik as "nik",
         c.checker_dept as "department",
         c.submitted_at as "submittedAt",
-        i.id as "item_id",
+        i.id as "itemId",              -- ✅ WAJIB: Actual database ID
         i.question_text as "pertanyaan",
         i.order_number as "no",
         i.hasil_cek as "hasilCek",
@@ -53,7 +53,6 @@ export async function GET(request: NextRequest) {
       WHERE 1=1
     `;
 
-    // ✅ Build separate params arrays for each query (critical fix!)
     const paramsTK: any[] = [];
     const paramsJE: any[] = [];
     let paramIndexTK = 1;
@@ -71,23 +70,20 @@ export async function GET(request: NextRequest) {
     if (location) {
       queryTK += ` AND i.location_name = $${paramIndexTK}`;
       paramsTK.push(location);
-      // Jalur Evakuasi TIDAK punya filter location, jadi tidak ditambahkan ke paramsJE
     }
 
     queryTK += ' ORDER BY c.checklist_date DESC, i.id ASC';
     queryJE += ' ORDER BY c.checklist_date DESC, i.order_number ASC';
 
-    // ✅ Execute queries with CORRECT parameter arrays
     const [resultTK, resultJE] = await Promise.all([
       pool.query(queryTK, paramsTK),
       pool.query(queryJE, paramsJE)
     ]);
 
-    // ✅ CRITICAL FIX: Extract rows from result objects (bukan destructuring array)
     const rowsTK = resultTK.rows;
     const rowsJE = resultJE.rows;
 
-    // ✅ Group data by date
+    // ✅ Group by date
     const grouped: any = {};
 
     // Process Titik Kumpul
@@ -105,7 +101,9 @@ export async function GET(request: NextRequest) {
         };
       }
       grouped[row.date].titikKumpul.push({
-        no: row.item_id,
+        // ✅ WAJIB: Ambil itemId dari database (7, 8, 9...)
+        itemId: row.itemId,
+        no: row.itemId,                  // ✅ Gunakan actual ID untuk no
         lokasi: row.lokasi,
         areaAman: row.areaAman,
         identitasTitikKumpul: row.identitasTitikKumpul,
@@ -132,6 +130,8 @@ export async function GET(request: NextRequest) {
         };
       }
       grouped[row.date].jalurEvakuasi.push({
+        // ✅ WAJIB: Ambil itemId dari database
+        itemId: row.itemId,
         no: row.no,
         pertanyaan: row.pertanyaan,
         hasilCek: row.hasilCek,
@@ -144,10 +144,10 @@ export async function GET(request: NextRequest) {
 
     const result = Object.values(grouped);
 
+    // 🔍 Debug log
     console.log('✅ Titik Kumpul history loaded:', {
       totalRecords: result.length,
-      titikKumpulItems: result.reduce((sum: number, rec: any) => sum + (rec.titikKumpul?.length || 0), 0),
-      jalurEvakuasiItems: result.reduce((sum: number, rec: any) => sum + (rec.jalurEvakuasi?.length || 0), 0)
+      sample: result[0] ? { ...result[0], titikKumpul: (result[0] as any).titikKumpul?.slice(0, 2) } : null  // 🔍 Lihat itemId
     });
 
     return NextResponse.json(result);

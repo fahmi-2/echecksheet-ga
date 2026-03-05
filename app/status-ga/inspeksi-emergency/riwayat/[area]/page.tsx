@@ -9,6 +9,7 @@ import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
 
 interface EmergencyItem {
+  itemId?: number;
   no: number;
   lokasi: string;
   id: string;
@@ -22,6 +23,7 @@ interface EmergencyItem {
   tindakanPerbaikan: string;
   pic: string;
   foto: string | null;
+  _action?: 'create' | 'update' | 'delete';
 }
 
 interface EmergencyRecord {
@@ -32,6 +34,16 @@ interface EmergencyRecord {
   checker: string;
   checkerNik?: string;
   submittedAt: string;
+}
+
+interface EditFormData {
+  recordId: string;
+  date: string;
+  area: string;
+  checker: string;
+  checkerNik?: string;
+  items: EmergencyItem[];
+  replaceItems?: boolean;
 }
 
 const areaTitles: Record<string, string> = {
@@ -60,6 +72,13 @@ export default function RiwayatEmergency() {
   const [filterLocation, setFilterLocation] = useState("");
   const [previewImage, setPreviewImage] = useState<string | null>(null);
   const [expandedRecord, setExpandedRecord] = useState<string | null>(null);
+  
+  // Edit Mode States
+  const [isEditMode, setIsEditMode] = useState(false);
+  const [editData, setEditData] = useState<EditFormData | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [activeTab, setActiveTab] = useState<'header' | 'items'>('header');
+  const [newItemNo, setNewItemNo] = useState(1);
 
   // Validasi akses
   useEffect(() => {
@@ -169,6 +188,184 @@ export default function RiwayatEmergency() {
     }
   };
 
+  const formatDateForInput = (dateString: string) => {
+    try {
+      const date = new Date(dateString);
+      return date.toISOString().split('T')[0];
+    } catch {
+      return '';
+    }
+  };
+
+  const generateNextNo = (items: EmergencyItem[]) => {
+    const maxNo = Math.max(0, ...items.map(i => i.no || 0));
+    return maxNo + 1;
+  };
+
+  // Edit Functions
+  const openEditModal = async (record: EmergencyRecord) => {
+    try {
+      const response = await fetch(`/api/emergency-lamp/history?area=${area}&record_id=${record.id}`);
+      if (response.ok) {
+        const data = await response.json();
+        if (data.success && data.data?.[0]) {
+          const freshRecord = data.data[0];
+          setEditData({
+            recordId: freshRecord.id,
+            date: formatDateForInput(freshRecord.date),
+            area: freshRecord.area,
+            checker: freshRecord.checker,
+            checkerNik: freshRecord.checkerNik || '',
+            items: (freshRecord.items || []).map((item: EmergencyItem) => ({
+              ...item,
+              itemId: (item as any).itemId,
+              _action: 'update'
+            })),
+            replaceItems: true
+          });
+          setIsEditMode(true);
+          setActiveTab('header');
+          setNewItemNo(generateNextNo(freshRecord.items) + 1);
+          return;
+        }
+      }
+    } catch (error) {
+      console.error('Error fetching record for edit:', error);
+    }
+    
+    setEditData({
+      recordId: record.id,
+      date: formatDateForInput(record.date),
+      area: record.area || area,
+      checker: record.checker,
+      checkerNik: record.checkerNik || '',
+      items: record.items.map((item) => ({ ...item, _action: 'update' })),
+      replaceItems: true
+    });
+    setIsEditMode(true);
+    setActiveTab('header');
+    setNewItemNo(generateNextNo(record.items) + 1);
+  };
+
+  const closeEditModal = () => {
+    setIsEditMode(false);
+    setEditData(null);
+    setNewItemNo(1);
+  };
+
+  const handleHeaderChange = (field: keyof EditFormData, value: string) => {
+    if (!editData) return;
+    setEditData(prev => prev ? { ...prev, [field]: value } : null);
+  };
+
+  const handleItemChange = (index: number, field: keyof EmergencyItem, value: string) => {
+    if (!editData) return;
+    const updatedItems = [...editData.items];
+    updatedItems[index] = { 
+      ...updatedItems[index], 
+      [field]: value,
+      _action: updatedItems[index]._action === 'create' ? 'create' : 'update'
+    };
+    setEditData(prev => prev ? { ...prev, items: updatedItems } : null);
+  };
+
+  const handleAddItem = () => {
+    if (!editData) return;
+    const itemToAdd: EmergencyItem = {
+      no: newItemNo,
+      lokasi: `Lokasi Baru ${newItemNo}`,
+      id: `EL-${newItemNo}`,
+      kondisiLampu: 'OK',
+      indicatorLamp: 'OK',
+      batteryCharger: 'OK',
+      idNumber: 'OK',
+      kebersihan: 'OK',
+      kondisiKabel: 'OK',
+      keterangan: '',
+      tindakanPerbaikan: '',
+      pic: editData.checker,
+      foto: null,
+      _action: 'create'
+    };
+    setEditData(prev => prev ? { ...prev, items: [...prev.items, itemToAdd] } : null);
+    setNewItemNo(prev => prev + 1);
+  };
+
+  const handleRemoveItem = (index: number) => {
+    if (!editData) return;
+    const updatedItems = [...editData.items];
+    const item = updatedItems[index];
+    if (item.itemId) {
+      updatedItems[index] = { ...item, _action: 'delete' };
+    } else {
+      updatedItems.splice(index, 1);
+    }
+    setEditData(prev => prev ? { ...prev, items: updatedItems } : null);
+  };
+
+  const handleFotoUpload = (index: number, file: File) => {
+    if (!editData) return;
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      const updatedItems = [...editData.items];
+      updatedItems[index] = { 
+        ...updatedItems[index], 
+        foto: reader.result as string,
+        _action: updatedItems[index]._action === 'create' ? 'create' : 'update'
+      };
+      setEditData(prev => prev ? { ...prev, items: updatedItems } : null);
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleSubmitEdit = async () => {
+    if (!editData) return;
+    if (!editData.date || !editData.area || !editData.checker) {
+      alert('Harap lengkapi field Header: Tanggal, Area, dan Checker');
+      setActiveTab('header');
+      return;
+    }
+    
+    const itemsToSubmit = editData.items
+      .filter(item => item._action !== 'delete')
+      .map(({ _action, itemId, ...item }) => item);
+    
+    if (itemsToSubmit.length === 0 && !confirm('Tidak ada item yang akan disimpan. Lanjutkan hanya update header?')) {
+      return;
+    }
+
+    setIsSubmitting(true);
+    try {
+      const response = await fetch('/api/emergency-lamp/edit', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          recordId: editData.recordId,
+          date: editData.date,
+          area: editData.area,
+          checker: editData.checker,
+          checkerNik: editData.checkerNik,
+          items: itemsToSubmit,
+          replaceItems: true
+        })
+      });
+
+      const result = await response.json();
+      if (result.success) {
+        alert('✅ Data berhasil diupdate!');
+        closeEditModal();
+        await loadData();
+      } else {
+        alert('❌ Gagal update: ' + result.message);
+      }
+    } catch (error) {
+      console.error('Edit error:', error);
+      alert('Terjadi kesalahan saat menyimpan perubahan');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
   if (!user) return null;
 
   const areaTitle = areaTitles[area] || area.toUpperCase();
@@ -261,6 +458,13 @@ export default function RiwayatEmergency() {
                         <span>📅 {formatDate(record.date)}</span>
                         <span>👤 {record.checker}</span>
                         <div className="section-actions">
+                          <button
+                            onClick={() => openEditModal(record)}
+                            className="edit-btn"
+                            title="Edit data"
+                          >
+                            ✏️
+                          </button>
                           <button
                             onClick={() => handleDelete(record.id)}
                             className="delete-btn"
@@ -356,6 +560,12 @@ export default function RiwayatEmergency() {
                       {expandedRecord === record.id && (
                         <div className="card-body">
                           <div className="card-actions">
+                            <button
+                              onClick={() => openEditModal(record)}
+                              className="edit-btn-mobile"
+                            >
+                              ✏️ Edit Data
+                            </button>
                             <button
                               onClick={() => handleDelete(record.id)}
                               className="delete-btn-mobile"
@@ -460,6 +670,223 @@ export default function RiwayatEmergency() {
             <div className="modal-content" onClick={(e) => e.stopPropagation()}>
               <button className="close-btn" onClick={closeImagePreview}>✕</button>
               <img src={previewImage} alt="Zoom" className="modal-image" />
+            </div>
+          </div>
+        )}
+
+        {/* ✅ EDIT MODAL */}
+        {isEditMode && editData && (
+          <div className="modal-overlay" onClick={closeEditModal}>
+            <div className="modal-container" onClick={(e) => e.stopPropagation()}>
+              <div className="modal-header">
+                <h3>✏️ Edit Inspeksi Emergency Lamp</h3>
+                <button className="modal-close" onClick={closeEditModal}>✕</button>
+              </div>
+              <div className="modal-tabs">
+                <button 
+                  className={`tab-btn ${activeTab === 'header' ? 'active' : ''}`}
+                  onClick={() => setActiveTab('header')}
+                >
+                  📋 Header
+                </button>
+                <button 
+                  className={`tab-btn ${activeTab === 'items' ? 'active' : ''}`}
+                  onClick={() => setActiveTab('items')}
+                >
+                  📦 Items ({editData.items.filter(i => i._action !== 'delete').length})
+                </button>
+              </div>
+              <div className="modal-body">
+                {activeTab === 'header' ? (
+                  <div className="form-section">
+                    <div className="form-grid">
+                      <div className="form-group">
+                        <label>Tanggal Inspeksi *</label>
+                        <input
+                          type="date"
+                          value={editData.date}
+                          onChange={(e) => handleHeaderChange('date', e.target.value)}
+                          className="form-input"
+                          required
+                        />
+                      </div>
+                      <div className="form-group">
+                        <label>Area *</label>
+                        <input
+                          type="text"
+                          value={editData.area}
+                          onChange={(e) => handleHeaderChange('area', e.target.value)}
+                          className="form-input"
+                          required
+                        />
+                      </div>
+                      <div className="form-group">
+                        <label>Checker *</label>
+                        <input
+                          type="text"
+                          value={editData.checker}
+                          onChange={(e) => handleHeaderChange('checker', e.target.value)}
+                          className="form-input"
+                          required
+                        />
+                      </div>
+                      <div className="form-group">
+                        <label>NIK Checker</label>
+                        <input
+                          type="text"
+                          value={editData.checkerNik || ''}
+                          onChange={(e) => handleHeaderChange('checkerNik', e.target.value)}
+                          className="form-input"
+                          placeholder="Opsional"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="form-section">
+                    <div className="items-edit-list">
+                      {editData.items.filter(i => i._action !== 'delete').map((item, index) => {
+                        const originalIndex = editData.items.findIndex(i => i.no === item.no && i.lokasi === item.lokasi);
+                        const realIndex = originalIndex >= 0 ? originalIndex : index;
+                        
+                        return (
+                          <div key={`${item.no}-${item.lokasi}-${index}`} className="edit-item-card">
+                            <div className="edit-item-header">
+                              <span className="item-badge">#{item.no}</span>
+                              <span className="item-lokasi-edit">{item.lokasi}</span>
+                              <button 
+                                className="remove-item-btn"
+                                onClick={() => handleRemoveItem(realIndex)}
+                                title="Hapus item"
+                              >
+                                🗑️
+                              </button>
+                            </div>
+                            <div className="edit-item-fields">
+                              <div className="form-row">
+                                <div className="form-group-small">
+                                  <label>Lokasi</label>
+                                  <input
+                                    type="text"
+                                    value={item.lokasi}
+                                    onChange={(e) => handleItemChange(realIndex, 'lokasi', e.target.value)}
+                                    className="form-input-small"
+                                  />
+                                </div>
+                                <div className="form-group-small">
+                                  <label>ID Lampu</label>
+                                  <input
+                                    type="text"
+                                    value={item.id}
+                                    onChange={(e) => handleItemChange(realIndex, 'id', e.target.value)}
+                                    className="form-input-small"
+                                  />
+                                </div>
+                              </div>
+                              <div className="status-grid">
+                                {['kondisiLampu', 'indicatorLamp', 'batteryCharger', 'idNumber', 'kebersihan', 'kondisiKabel'].map((field) => (
+                                  <div key={field} className="status-select-group">
+                                    <label className="status-label">
+                                      {field === 'kondisiLampu' ? 'Kondisi Lampu' : 
+                                       field === 'indicatorLamp' ? 'Indicator' :
+                                       field === 'batteryCharger' ? 'Battery' :
+                                       field === 'idNumber' ? 'ID Number' :
+                                       field === 'kebersihan' ? 'Kebersihan' : 'Kondisi Kabel'}
+                                    </label>
+                                    <select
+                                      value={item[field as keyof EmergencyItem] || 'OK'}
+                                      onChange={(e) => handleItemChange(realIndex, field as keyof EmergencyItem, e.target.value)}
+                                      className={`status-select ${item[field as keyof EmergencyItem] === 'NG' ? 'ng' : 'ok'}`}
+                                    >
+                                      <option value="OK">✅ OK</option>
+                                      <option value="NG">❌ NG</option>
+                                    </select>
+                                  </div>
+                                ))}
+                              </div>
+                              <div className="form-row">
+                                <div className="form-group-small full">
+                                  <label>Keterangan (jika NG)</label>
+                                  <textarea
+                                    value={item.keterangan || ''}
+                                    onChange={(e) => handleItemChange(realIndex, 'keterangan', e.target.value)}
+                                    className="form-textarea-small"
+                                    rows={2}
+                                    placeholder="Jelaskan jika ada kondisi NG..."
+                                  />
+                                </div>
+                              </div>
+                              <div className="form-row">
+                                <div className="form-group-small full">
+                                  <label>Tindakan Perbaikan</label>
+                                  <textarea
+                                    value={item.tindakanPerbaikan || ''}
+                                    onChange={(e) => handleItemChange(realIndex, 'tindakanPerbaikan', e.target.value)}
+                                    className="form-textarea-small"
+                                    rows={2}
+                                    placeholder="Tindakan yang dilakukan..."
+                                  />
+                                </div>
+                              </div>
+                              <div className="form-row">
+                                <div className="form-group-small">
+                                  <label>PIC</label>
+                                  <input
+                                    type="text"
+                                    value={item.pic || ''}
+                                    onChange={(e) => handleItemChange(realIndex, 'pic', e.target.value)}
+                                    className="form-input-small"
+                                  />
+                                </div>
+                                <div className="form-group-small">
+                                  <label>Foto</label>
+                                  <input
+                                    type="file"
+                                    accept="image/*"
+                                    onChange={(e) => e.target.files?.[0] && handleFotoUpload(realIndex, e.target.files[0])}
+                                    className="form-file-small"
+                                  />
+                                  {item.foto && (
+                                    <img 
+                                      src={item.foto} 
+                                      alt="Preview" 
+                                      className="item-foto-preview"
+                                      onClick={() => openImagePreview(item.foto!)}
+                                    />
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                    <div className="add-item-section">
+                      <button type="button" onClick={handleAddItem} className="btn-add-item">
+                        ➕ Tambah Item Baru
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+              <div className="modal-footer">
+                <button 
+                  type="button" 
+                  onClick={closeEditModal} 
+                  className="btn-modal-cancel"
+                  disabled={isSubmitting}
+                >
+                  Batal
+                </button>
+                <button 
+                  type="button" 
+                  onClick={handleSubmitEdit} 
+                  className="btn-modal-save"
+                  disabled={isSubmitting}
+                >
+                  {isSubmitting ? '💾 Menyimpan...' : '💾 Simpan Perubahan'}
+                </button>
+              </div>
             </div>
           </div>
         )}
@@ -675,12 +1102,12 @@ export default function RiwayatEmergency() {
           gap: 8px;
         }
 
+        .edit-btn,
         .delete-btn {
           background: none;
           border: none;
           font-size: 1.2rem;
           cursor: pointer;
-          color: #f44336;
           transition: transform 0.2s;
           min-width: 44px;
           min-height: 44px;
@@ -689,6 +1116,15 @@ export default function RiwayatEmergency() {
           justify-content: center;
         }
 
+        .edit-btn {
+          color: #1976d2;
+        }
+
+        .delete-btn {
+          color: #f44336;
+        }
+
+        .edit-btn:hover,
         .delete-btn:hover {
           transform: scale(1.1);
         }
@@ -805,11 +1241,10 @@ export default function RiwayatEmergency() {
           margin-bottom: 16px;
         }
 
+        .edit-btn-mobile,
         .delete-btn-mobile {
           width: 100%;
           padding: 12px 16px;
-          background: #fee2e2;
-          color: #dc2626;
           border: none;
           border-radius: 8px;
           font-weight: 600;
@@ -820,6 +1255,21 @@ export default function RiwayatEmergency() {
           align-items: center;
           justify-content: center;
           gap: 8px;
+          margin-bottom: 8px;
+        }
+
+        .edit-btn-mobile {
+          background: #dbeafe;
+          color: #1976d2;
+        }
+
+        .edit-btn-mobile:hover {
+          background: #bfdbfe;
+        }
+
+        .delete-btn-mobile {
+          background: #fee2e2;
+          color: #dc2626;
         }
 
         .delete-btn-mobile:hover {
@@ -1006,6 +1456,379 @@ export default function RiwayatEmergency() {
           border-radius: 8px;
         }
 
+        /* ✅ EDIT MODAL STYLES */
+        .modal-overlay {
+          position: fixed;
+          top: 0;
+          left: 0;
+          width: 100vw;
+          height: 100vh;
+          background: rgba(0, 0, 0, 0.6);
+          display: flex;
+          justify-content: center;
+          align-items: center;
+          z-index: 2000;
+          padding: 16px;
+          overflow-y: auto;
+        }
+
+        .modal-container {
+          background: white;
+          border-radius: 16px;
+          width: 100%;
+          max-width: 800px;
+          max-height: 90vh;
+          display: flex;
+          flex-direction: column;
+          box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+          animation: modalSlideIn 0.3s ease;
+        }
+
+        @keyframes modalSlideIn {
+          from { opacity: 0; transform: translateY(-20px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
+
+        .modal-header {
+          padding: 16px 20px;
+          background: linear-gradient(135deg, #1976d2 0%, #0d47a1 100%);
+          color: white;
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          border-radius: 16px 16px 0 0;
+        }
+
+        .modal-header h3 {
+          margin: 0;
+          font-size: 1.2rem;
+          font-weight: 600;
+        }
+
+        .modal-close {
+          background: rgba(255,255,255,0.2);
+          border: none;
+          color: white;
+          width: 32px;
+          height: 32px;
+          border-radius: 50%;
+          font-size: 1.2rem;
+          cursor: pointer;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          transition: background 0.2s;
+        }
+
+        .modal-close:hover {
+          background: rgba(255,255,255,0.3);
+        }
+
+        .modal-tabs {
+          display: flex;
+          padding: 8px 16px;
+          background: #f8fafc;
+          border-bottom: 1px solid #e2e8f0;
+          gap: 4px;
+        }
+
+        .tab-btn {
+          padding: 10px 20px;
+          border: none;
+          background: transparent;
+          border-radius: 8px;
+          font-weight: 600;
+          color: #64748b;
+          cursor: pointer;
+          transition: all 0.2s;
+          font-size: 0.95rem;
+        }
+
+        .tab-btn.active {
+          background: #1976d2;
+          color: white;
+        }
+
+        .tab-btn:hover:not(.active) {
+          background: #e2e8f0;
+        }
+
+        .modal-body {
+          flex: 1;
+          overflow-y: auto;
+          padding: 20px;
+        }
+
+        .form-section {
+          display: flex;
+          flex-direction: column;
+          gap: 20px;
+        }
+
+        .form-grid {
+          display: grid;
+          grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+          gap: 16px;
+        }
+
+        .form-group {
+          display: flex;
+          flex-direction: column;
+          gap: 6px;
+        }
+
+        .form-group label {
+          font-weight: 600;
+          font-size: 0.9rem;
+          color: #334155;
+        }
+
+        .form-input {
+          padding: 10px 12px;
+          border: 1px solid #cbd5e1;
+          border-radius: 8px;
+          font-size: 0.95rem;
+          min-height: 44px;
+          transition: border-color 0.2s;
+        }
+
+        .form-input:focus {
+          outline: none;
+          border-color: #1976d2;
+          box-shadow: 0 0 0 3px rgba(25, 118, 210, 0.1);
+        }
+
+        .items-edit-list {
+          display: flex;
+          flex-direction: column;
+          gap: 12px;
+        }
+
+        .edit-item-card {
+          border: 1px solid #e2e8f0;
+          border-radius: 10px;
+          padding: 14px;
+          background: #fafbfc;
+        }
+
+        .edit-item-header {
+          display: flex;
+          align-items: center;
+          gap: 10px;
+          margin-bottom: 12px;
+          padding-bottom: 10px;
+          border-bottom: 1px solid #e2e8f0;
+        }
+
+        .item-badge {
+          background: #1976d2;
+          color: white;
+          padding: 4px 12px;
+          border-radius: 20px;
+          font-weight: 700;
+          font-size: 0.8rem;
+        }
+
+        .item-lokasi-edit {
+          font-weight: 600;
+          color: #1e293b;
+          flex: 1;
+        }
+
+        .remove-item-btn {
+          background: none;
+          border: none;
+          font-size: 1.2rem;
+          cursor: pointer;
+          color: #f44336;
+          padding: 4px 8px;
+          border-radius: 4px;
+          transition: background 0.2s;
+        }
+
+        .remove-item-btn:hover {
+          background: #fee2e2;
+        }
+
+        .edit-item-fields {
+          display: flex;
+          flex-direction: column;
+          gap: 12px;
+        }
+
+        .form-row {
+          display: flex;
+          gap: 12px;
+          flex-wrap: wrap;
+        }
+
+        .form-group-small {
+          display: flex;
+          flex-direction: column;
+          gap: 4px;
+          flex: 1;
+          min-width: 150px;
+        }
+
+        .form-group-small.full {
+          flex: 1 1 100%;
+        }
+
+        .form-group-small label {
+          font-size: 0.8rem;
+          font-weight: 500;
+          color: #64748b;
+        }
+
+        .form-input-small {
+          padding: 8px 10px;
+          border: 1px solid #cbd5e1;
+          border-radius: 6px;
+          font-size: 0.9rem;
+          min-height: 38px;
+        }
+
+        .form-textarea-small {
+          padding: 8px 10px;
+          border: 1px solid #cbd5e1;
+          border-radius: 6px;
+          font-size: 0.9rem;
+          resize: vertical;
+          font-family: inherit;
+        }
+
+        .form-input-small:focus,
+        .form-textarea-small:focus {
+          outline: none;
+          border-color: #1976d2;
+        }
+
+        .form-file-small {
+          font-size: 0.85rem;
+        }
+
+        .item-foto-preview {
+          width: 50px;
+          height: 50px;
+          object-fit: cover;
+          border-radius: 6px;
+          border: 1px solid #cbd5e1;
+          cursor: pointer;
+          margin-top: 4px;
+        }
+
+        .status-grid {
+          display: grid;
+          grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+          gap: 10px;
+        }
+
+        .status-select-group {
+          display: flex;
+          flex-direction: column;
+          gap: 4px;
+        }
+
+        .status-label {
+          font-size: 0.75rem;
+          font-weight: 500;
+          color: #64748b;
+        }
+
+        .status-select {
+          padding: 6px 10px;
+          border: 1px solid #cbd5e1;
+          border-radius: 6px;
+          font-size: 0.85rem;
+          font-weight: 600;
+          cursor: pointer;
+          background: white;
+        }
+
+        .status-select.ok {
+          color: #059669;
+          border-color: #059669;
+        }
+
+        .status-select.ng {
+          color: #dc2626;
+          border-color: #dc2626;
+        }
+
+        .add-item-section {
+          padding-top: 12px;
+          border-top: 1px dashed #cbd5e1;
+        }
+
+        .btn-add-item {
+          width: 100%;
+          padding: 12px;
+          background: #f1f5f9;
+          color: #1976d2;
+          border: 2px dashed #94a3b8;
+          border-radius: 8px;
+          font-weight: 600;
+          cursor: pointer;
+          transition: all 0.2s;
+          font-size: 0.95rem;
+        }
+
+        .btn-add-item:hover {
+          background: #e2e8f0;
+          border-color: #1976d2;
+        }
+
+        .modal-footer {
+          padding: 16px 20px;
+          background: #f8fafc;
+          border-top: 1px solid #e2e8f0;
+          display: flex;
+          justify-content: flex-end;
+          gap: 12px;
+          border-radius: 0 0 16px 16px;
+        }
+
+        .btn-modal-cancel,
+        .btn-modal-save {
+          padding: 12px 24px;
+          border-radius: 8px;
+          font-weight: 600;
+          font-size: 0.95rem;
+          cursor: pointer;
+          min-height: 44px;
+          min-width: 100px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          transition: all 0.2s;
+        }
+
+        .btn-modal-cancel {
+          background: #f1f5f9;
+          color: #64748b;
+          border: 1px solid #cbd5e1;
+        }
+
+        .btn-modal-cancel:hover:not(:disabled) {
+          background: #e2e8f0;
+        }
+
+        .btn-modal-save {
+          background: #1976d2;
+          color: white;
+          border: none;
+        }
+
+        .btn-modal-save:hover:not(:disabled) {
+          background: #1565c0;
+        }
+
+        .btn-modal-cancel:disabled,
+        .btn-modal-save:disabled {
+          opacity: 0.6;
+          cursor: not-allowed;
+        }
+
         /* ✅ TABLET RESPONSIVE */
         @media (max-width: 1024px) {
           .page-content {
@@ -1129,6 +1952,42 @@ export default function RiwayatEmergency() {
           .item-lokasi {
             font-size: 0.95rem;
           }
+
+          /* Modal Mobile */
+          .modal-container {
+            max-height: 95vh;
+            border-radius: 12px;
+          }
+
+          .modal-header {
+            padding: 12px 16px;
+          }
+
+          .modal-header h3 {
+            font-size: 1.1rem;
+          }
+
+          .modal-body {
+            padding: 16px;
+          }
+
+          .form-grid {
+            grid-template-columns: 1fr;
+          }
+
+          .status-grid {
+            grid-template-columns: repeat(2, 1fr);
+          }
+
+          .modal-footer {
+            flex-direction: column-reverse;
+            padding: 12px 16px;
+          }
+
+          .btn-modal-cancel,
+          .btn-modal-save {
+            width: 100%;
+          }
         }
 
         /* ✅ SMALL MOBILE */
@@ -1244,9 +2103,23 @@ export default function RiwayatEmergency() {
             height: 40px;
           }
 
-          .delete-btn-mobile {
+          .delete-btn-mobile,
+          .edit-btn-mobile {
             min-height: 52px;
             font-size: 0.9rem;
+          }
+
+          .status-grid {
+            grid-template-columns: 1fr;
+          }
+
+          .form-row {
+            flex-direction: column;
+            gap: 8px;
+          }
+
+          .form-group-small {
+            min-width: 100%;
           }
         }
       `}</style>

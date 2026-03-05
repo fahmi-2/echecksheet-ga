@@ -5,106 +5,89 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
 import { Sidebar } from "@/components/Sidebar";
+import { ArrowLeft, Calendar, Clock, User, CheckCircle, XCircle, FileText, Camera } from "lucide-react";
 
+// ─────────────────────────────────────────────────────────────
+// 📋 TYPE DEFINITIONS
+// ─────────────────────────────────────────────────────────────
 type HistoryEntry = {
-  id: string;
+  id: number;                   // ✅ Number untuk edit
   type: string;
   tanggal: string;
   area: string;
   pic: string;
-  items: Record<number, { hasil: "OK" | "NOK"; keterangan: string; foto_path: string | null }>;
+  items: Record<number, {
+    itemId?: number;            // ✅ Untuk edit
+    hasil: "OK" | "NOK";
+    keterangan: string;
+    foto_path: string | null;
+    _action?: 'create' | 'update' | 'delete';
+  }>;
   additionalNotes: string | null;
   createdAt: string;
   updatedAt: string;
 };
 
-const checklistInstalasi = [
-  {
-    no: 1,
-    item: "Standar Kabel Listrik",
-    detail: "Kabel sesuai standar dan tidak terkelupas",
-  },
-  {
-    no: 2,
-    item: "Kerapihan Instalasi",
-    detail: "Kabel tertata rapi dan tidak menggantung",
-  },
-  {
-    no: 3,
-    item: "Pelindung Kabel",
-    detail: "Menggunakan conduit / ducting",
-  },
-  {
-    no: 4,
-    item: "Sambungan Kabel",
-    detail: "Tidak ada sambungan terbuka",
-  },
+interface EditFormData {
+  inspectionId: number;
+  type: string;
+  tanggal: string;
+  area: string;
+  pic: string;
+  additional_notes: string;
+  items: Record<number, {
+    itemId?: number;
+    itemNo?: number;
+    hasil: string;
+    keterangan: string;
+    foto_path: string;
+    _action?: 'create' | 'update' | 'delete';
+  }>;
+  replaceItems?: boolean;
+}
+
+const checklistStopKontak = [
+  { no: 1, item: "Kondisi Fisik Stop Kontak", detail: "Tidak retak, pecah, atau longgar" },
+  { no: 2, item: "Penutup Stop Kontak", detail: "Penutup terpasang dan aman" },
+  { no: 3, item: "Fungsi Stop Kontak", detail: "Berfungsi dengan baik saat diuji" },
+  { no: 4, item: "Keamanan", detail: "Tidak panas dan tidak berbau" },
 ];
 
-// ✅ Helper: Format tanggal saja (tanpa waktu)
+// Helpers
 const formatDateOnly = (dateString: string): string => {
   if (!dateString) return '-';
-  
   try {
     const date = new Date(dateString);
-    if (isNaN(date.getTime())) return dateString;
-    
-    const options: Intl.DateTimeFormatOptions = {
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric',
-      timeZone: 'Asia/Jakarta'
-    };
-    
-    return new Intl.DateTimeFormat('id-ID', options).format(date);
-  } catch {
-    return dateString;
-  }
+    return new Intl.DateTimeFormat('id-ID', { year: 'numeric', month: 'long', day: 'numeric', timeZone: 'Asia/Jakarta' }).format(date);
+  } catch { return dateString; }
 };
 
-// ✅ Helper: Format waktu saja (HH:mm)
-const formatTime = (dateString: string): string => {
-  if (!dateString) return '-';
-  
-  try {
-    const date = new Date(dateString);
-    if (isNaN(date.getTime())) return dateString;
-    
-    const hours = String(date.getHours()).padStart(2, '0');
-    const minutes = String(date.getMinutes()).padStart(2, '0');
-    
-    return `${hours}:${minutes}`;
-  } catch {
-    return dateString;
-  }
-};
-
-// ✅ Helper: Format tanggal & waktu lengkap (DD/MM/YYYY HH:mm)
 const formatDateTime = (dateString: string): string => {
   if (!dateString) return '-';
-  
   try {
     const date = new Date(dateString);
-    if (isNaN(date.getTime())) return dateString;
-    
     const day = String(date.getDate()).padStart(2, '0');
     const month = String(date.getMonth() + 1).padStart(2, '0');
     const year = date.getFullYear();
     const hours = String(date.getHours()).padStart(2, '0');
     const minutes = String(date.getMinutes()).padStart(2, '0');
-    
     return `${day}/${month}/${year} ${hours}:${minutes}`;
-  } catch {
-    return dateString;
-  }
+  } catch { return dateString; }
 };
 
-export default function RiwayatInstalasiListrik() {
+export default function RiwayatStopKontak() {
   const router = useRouter();
   const { user } = useAuth();
   const [history, setHistory] = useState<HistoryEntry[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [previewImage, setPreviewImage] = useState<string | null>(null);
+  
+  // ✅ EDIT MODE STATES
+  const [isEditMode, setIsEditMode] = useState(false);
+  const [editData, setEditData] = useState<EditFormData | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [activeTab, setActiveTab] = useState<'header' | 'items'>('header');
 
   useEffect(() => {
     if (!user) return;
@@ -115,26 +98,40 @@ export default function RiwayatInstalasiListrik() {
     loadHistory();
   }, [user, router]);
 
+  // ─────────────────────────────────────────────────────────────
+  // 🔧 LOAD DATA FUNCTION
+  // ─────────────────────────────────────────────────────────────
   const loadHistory = async () => {
     try {
-      const response = await fetch('/api/electrical_inspections?type=instalasi-listrik');
+      setIsLoading(true);
+      const response = await fetch(`/api/electrical_inspections?type=instalasi-listrik&t=${Date.now()}`);
       
-      const contentType = response.headers.get('content-type');
       if (!response.ok) {
-        if (contentType?.includes('text/html')) {
-          throw new Error('Endpoint tidak ditemukan');
-        }
         const errorText = await response.text();
         throw new Error(errorText || `HTTP ${response.status}`);
       }
-
+      
       const result = await response.json();
-
+      
       if (result.success && Array.isArray(result.data)) {
-        const filtered = result.data.filter((item: HistoryEntry) => 
-          item.type === 'instalasi-listrik'
-        );
-        setHistory(filtered);
+        const filtered = result.data.filter((item: HistoryEntry) => item.type === 'instalasi-listrik');
+        
+        // ✅ Pastikan itemId ada dari API
+        const withItemIds = filtered.map((entry: HistoryEntry) => ({
+          ...entry,
+          id: Number(entry.id),
+          items: Object.entries(entry.items || {}).reduce((acc, [itemNo, item]: [string, any]) => ({
+            ...acc,
+            [parseInt(itemNo)]: {
+              itemId: Number(item.itemId),      // ✅ Dari API
+              hasil: item.hasil,
+              keterangan: item.keterangan || '',
+              foto_path: item.foto_path || null
+            }
+          }), {})
+        }));
+        
+        setHistory(withItemIds);
       }
     } catch (e) {
       console.error("❌ Error loading history:", e);
@@ -144,56 +141,182 @@ export default function RiwayatInstalasiListrik() {
     }
   };
 
-  if (!user) return <div className="loading">Loading...</div>;
-  if (user.role !== "inspector-ga") return null;
-  if (isLoading) return (
-    <div className="app-page">
-      <Sidebar userName={user.fullName} />
-      <div className="page-content">
-        <div className="loading-state">
-          <div className="spinner"></div>
-          <p>Loading riwayat...</p>
-        </div>
-      </div>
-    </div>
-  );
+  // ─────────────────────────────────────────────────────────────
+  // ✏️ EDIT FUNCTIONS
+  // ─────────────────────────────────────────────────────────────
+  const formatDateForInput = (dateString: string) => {
+    try {
+      const date = new Date(dateString);
+      return date.toISOString().split('T')[0];
+    } catch { return ''; }
+  };
+
+  const openEditModal = (entry: HistoryEntry) => {
+    console.log('🔍 Opening edit for:', {
+      inspectionId: entry.id,
+      itemsCount: Object.keys(entry.items).length
+    });
+
+    if (!entry.id) {
+      console.error('❌ Inspection ID tidak ada:', entry);
+      alert('❌ Error: Data tidak valid. Silakan refresh halaman.');
+      return;
+    }
+
+    setEditData({
+      inspectionId: entry.id,
+      type: entry.type,
+      tanggal: formatDateForInput(entry.tanggal),
+      area: entry.area,
+      pic: entry.pic,
+      additional_notes: entry.additionalNotes || '',
+      items: Object.entries(entry.items).reduce((acc, [itemNo, item]) => ({
+        ...acc,
+        [parseInt(itemNo)]: {
+          itemId: item.itemId ? Number(item.itemId) : null,
+          itemNo: parseInt(itemNo),
+          hasil: item.hasil,
+          keterangan: item.keterangan || '',
+          foto_path: item.foto_path || '',
+          _action: 'update'
+        }
+      }), {}),
+      replaceItems: false
+    });
+    setIsEditMode(true);
+    setActiveTab('header');
+  };
+
+  const closeEditModal = () => {
+    setIsEditMode(false);
+    setEditData(null);
+  };
+
+  const handleHeaderChange = (field: keyof EditFormData, value: string) => {
+    if (!editData) return;
+    setEditData(prev => prev ? { ...prev, [field]: value } : null);
+  };
+
+  const handleItemChange = (itemNo: number, field: keyof any, value: string) => {
+    if (!editData) return;
+    const updatedItems = { ...editData.items };
+    if (updatedItems[itemNo]) {
+      updatedItems[itemNo] = {
+        ...updatedItems[itemNo],
+        [field]: value,
+        _action: updatedItems[itemNo]._action === 'create' ? 'create' : 'update'
+      };
+    }
+    setEditData(prev => prev ? { ...prev, items: updatedItems } : null);
+  };
+
+  const handleFotoUpload = (itemNo: number, file: File) => {
+    if (!editData) return;
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      const updatedItems = { ...editData.items };
+      if (updatedItems[itemNo]) {
+        updatedItems[itemNo] = {
+          ...updatedItems[itemNo],
+          foto_path: reader.result as string,
+          _action: updatedItems[itemNo]._action === 'create' ? 'create' : 'update'
+        };
+      }
+      setEditData(prev => prev ? { ...prev, items: updatedItems } : null);
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleSubmitEdit = async () => {
+    if (!editData) return;
+    
+    if (!editData.tanggal || !editData.area || !editData.pic) {
+      alert('Harap lengkapi field Header: Tanggal, Area, dan PIC');
+      setActiveTab('header');
+      return;
+    }
+
+    const itemsToSubmit = Object.entries(editData.items).reduce((acc, [itemNo, item]) => ({
+      ...acc,
+      [itemNo]: {
+        itemId: item.itemId,
+        itemNo: parseInt(itemNo),
+        hasil: item.hasil,
+        keterangan: item.keterangan || '',
+        foto_path: item.foto_path || '',
+        _action: item._action || 'update'
+      }
+    }), {});
+
+    console.log('📤 Sending payload:', {
+      inspectionId: editData.inspectionId,
+      itemsCount: Object.keys(itemsToSubmit).length
+    });
+
+    setIsSubmitting(true);
+    try {
+      const response = await fetch('/api/electrical_inspections/edit', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          inspectionId: Number(editData.inspectionId),
+          type: editData.type,
+          tanggal: editData.tanggal,
+          area: editData.area,
+          pic: editData.pic,
+          additional_notes: editData.additional_notes,
+          items: itemsToSubmit,
+          replaceItems: false
+        })
+      });
+      
+      const result = await response.json();
+      console.log('📥 API Response:', result);
+      
+      if (result.success) {
+        alert('✅ Data berhasil diupdate!');
+        closeEditModal();
+        await new Promise(resolve => setTimeout(resolve, 500));
+        await loadHistory();
+      } else {
+        alert('❌ Gagal update: ' + result.message);
+        console.error('API Error:', result);
+      }
+    } catch (error) {
+      console.error('✗ Edit error:', error);
+      alert('Terjadi kesalahan saat menyimpan perubahan');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  if (!user) return null;
+  if (isLoading) return <div className="loading"><div className="spinner"></div><p>Loading riwayat...</p></div>;
 
   return (
     <div className="app-page">
       <Sidebar userName={user.fullName} />
-
       <div className="page-content">
-        <button onClick={() => router.back()} className="back-btn">
-          ← Kembali
-        </button>
-
+        <button onClick={() => router.back()} className="back-btn">← Kembali</button>
         <h1>📋 Riwayat Pengecekan Instalasi Listrik</h1>
-
+        
         {history.length === 0 ? (
           <div className="empty-state">
             <div className="empty-icon">📋</div>
             <p>Tidak ada riwayat inspeksi</p>
-            <button
-              onClick={() => router.push("/status-ga/form-inspeksi-stop-kontak/instalasi-listrik")}
-              className="btn-primary"
-            >
+            <button onClick={() => router.push("/status-ga/form-inspeksi-stop-kontak/instalasi-listrik")} className="btn-primary">
               + Buat Pengecekan Baru
             </button>
           </div>
         ) : (
           <div className="history-list">
             {history.map((entry) => {
-              const hasNOK = Object.values(entry.items).some(
-                (item) => item?.hasil === "NOK"
-              );
-              const isExpanded = expandedId === entry.id;
-
+              const hasNOK = Object.values(entry.items).some(item => item?.hasil === "NOK");
+              const isExpanded = expandedId === entry.id.toString();
+              
               return (
                 <div key={entry.id} className="history-card">
-                  <div
-                    className="card-header"
-                    onClick={() => setExpandedId(isExpanded ? null : entry.id)}
-                  >
+                  <div className="card-header" onClick={() => setExpandedId(isExpanded ? null : entry.id.toString())}>
                     <div className="header-info">
                       <div className="header-text">
                         <h3>{entry.area}</h3>
@@ -204,28 +327,21 @@ export default function RiwayatInstalasiListrik() {
                         {hasNOK ? "⚠️ ADA MASALAH" : "✓ BAIK"}
                       </span>
                     </div>
-                    <span className="expand-icon">
-                      {isExpanded ? "▼" : "▶"}
-                    </span>
+                    <div className="card-actions-header">
+                      <button onClick={(e) => { e.stopPropagation(); openEditModal(entry); }} className="btn-edit" title="Edit">
+                        ✏️
+                      </button>
+                      <span className="expand-icon">{isExpanded ? "▼" : "▶"}</span>
+                    </div>
                   </div>
-
+                  
                   {isExpanded && (
                     <div className="card-body">
                       <div className="meta-info">
-                        <div className="meta-item">
-                          <span className="meta-label">PIC:</span>
-                          <span className="meta-value">{entry.pic}</span>
-                        </div>
-                        <div className="meta-item">
-                          <span className="meta-label">Tanggal Inspeksi:</span>
-                          <span className="meta-value">{formatDateOnly(entry.tanggal)}</span>
-                        </div>
-                        <div className="meta-item">
-                          <span className="meta-label">Waktu Input:</span>
-                          <span className="meta-value">{formatDateTime(entry.createdAt)}</span>
-                        </div>
+                        <div className="meta-item"><span className="meta-label">PIC:</span><span className="meta-value">{entry.pic}</span></div>
+                        <div className="meta-item"><span className="meta-label">Tanggal:</span><span className="meta-value">{formatDateOnly(entry.tanggal)}</span></div>
+                        <div className="meta-item"><span className="meta-label">Waktu Input:</span><span className="meta-value">{formatDateTime(entry.createdAt)}</span></div>
                       </div>
-
                       <div className="table-wrapper">
                         <table className="detail-table">
                           <thead>
@@ -234,10 +350,11 @@ export default function RiwayatInstalasiListrik() {
                               <th className="col-item">Item Pengecekan</th>
                               <th className="col-hasil">Hasil</th>
                               <th className="col-ket">Keterangan</th>
+                              <th className="col-foto">Foto</th>
                             </tr>
                           </thead>
                           <tbody>
-                            {checklistInstalasi.map((item) => {
+                            {checklistStopKontak.map((item) => {
                               const data = entry.items[item.no];
                               return (
                                 <tr key={item.no}>
@@ -247,35 +364,93 @@ export default function RiwayatInstalasiListrik() {
                                     <div className="item-detail">{item.detail}</div>
                                   </td>
                                   <td className="col-hasil">
-                                    <span className={`hasil-${data?.hasil?.toLowerCase()}`}>
-                                      {data?.hasil || "-"}
-                                    </span>
+                                    <span className={`hasil-${data?.hasil?.toLowerCase()}`}>{data?.hasil || "-"}</span>
                                   </td>
                                   <td className="col-ket">{data?.keterangan || "-"}</td>
+                                  <td className="col-foto">
+                                    {data?.foto_path && (
+                                      <img src={data.foto_path.startsWith('http') ? data.foto_path : `${process.env.NEXT_PUBLIC_BASE_URL || ''}${data.foto_path}`} 
+                                        alt="Foto" className="history-image" onClick={(e) => { e.stopPropagation(); setPreviewImage(data.foto_path); }} />
+                                    )}
+                                  </td>
                                 </tr>
                               );
                             })}
                           </tbody>
                         </table>
                       </div>
-
-                      <div className="card-actions">
-                        <button
-                          onClick={() =>
-                            router.push(
-                              `/status-ga/form-inspeksi-stop-kontak/instalasi-listrik?view=${entry.id}`
-                            )
-                          }
-                          className="btn-view"
-                        >
-                          👁️ Lihat Detail
-                        </button>
-                      </div>
                     </div>
                   )}
                 </div>
               );
             })}
+          </div>
+        )}
+
+        {/* Image Preview Modal */}
+        {previewImage && (
+          <div className="image-modal" onClick={() => setPreviewImage(null)}>
+            <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+              <button className="close-btn" onClick={() => setPreviewImage(null)}>✕</button>
+              <img src={previewImage.startsWith('http') ? previewImage : `${process.env.NEXT_PUBLIC_BASE_URL || ''}${previewImage}`} alt="Zoom" className="modal-image" />
+            </div>
+          </div>
+        )}
+
+        {/* ✅ EDIT MODAL */}
+        {isEditMode && editData && (
+          <div className="modal-overlay" onClick={closeEditModal}>
+            <div className="modal-container" onClick={(e) => e.stopPropagation()}>
+              <div className="modal-header">
+                <h3>✏️ Edit Instalasi Listrik</h3>
+                <button className="modal-close" onClick={closeEditModal}>✕</button>
+              </div>
+              <div className="modal-tabs">
+                <button className={`tab-btn ${activeTab === 'header' ? 'active' : ''}`} onClick={() => setActiveTab('header')}>📋 Header</button>
+                <button className={`tab-btn ${activeTab === 'items' ? 'active' : ''}`} onClick={() => setActiveTab('items')}>📦 Items ({Object.keys(editData.items).length})</button>
+              </div>
+              <div className="modal-body">
+                {activeTab === 'header' ? (
+                  <div className="form-section">
+                    <div className="form-grid">
+                      <div className="form-group"><label>Tanggal *</label><input type="date" value={editData.tanggal} onChange={(e) => handleHeaderChange('tanggal', e.target.value)} className="form-input" /></div>
+                      <div className="form-group"><label>Area *</label><input type="text" value={editData.area} onChange={(e) => handleHeaderChange('area', e.target.value)} className="form-input" /></div>
+                      <div className="form-group"><label>PIC *</label><input type="text" value={editData.pic} onChange={(e) => handleHeaderChange('pic', e.target.value)} className="form-input" /></div>
+                      <div className="form-group full"><label>Catatan Tambahan</label><textarea value={editData.additional_notes || ''} onChange={(e) => handleHeaderChange('additional_notes', e.target.value)} className="form-textarea" rows={3} /></div>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="form-section">
+                    <div className="items-edit-list">
+                      {Object.entries(editData.items).map(([itemNo, item]) => (
+                        <div key={itemNo} className="edit-item-card">
+                          <div className="edit-item-header"><span className="item-badge">Item {itemNo}</span></div>
+                          <div className="edit-item-fields">
+                            <div className="status-select-group">
+                              <label className="status-label">Hasil</label>
+                              <select value={item.hasil || 'OK'} onChange={(e) => handleItemChange(parseInt(itemNo), 'hasil', e.target.value)} className={`status-select ${item.hasil === 'NOK' ? 'nok' : 'ok'}`}>
+                                <option value="OK">✅ OK</option>
+                                <option value="NOK">❌ NOK</option>
+                              </select>
+                            </div>
+                            {item.hasil === 'NOK' && (
+                              <div className="form-group-small full"><label>Keterangan *</label><textarea value={item.keterangan || ''} onChange={(e) => handleItemChange(parseInt(itemNo), 'keterangan', e.target.value)} className="form-textarea-small" rows={2} /></div>
+                            )}
+                            <div className="form-group-small"><label>Foto</label><input type="file" accept="image/*" onChange={(e) => e.target.files?.[0] && handleFotoUpload(parseInt(itemNo), e.target.files[0])} className="form-file-small" />
+                              {item.foto_path && <img src={item.foto_path} alt="Preview" className="item-foto-preview" onClick={() => setPreviewImage(item.foto_path)} />}
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+              <div className="modal-footer">
+                <button type="button" onClick={closeEditModal} className="btn-modal-cancel" disabled={isSubmitting}>Batal</button>
+                <button type="button" onClick={handleSubmitEdit} className="btn-modal-save" disabled={isSubmitting}>{isSubmitting ? '💾 Menyimpan...' : '💾 Simpan Perubahan'}</button>
+              </div>
+            </div>
           </div>
         )}
       </div>
@@ -950,6 +1125,319 @@ export default function RiwayatInstalasiListrik() {
             min-height: 40px;
           }
         }
+          /* ===================================================== */
+/* ✅ EDIT BUTTON (HEADER ACTIONS) */
+/* ===================================================== */
+
+.card-actions-header {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.btn-edit {
+  background: white;
+  border: 1px solid #e0e0e0;
+  font-size: 1.1rem;
+  cursor: pointer;
+  color: #1976d2;
+  min-width: 44px;
+  min-height: 44px;
+  border-radius: 8px;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.btn-edit:hover {
+  background: #e3f2fd;
+  border-color: #1976d2;
+  transform: scale(1.05);
+}
+
+/* ===================================================== */
+/* ✅ EDIT MODAL STYLES */
+/* ===================================================== */
+
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  background: rgba(0, 0, 0, 0.6);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 2000;
+  padding: 16px;
+}
+
+.modal-container {
+  background: white;
+  border-radius: 16px;
+  width: 100%;
+  max-width: 800px;
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+  overflow: hidden;
+}
+
+.modal-header {
+  padding: 16px 20px;
+  background: linear-gradient(135deg, #1976d2 0%, #0d47a1 100%);
+  color: white;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.modal-header h3 {
+  margin: 0;
+  font-size: 1.2rem;
+}
+
+.modal-close {
+  background: rgba(255, 255, 255, 0.2);
+  border: none;
+  color: white;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  font-size: 1.2rem;
+  cursor: pointer;
+}
+
+.modal-tabs {
+  display: flex;
+  padding: 8px 16px;
+  background: #f8fafc;
+  border-bottom: 1px solid #e2e8f0;
+  gap: 4px;
+}
+
+.tab-btn {
+  padding: 10px 20px;
+  border: none;
+  background: transparent;
+  border-radius: 8px;
+  font-weight: 600;
+  color: #64748b;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.tab-btn.active {
+  background: #1976d2;
+  color: white;
+}
+
+.modal-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 20px;
+}
+
+.form-section {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.form-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 16px;
+}
+
+.form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.form-group.full {
+  grid-column: 1 / -1;
+}
+
+.form-group label {
+  font-weight: 600;
+  font-size: 0.9rem;
+  color: #334155;
+}
+
+.form-input,
+.form-textarea {
+  padding: 10px 12px;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  font-size: 0.95rem;
+  color : #1e293b;
+}
+
+.form-input:focus,
+.form-textarea:focus {
+  outline: none;
+  border-color: #1976d2;
+}
+
+.items-edit-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.edit-item-card {
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  padding: 14px;
+  background: #fafbfc;
+}
+
+.edit-item-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 12px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.item-badge {
+  background: #1976d2;
+  color: white;
+  padding: 4px 12px;
+  border-radius: 20px;
+  font-weight: 700;
+  font-size: 0.8rem;
+}
+
+.status-select {
+  padding: 6px 10px;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.status-select.ok {
+  color: #059669;
+  border-color: #059669;
+}
+
+.status-select.nok {
+  color: #dc2626;
+  border-color: #dc2626;
+}
+
+.form-textarea-small {
+  padding: 8px 10px;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  font-size: 0.9rem;
+  resize: vertical;
+}
+
+.item-foto-preview {
+  width: 50px;
+  height: 50px;
+  object-fit: cover;
+  border-radius: 6px;
+  border: 1px solid #cbd5e1;
+  cursor: pointer;
+  margin-top: 4px;
+}
+
+.modal-footer {
+  padding: 16px 20px;
+  background: #f8fafc;
+  border-top: 1px solid #e2e8f0;
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+}
+
+.btn-modal-cancel,
+.btn-modal-save {
+  padding: 12px 24px;
+  border-radius: 8px;
+  font-weight: 600;
+  font-size: 0.95rem;
+  cursor: pointer;
+  min-height: 44px;
+  min-width: 100px;
+}
+
+.btn-modal-cancel {
+  background: #f1f5f9;
+  color: #64748b;
+  border: 1px solid #cbd5e1;
+}
+
+.btn-modal-save {
+  background: #1976d2;
+  color: white;
+  border: none;
+}
+
+.btn-modal-cancel:disabled,
+.btn-modal-save:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* ===================================================== */
+/* ✅ IMAGE PREVIEW */
+/* ===================================================== */
+
+.history-image {
+  width: 60px;
+  height: 60px;
+  object-fit: cover;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.image-modal {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  background: rgba(0, 0, 0, 0.9);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 9999;
+}
+
+.modal-content {
+  position: relative;
+  max-width: 90vw;
+  max-height: 90vh;
+}
+
+.close-btn {
+  position: absolute;
+  top: -40px;
+  right: 0;
+  background: white;
+  border: none;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  font-size: 1.2rem;
+  cursor: pointer;
+}
+
+.modal-image {
+  max-width: 100%;
+  max-height: 80vh;
+  border-radius: 8px;
+}
       `}</style>
     </div>
   );

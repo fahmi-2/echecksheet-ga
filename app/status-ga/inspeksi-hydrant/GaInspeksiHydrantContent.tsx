@@ -327,32 +327,15 @@ export function GaInspeksiHydrantContent() {
       }}>
         {/* Header */}
         <div style={{ marginBottom: "28px" }}>
+          <div className="header">
           <button
+            className="btn-back"
             onClick={() => router.push("/status-ga")}
-            style={{
-              background: "none",
-              border: "none",
-              color: "#1976d2",
-              fontSize: "14px",
-              fontWeight: "600",
-              cursor: "pointer",
-              marginBottom: "12px",
-              display: "inline-flex",
-              alignItems: "center",
-              gap: "6px"
-            }}
-            aria-label="Kembali ke halaman utama"
           >
             <ArrowLeft size={18} />
             Kembali
           </button>
-          
-          <div style={{
-            background: "#1976d2",
-            borderRadius: "8px",
-            padding: "20px 24px",
-            boxShadow: "0 2px 8px rgba(0,0,0,0.1)"
-          }}>
+          <div className="text-header">
             <h1 style={{ 
               margin: "0 0 6px 0", 
               color: "white", 
@@ -370,6 +353,7 @@ export function GaInspeksiHydrantContent() {
             }}>
               Monthly inspection schedule and maintenance records
             </p>
+          </div>
           </div>
 
           {/* Dropdown + Search */}

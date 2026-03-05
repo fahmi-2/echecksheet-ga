@@ -3,7 +3,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import pool from '../../../../lib/db';
 
 interface FireAlarmItem {
-  id?: number; // ID dari database (jika update item existing)
+  id?: number;
   no: number;
   zona: string;
   lokasi: string;
@@ -16,17 +16,17 @@ interface FireAlarmItem {
   tindakanPerbaikan?: string | null;
   pic: string;
   foto?: string | null;
-  _action?: 'create' | 'update' | 'delete'; // Opsional: untuk kontrol granular
+  _action?: 'create' | 'update' | 'delete';
 }
 
 interface EditData {
-  recordId: string; // ID record yang akan diupdate (FIRE-ALARM-xxx)
+  recordId: string;
   date?: string;
   zona?: string;
   checker?: string;
   checkerNik?: string;
-  items?: FireAlarmItem[]; // Jika tidak dikirim, items tidak diupdate
-  replaceItems?: boolean; // Jika true, items lama akan dihapus dan diganti dengan yang baru
+  items?: FireAlarmItem[];
+  replaceItems?: boolean;
 }
 
 export async function PUT(request: NextRequest) {
@@ -42,7 +42,7 @@ export async function PUT(request: NextRequest) {
       );
     }
 
-    // Cek apakah record existe
+    // Cek apakah record exists
     const recordCheck = await pool.query(
       'SELECT id, zona, checker FROM fire_alarm_records WHERE id = $1',
       [data.recordId]
@@ -58,7 +58,6 @@ export async function PUT(request: NextRequest) {
     // Validasi items jika dikirim
     if (data.items && data.items.length > 0) {
       for (const [index, item] of data.items.entries()) {
-        // Skip validasi jika item akan dihapus
         if (item._action === 'delete') continue;
         
         const requiredFields = ['no', 'zona', 'lokasi', 'alarmBell', 'indicatorLamp', 'manualCallPoint', 'idZona', 'kebersihan', 'pic'];
@@ -91,7 +90,7 @@ export async function PUT(request: NextRequest) {
       console.log(`🔄 Transaction started for editing record: ${data.recordId}`);
 
       // ─────────────────────────────────────────────────────
-      // 1. UPDATE HEADER RECORD (jika ada field yang diubah)
+      // 1. UPDATE HEADER RECORD
       // ─────────────────────────────────────────────────────
       if (data.date || data.zona || data.checker || data.checkerNik !== undefined) {
         const updateFields = [];
@@ -115,10 +114,10 @@ export async function PUT(request: NextRequest) {
           params.push(data.checkerNik);
         }
 
-        // Selalu update updated_at
+        // Update updated_at di header (asumsi tabel records memiliki kolom ini)
         updateFields.push(`updated_at = CURRENT_TIMESTAMP`);
 
-        params.push(data.recordId); // ID untuk WHERE clause
+        params.push(data.recordId);
 
         await client.query(
           `UPDATE fire_alarm_records 
@@ -134,26 +133,24 @@ export async function PUT(request: NextRequest) {
       // ─────────────────────────────────────────────────────
       if (data.items && data.items.length > 0) {
         
-        // Opsi A: Replace semua items (hapus lama, insert baru)
+        // Opsi A: Replace semua items
         if (data.replaceItems) {
           console.log('🗑️ Replacing all items...');
           
-          // Hapus items lama
           await client.query(
             'DELETE FROM fire_alarm_items WHERE record_id = $1',
             [data.recordId]
           );
           
-          // Insert items baru
           for (const item of data.items) {
-            if (item._action === 'delete') continue; // Skip jika marked delete
+            if (item._action === 'delete') continue;
             
             await client.query(
               `INSERT INTO fire_alarm_items (
                 record_id, no, zona, lokasi, alarm_bell, indicator_lamp, 
                 manual_call_point, id_zona, kebersihan, kondisi_nok, 
-                tindakan_perbaikan, pic, foto, created_at, updated_at
-              ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
+                tindakan_perbaikan, pic, foto, created_at
+              ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, CURRENT_TIMESTAMP)`,
               [
                 data.recordId,
                 item.no,
@@ -173,7 +170,7 @@ export async function PUT(request: NextRequest) {
           }
           console.log(`✅ Replaced with ${data.items.length} new items`);
         } 
-        // Opsi B: Update granular (create/update/delete per item)
+        // Opsi B: Update granular
         else {
           for (const item of data.items) {
             
@@ -189,13 +186,14 @@ export async function PUT(request: NextRequest) {
             
             // ✏️ UPDATE existing item
             if (item._action === 'update' && item.id) {
+              // ⚠️ PERBAIKAN: Hapus updated_at karena kolom ini mungkin tidak ada di tabel items
               await client.query(
                 `UPDATE fire_alarm_items 
                  SET 
                    no = $1, zona = $2, lokasi = $3, alarm_bell = $4, 
                    indicator_lamp = $5, manual_call_point = $6, id_zona = $7, 
                    kebersihan = $8, kondisi_nok = $9, tindakan_perbaikan = $10, 
-                   pic = $11, foto = $12, updated_at = CURRENT_TIMESTAMP
+                   pic = $11, foto = $12
                  WHERE id = $13 AND record_id = $14`,
                 [
                   item.no,
@@ -222,8 +220,8 @@ export async function PUT(request: NextRequest) {
                 `INSERT INTO fire_alarm_items (
                   record_id, no, zona, lokasi, alarm_bell, indicator_lamp, 
                   manual_call_point, id_zona, kebersihan, kondisi_nok, 
-                  tindakan_perbaikan, pic, foto, created_at, updated_at
-                ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
+                  tindakan_perbaikan, pic, foto, created_at
+                ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, CURRENT_TIMESTAMP)`,
                 [
                   data.recordId,
                   item.no,
@@ -273,7 +271,8 @@ export async function PUT(request: NextRequest) {
             { 
               success: false, 
               message: 'Struktur tabel tidak sesuai. Periksa kolom di tabel fire_alarm_items',
-              error: transactionError.message
+              error: transactionError.message,
+              hint: 'Pastikan kolom: no, zona, lokasi, alarm_bell, indicator_lamp, manual_call_point, id_zona, kebersihan, kondisi_nok, tindakan_perbaikan, pic, foto, created_at ada di tabel'
             },
             { status: 500 }
           );
