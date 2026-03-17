@@ -449,25 +449,16 @@ export function EChecksheetTgListrikForm({
   return (
     <div style={{ minHeight: "100vh", background: "#f8f9fa" }}>
       <Sidebar userName={user.fullName} />
-      <div style={{
-        paddingLeft: "95px",
-        paddingRight: "25px",
-        paddingTop: "32px",
-        paddingBottom: "32px",
-        maxWidth: "100%",
-        margin: "0 auto"
-      }}>
-
+      <div className="page-content">
         {/* Header */}
         <div style={{ marginBottom: "24px" }}>
           <div style={{
             background: "linear-gradient(135deg, #0d47a1 0%, #1e88e5 100%)",
             borderRadius: "12px",
-            padding: "20px 24px",
             boxShadow: "0 4px 12px rgba(13, 71, 161, 0.15)"
           }}>
             <h1 style={{ margin: "0 0 8px 0", color: "white", fontSize: "clamp(20px, 5vw, 28px)", fontWeight: "700" }}>
-              Check Sheet Tangga Listrik (AWP)
+              Check Sheet Tangga Listrik (AWPmmmmmmmmmm)
             </h1>
             <p style={{ margin: 0, color: "rgba(255,255,255,0.9)", fontSize: "14px" }}>
               Form Pemeriksaan Aerial Work Platform – 2x/bulan

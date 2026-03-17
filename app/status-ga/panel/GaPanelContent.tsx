@@ -160,7 +160,7 @@ export function GaPanelContent() {
     console.log('🔍 Searching for area to auto-open:', openPanelParam);
     
     const found = areas.find((item) => {
-      const parts = item.name.split(' \u0007 ');
+      const parts = item.name.split(' • ');
       return parts[0] === openPanelParam;
     });
 
@@ -279,14 +279,7 @@ export function GaPanelContent() {
   return (
     <div style={{ minHeight: "100vh", background: "#f8f9fa" }}>
       <Sidebar userName={user?.fullName} />
-      <div style={{
-        paddingLeft: "96px",
-        paddingRight: "20px",
-        paddingTop: "24px",
-        paddingBottom: "24px",
-        maxWidth: "1400px",
-        margin: "0 auto"
-      }}>
+      <div className="page-content">
         {/* Header */}
         <div style={{ marginBottom: "28px" }} className="header">
           <button
@@ -360,7 +353,7 @@ export function GaPanelContent() {
               </thead>
               <tbody>
                 {areas.map((area, idx) => {
-                  const parts = area.name.split(' \u0007 ');
+                  const parts = area.name.split(' • ');
                   const panelName = parts[0] || '';
                   const areaName = parts[1] || '';
                   
@@ -480,14 +473,14 @@ export function GaPanelContent() {
                     fontSize: "20px", 
                     fontWeight: "600" 
                   }}>
-                    Inspection History - {selectedArea.name.split(' \u0007 ')[0]}
+                    Inspection History - {selectedArea.name.split(' • ')[0]}
                   </h2>
                   <p style={{ 
                     margin: "0", 
                     color: "#616161", 
                     fontSize: "14px" 
                   }}>
-                    {selectedArea.name.split(' \u0007 ')[1]}
+                    {selectedArea.name.split(' • ')[1]}
                   </p>
                 </div>
                 <button 

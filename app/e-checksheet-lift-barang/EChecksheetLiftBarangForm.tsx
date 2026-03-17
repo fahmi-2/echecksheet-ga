@@ -100,8 +100,8 @@ export function EChecksheetLiftBarangForm() {
     
     const loadAreaData = async () => {
       try {
-        // Format area name sesuai database: "NAMA LIFT \u0007 AREA \u0007 LOKASI"
-        const areaName = `${liftName} \u0007 ${area} \u0007 ${lokasi}`;
+        // Format area name sesuai database: "NAMA LIFT • AREA • LOKASI"
+        const areaName = `${liftName} • ${area} • ${lokasi}`;
         
         const areas = await getAreasByType(TYPE_SLUG);
         const areaItem = areas.find((a: any) => a.name === areaName);
@@ -364,14 +364,7 @@ export function EChecksheetLiftBarangForm() {
   return (
     <div style={{ minHeight: "100vh", background: "#f8f9fa" }}>
       <Sidebar userName={user?.fullName} />
-      <div style={{
-        paddingLeft: "95px",
-        paddingRight: "25px",
-        paddingTop: "32px",
-        paddingBottom: "32px",
-        maxWidth: "100%",
-        margin: "0 auto"
-      }}>
+      <div className="page-content">
         {/* Header */}
         <div style={{ marginBottom: "24px" }}>
           <div style={{

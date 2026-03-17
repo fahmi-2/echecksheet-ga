@@ -223,58 +223,107 @@ export function Sidebar({ userName = "User", userRole = "Role" }: SidebarProps) 
         {/* Body - BIRU GRADIENT */}
         <div className="sidebar-body">
           {/* Navigation Menu */}
-          <nav className="sidebar-navigation">
-            <Link 
-              href={getHomeRoute()} 
-              className={`menu-item ${pathname === '/home' ? 'active' : ''}`}
-              onClick={() => {
-                if (isMobile) setIsExpanded(false);
-              }}
-            >
-              <span className="menu-icon">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2">
-                  <path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
-                  <polyline points="9 22 9 12 15 12 15 22" />
-                </svg>
-              </span>
-              {isExpanded && <span className="menu-label">Home</span>}
-            </Link>
+<nav className="sidebar-navigation">
+  {/* ✅ Home - Selalu muncul untuk semua role */}
+  <Link 
+    href={getHomeRoute()} 
+    className={`menu-item ${pathname === '/home' ? 'active' : ''}`}
+    onClick={() => {
+      if (isMobile) setIsExpanded(false);
+    }}
+  >
+    <span className="menu-icon">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2">
+        <path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
+        <polyline points="9 22 9 12 15 12 15 22" />
+      </svg>
+    </span>
+    {isExpanded && <span className="menu-label">Home</span>}
+  </Link>
 
-            <Link 
-              href={getDashboardRoute()} 
-              className={`menu-item ${pathname === '/ga-dashboard' ? 'active' : ''}`}
-              onClick={() => {
-                if (isMobile) setIsExpanded(false);
-              }}
-            >
-              <span className="menu-icon">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2">
-                  <rect x="3" y="3" width="7" height="7" rx="1" />
-                  <rect x="14" y="3" width="7" height="7" rx="1" />
-                  <rect x="14" y="14" width="7" height="7" rx="1" />
-                  <rect x="3" y="14" width="7" height="7" rx="1" />
-                </svg>
-              </span>
-              {isExpanded && <span className="menu-label">Dashboard</span>}
-            </Link>
+  {/* ✅ Dashboard - HANYA untuk admin & group-leader-qa */}
+  {(currentRole === "admin" || currentRole === "group-leader-qa") && (
+    <Link 
+      href={currentRole === "admin" ? "/admin/dashboard" : getDashboardRoute()} 
+      className={`menu-item ${pathname === '/ga-dashboard' || pathname === '/admin/dashboard' ? 'active' : ''}`}
+      onClick={() => {
+        if (isMobile) setIsExpanded(false);
+      }}
+    >
+      <span className="menu-icon">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2">
+          <rect x="3" y="3" width="7" height="7" rx="1" />
+          <rect x="14" y="3" width="7" height="7" rx="1" />
+          <rect x="14" y="14" width="7" height="7" rx="1" />
+          <rect x="3" y="14" width="7" height="7" rx="1" />
+        </svg>
+      </span>
+      {isExpanded && <span className="menu-label">Dashboard</span>}
+    </Link>
+  )}
 
-            {/* <Link 
-              href={getLaporanRoute()} 
-              className={`menu-item ${pathname === '/pelaporan-list' ? 'active' : ''}`}
-              onClick={() => {
-                if (isMobile) setIsExpanded(false);
-              }}
-            >
-              <span className="menu-icon">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2">
-                  <line x1="18" y1="20" x2="18" y2="10" />
-                  <line x1="12" y1="20" x2="12" y2="4" />
-                  <line x1="6" y1="20" x2="6" y2="14" />
-                </svg>
-              </span>
-              {isExpanded && <span className="menu-label">Laporan</span>}
-            </Link> */}
-          </nav>
+  {/* ✅ QR Generator - HANYA untuk admin */}
+  {currentRole === "admin" && (
+    <Link 
+      href="/admin/qr-generator" 
+      className={`menu-item ${pathname === '/admin/qr-generator' ? 'active' : ''}`}
+      onClick={() => {
+        if (isMobile) setIsExpanded(false);
+      }}
+    >
+      <span className="menu-icon">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2">
+          <rect x="3" y="3" width="7" height="7" />
+          <rect x="14" y="3" width="7" height="7" />
+          <rect x="14" y="14" width="7" height="7" />
+          <rect x="3" y="14" width="7" height="7" />
+          <path d="M3 10h7M14 10h7M3 17h7M14 17h7" />
+        </svg>
+      </span>
+      {isExpanded && <span className="menu-label">QR Generator</span>}
+    </Link>
+  )}
+
+  {/* ✅ Kelola Pengguna - HANYA untuk admin */}
+  {currentRole === "admin" && (
+    <Link 
+      href="/admin/activities" 
+      className={`menu-item ${pathname === '/admin/activities' ? 'active' : ''}`}
+      onClick={() => {
+        if (isMobile) setIsExpanded(false);
+      }}
+    >
+      <span className="menu-icon">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2">
+          <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+          <circle cx="9" cy="7" r="4" />
+          <path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75" />
+        </svg>
+      </span>
+      {isExpanded && <span className="menu-label">Kelola Pengguna</span>}
+    </Link>
+  )}
+
+  {/* ✅ Laporan - Untuk inspector-ga dan group-leader-qa */}
+  {(currentRole === "inspector-ga" || currentRole === "group-leader-qa") && (
+    <Link 
+      href={getLaporanRoute()} 
+      className={`menu-item ${pathname === '/pelaporan-list' ? 'active' : ''}`}
+      onClick={() => {
+        if (isMobile) setIsExpanded(false);
+      }}
+    >
+      <span className="menu-icon">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2">
+          <line x1="18" y1="20" x2="18" y2="10" />
+          <line x1="12" y1="20" x2="12" y2="4" />
+          <line x1="6" y1="20" x2="6" y2="14" />
+        </svg>
+      </span>
+      {isExpanded && <span className="menu-label">Laporan</span>}
+    </Link>
+  )}
+</nav>
 
           {/* 🔔 Notifikasi
           <div className="notification-section">

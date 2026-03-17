@@ -12,6 +12,7 @@ import {
   CheckCircle2,
   AlertCircle,
   ChevronRight,
+  LayoutDashboard,
 } from "lucide-react";
 import { Sidebar } from "@/components/Sidebar";
 import { useAuth } from "@/lib/auth-context";
@@ -129,60 +130,23 @@ export default function ModernHomePage() {
   // ✅ LOGIC BISNIS SETELAH VALIDASI AUTH
   const userName = user.fullName || "User";
   const currentRole = user.role;
-  const dashboardLink = (() => {
-    switch (currentRole) {
-      case "inspector-ga": return "/ga-dashboard";
-      case "inspector-qa": return "/qa-dashboard";
-      case "group-leader-qa": return "/gl-dashboard";
-      default: return "/dashboard";
-    }
-  })();
+  
+  // Dashboard link berdasarkan role - admin ke GA Dashboard
+  const dashboardLink = currentRole === "admin" ? "/ga-dashboard" : "/dashboard";
 
   const roleCards: Record<string, CardData[]> = {
-    "group-leader-qa": [
+    // ✅ ADMIN ROLE - Akses ke GA Dashboard
+    "admin": [
       {
-        id: "final-assy",
-        icon: Wrench,
-        title: "Final Assy",
-        description: "Daily check untuk Final Assembly",
+        id: "ga-dashboard",
+        icon: LayoutDashboard,
+        title: "Dashboard GA",
+        description: "Lihat statistik dan laporan sistem",
         gradient: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
-        href: "/status-final-assy?subType=group-leader-qa",
-      },
-      {
-        id: "pre-assy",
-        icon: Wrench,
-        title: "Pre-Assy",
-        description: "Daily check dan CC Stripping",
-        gradient: "linear-gradient(135deg, #f093fb 0%, #f5576c 100%)",
-        href: "/status-pre-assy?subType=group-leader-qa",
+        href: "/ga-dashboard",
       },
     ],
-    "inspector-qa": [
-      {
-        id: "final-assy",
-        icon: Wrench,
-        title: "Final Assy",
-        description: "Inspeksi Final Assembly",
-        gradient: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
-        href: "/status-final-assy?subType=inspector-qa",
-      },
-      {
-        id: "pre-assy",
-        icon: Wrench,
-        title: "Pre-Assy",
-        description: "Inspeksi Pre-Assembly",
-        gradient: "linear-gradient(135deg, #f093fb 0%, #f5576c 100%)",
-        href: "/status-pre-assy?subType=inspector-qa",
-      },
-      {
-        id: "pressure-jig",
-        icon: Wrench,
-        title: "Pressure Jig",
-        description: "Check Pressure Jig",
-        gradient: "linear-gradient(135deg, #fa709a 0%, #fee140 100%)",
-        href: "/status-pre-assy-pressure-jig",
-      },
-    ],
+    // ✅ INSPECTOR GA ROLE - Hanya checklist GA
     "inspector-ga": [
       {
         id: "checklist-ga",
@@ -501,6 +465,7 @@ export default function ModernHomePage() {
           
           .main-content {
             padding: 20px;
+            margin-left: 70px;
           }
         }
 

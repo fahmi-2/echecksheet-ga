@@ -1270,42 +1270,472 @@ export default function RiwayatStopKontak() {
           border-radius: 8px;
         }
         
+        
+        /* ───────────────────────────────────────────────────────────
+           TABLET OPTIMIZATION (768px - 1024px)
+           ─────────────────────────────────────────────────────────── */
+        @media (max-width: 1024px) {
+          .page-content {
+            width: 100%;
+            margin-left: 0;
+            padding: 20px 16px;
+          }
+
+          h1 {
+            font-size: 1.5rem;
+          }
+
+          .filter-container {
+            grid-template-columns: repeat(2, 1fr);
+          }
+
+          .detail-table {
+            font-size: 0.9rem;
+          }
+
+          .detail-table th,
+          .detail-table td {
+            padding: 12px;
+          }
+
+          .col-item {
+            min-width: 200px;
+          }
+
+          .modal-container {
+            width: 95%;
+            max-width: 750px;
+          }
+
+          .form-grid {
+            grid-template-columns: repeat(2, 1fr);
+          }
+        }
+
+        /* ───────────────────────────────────────────────────────────
+           MOBILE OPTIMIZATION (480px - 767px)
+           ─────────────────────────────────────────────────────────── */
         @media (max-width: 768px) {
           .page-content {
             width: 100%;
             margin-left: 0;
-            padding: 16px 12px;
+            padding: 12px 8px;
+            max-width: 100%;
           }
+
           .back-btn {
             width: 100%;
             justify-content: center;
+            padding: 10px 12px;
+            margin-bottom: 16px;
           }
+
           h1 {
-            font-size: 1.4rem;
+            font-size: 1.3rem;
+            margin-bottom: 16px;
           }
-          .card-header {
+
+          /* Filter Styles */
+          .filter-container {
+            grid-template-columns: 1fr;
+            gap: 10px;
+            margin-bottom: 16px;
+          }
+
+          .filter-group {
+            display: flex;
             flex-direction: column;
-            align-items: flex-start;
-            gap: 12px;
+            gap: 4px;
           }
-          .header-info {
-            width: 100%;
-            flex-direction: column;
+
+          .filter-group label {
+            font-size: 0.8rem;
+            font-weight: 600;
           }
+
+          .filter-group input,
+          .filter-group select {
+            padding: 8px 10px;
+            font-size: 0.9rem;
+            min-height: 40px;
+          }
+
+          /* History List - Card View */
           .desktop-view {
             display: none;
           }
+
           .mobile-view {
             display: block;
           }
-          .modal-container {
-            max-height: 95vh;
+
+          .history-card {
+            border: 1px solid #e0e0e0;
+            border-radius: 8px;
+            margin-bottom: 12px;
+            overflow: hidden;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
           }
-          .modal-footer {
-            flex-direction: column-reverse;
+
+          .history-card-header {
+            background: linear-gradient(135deg, #1976d2 0%, #0d47a1 100%);
+            color: white;
+            padding: 12px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            min-height: 44px;
           }
-          .btn-modal-cancel, .btn-modal-save {
+
+          .history-card-title {
+            font-weight: 600;
+            font-size: 0.95rem;
+            flex: 1;
+          }
+
+          .history-card-date {
+            font-size: 0.8rem;
+            opacity: 0.9;
+          }
+
+          .card-body {
+            padding: 12px;
+          }
+
+          .meta-info {
+            grid-template-columns: 1fr;
+            gap: 10px;
+            padding: 12px;
+            margin-bottom: 12px;
+            border-left: 3px solid #1e88e5;
+          }
+
+          .meta-item {
+            display: flex;
+            justify-content: space-between;
+            gap: 8px;
+          }
+
+          .meta-label {
+            font-size: 0.8rem;
+            color: #666;
+            font-weight: 600;
+            min-width: 80px;
+          }
+
+          .meta-value {
+            font-size: 0.85rem;
+            color: #1a237e;
+            font-weight: 500;
+            text-align: right;
+            flex: 1;
+          }
+
+          /* Table - Mobile Card Format */
+          .detail-table {
+            display: block;
+            font-size: 0.9rem;
             width: 100%;
+            border: none;
+            margin-bottom: 0;
+          }
+
+          .detail-table thead {
+            display: none;
+          }
+
+          .detail-table tbody {
+            display: block;
+          }
+
+          .detail-table tr {
+            display: block;
+            border: 1px solid #e0e0e0;
+            border-radius: 6px;
+            margin-bottom: 10px;
+            padding: 0;
+            overflow: hidden;
+          }
+
+          .detail-table td {
+            display: grid;
+            grid-template-columns: 100px 1fr;
+            gap: 8px;
+            padding: 10px;
+            border: none;
+            border-bottom: 1px solid #f0f0f0;
+            font-size: 0.9rem;
+          }
+
+          .detail-table td:last-child {
+            border-bottom: none;
+          }
+
+          .detail-table td::before {
+            content: attr(data-label);
+            font-weight: 600;
+            color: #0d47a1;
+            font-size: 0.8rem;
+          }
+
+          .detail-table .col-no::before { content: 'No'; }
+          .detail-table .col-item::before { content: 'Item'; }
+          .detail-table .col-hasil::before { content: 'Hasil'; }
+          .detail-table .col-ket::before { content: 'Keterangan'; }
+          .detail-table .col-foto::before { content: 'Foto'; }
+
+          .col-no,
+          .col-hasil {
+            text-align: left;
+          }
+
+          .history-image {
+            width: 50px;
+            height: 50px;
+            margin-top: 4px;
+          }
+
+          /* Buttons */
+          .btn-action {
+            display: flex;
+            gap: 8px;
+            min-height: 44px;
+          }
+
+          .btn-edit, .btn-delete {
+            flex: 1;
+            padding: 10px 12px;
+            min-height: 44px;
+          }
+
+          /* Modal */
+          .modal-overlay {
+            padding: 8px;
+          }
+
+          .modal-container {
+            width: 100%;
+            max-width: 100%;
+            max-height: 95vh;
+            border-radius: 12px 12px 0 0;
+          }
+
+          .modal-header {
+            padding: 12px;
+            border-radius: 12px 12px 0 0;
+          }
+
+          .modal-header h3 {
+            font-size: 1.1rem;
+          }
+
+          .modal-close {
+            width: 28px;
+            height: 28px;
+            font-size: 1rem;
+          }
+
+          .modal-tabs {
+            padding: 6px 8px;
+            gap: 2px;
+          }
+
+          .tab-btn {
+            padding: 8px 12px;
+            font-size: 0.85rem;
+          }
+
+          .modal-body {
+            padding: 12px;
+            max-height: calc(95vh - 200px);
+          }
+
+          .form-grid {
+            grid-template-columns: 1fr;
+            gap: 12px;
+          }
+
+          .form-group {
+            gap: 4px;
+          }
+
+          .form-group label {
+            font-size: 0.85rem;
+          }
+
+          .form-input,
+          .form-textarea {
+            padding: 8px 10px;
+            font-size: 0.9rem;
+            min-height: 40px;
+          }
+
+          .form-textarea {
+            min-height: 80px;
+          }
+
+          .items-edit-list {
+            gap: 10px;
+          }
+
+          .edit-item-card {
+            padding: 10px;
+            border-radius: 8px;
+          }
+
+          .edit-item-header {
+            gap: 6px;
+            margin-bottom: 8px;
+            padding-bottom: 8px;
+          }
+
+          .item-badge {
+            padding: 3px 10px;
+            font-size: 0.75rem;
+          }
+
+          .item-lokasi-edit {
+            font-size: 0.9rem;
+          }
+
+          .status-select {
+            padding: 6px 8px;
+            font-size: 0.85rem;
+            min-height: 40px;
+          }
+
+          .form-textarea-small {
+            padding: 8px 10px;
+            font-size: 0.85rem;
+            min-height: 60px;
+          }
+
+          .modal-footer {
+            padding: 12px;
+            flex-direction: column-reverse;
+            gap: 8px;
+          }
+
+          .btn-modal-cancel,
+          .btn-modal-save {
+            width: 100%;
+            padding: 12px 16px;
+            min-height: 44px;
+            font-size: 0.9rem;
+          }
+
+          /* Image Modal */
+          .image-modal {
+            padding: 8px;
+          }
+
+          .close-btn {
+            top: -35px;
+            right: -5px;
+            width: 28px;
+            height: 28px;
+          }
+
+          .modal-image {
+            max-height: 70vh;
+          }
+        }
+
+        /* ───────────────────────────────────────────────────────────
+           SMALL MOBILE (320px - 479px)
+           ─────────────────────────────────────────────────────────── */
+        @media (max-width: 479px) {
+          .page-content {
+            padding: 8px 6px;
+          }
+
+          .back-btn {
+            padding: 8px 10px;
+            font-size: 0.8rem;
+            margin-bottom: 12px;
+          }
+
+          h1 {
+            font-size: 1.1rem;
+            margin-bottom: 12px;
+          }
+
+          .filter-container {
+            gap: 8px;
+            margin-bottom: 12px;
+          }
+
+          .filter-group input,
+          .filter-group select {
+            padding: 6px 8px;
+            font-size: 0.8rem;
+          }
+
+          .history-card {
+            margin-bottom: 8px;
+          }
+
+          .history-card-header {
+            padding: 10px;
+          }
+
+          .history-card-title {
+            font-size: 0.9rem;
+          }
+
+          .history-card-date {
+            font-size: 0.75rem;
+          }
+
+          .card-body {
+            padding: 10px;
+          }
+
+          .meta-info {
+            padding: 10px;
+            gap: 8px;
+          }
+
+          .meta-label {
+            font-size: 0.75rem;
+            min-width: 70px;
+          }
+
+          .meta-value {
+            font-size: 0.8rem;
+          }
+
+          .detail-table td {
+            grid-template-columns: 80px 1fr;
+            gap: 6px;
+            padding: 8px;
+            font-size: 0.8rem;
+          }
+
+          .history-image {
+            width: 40px;
+            height: 40px;
+          }
+
+          .modal-body {
+            max-height: calc(95vh - 180px);
+          }
+
+          .form-grid {
+            gap: 10px;
+          }
+
+          .form-input,
+          .form-textarea,
+          .status-select {
+            padding: 6px 8px;
+            font-size: 0.8rem;
+          }
+
+          .btn-modal-cancel,
+          .btn-modal-save {
+            font-size: 0.85rem;
+            padding: 10px 12px;
           }
         }
       `}</style>

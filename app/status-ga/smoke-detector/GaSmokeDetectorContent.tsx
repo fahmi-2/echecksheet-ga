@@ -157,13 +157,13 @@ export function GaSmokeDetectorContent() {
     return () => clearTimeout(verificationTimeout);
   }, [user, authLoading, isInitialized, router, isMounted]);
 
-  // ✅ Auto-open modal jika ada openArea param - HANYA SETELAH AUTH VERIFIED
+  // ✅ Auto-open modal jika ada openArea param - HANYA SETELAH AUTH VERIFIEDss
   useEffect(() => {
     if (!isMounted || !authVerified || !openAreaParam || areas.length === 0) return;
     
     console.log('🔍 Searching for area to auto-open:', openAreaParam);
     const found = areas.find((item) => {
-      const parts = item.name.split(' \u0007 ');
+      const parts = item.name.split(' • ');
       return parts[0] === openAreaParam;
     });
 
@@ -235,7 +235,7 @@ export function GaSmokeDetectorContent() {
 
   // Filter data berdasarkan search
   const filteredData = areas.filter(item => {
-    const parts = item.name.split(' \u0007 ');
+    const parts = item.name.split(' • ');
     const location = parts[0] || '';
     const zone = parts[1] || '';
     return (
@@ -359,14 +359,7 @@ export function GaSmokeDetectorContent() {
   return (
     <div style={{ minHeight: "100vh", background: "#f8f9fa" }}>
       <Sidebar userName={user?.fullName} />
-      <div style={{
-        paddingLeft: "96px",
-        paddingRight: "20px",
-        paddingTop: "24px",
-        paddingBottom: "24px",
-        maxWidth: "1400px",
-        margin: "0 auto"
-      }}>
+      <div className="page-content">
         {/* Header */}
         <div style={{ marginBottom: "28px" }} className="header">
           <button
@@ -469,7 +462,7 @@ export function GaSmokeDetectorContent() {
               </thead>
               <tbody>
                 {filteredData.map((area, idx) => {
-                  const parts = area.name.split(' \u0007 ');
+                  const parts = area.name.split(' • ');
                   const location = parts[0] || '';
                   const zone = parts[1] || '';
                   

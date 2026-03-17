@@ -136,53 +136,77 @@ export default function StatusGA() {
       </div>
 
       <style jsx>{`
+        /* ───────────────────────────────────────────────────────────
+           BASE STYLES - Mobile First (min-width approach)
+           ─────────────────────────────────────────────────────────── */
         .page-content {
-          max-width: 1400px;
-          margin: 0 0 0 120px;
-          padding: 32px 24px;
+          width: 100%;
+          min-width: 0;
+          margin-left: 0; /* Default: No margin for mobile/tablet */
+          padding: 16px 12px;
           background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
           min-height: 100vh;
+          box-sizing: border-box;
+          display: flex;
+          flex-direction: column;
+          align-items: stretch;
+          transition: margin-left 0.3s ease, padding 0.3s ease;
         }
 
         .header {
           display: flex;
-          justify-content: space-between;
-          align-items: center;
-          margin-bottom: 48px;
-          padding: 24px;
+          flex-direction: column;
+          align-items: stretch;
+          gap: 12px;
+          margin-bottom: 24px;
+          padding: 14px 12px;
           background: linear-gradient(135deg, #0d47a1 0%, #1565c0 100%);
           border-radius: 12px;
-          flex-wrap: wrap;
-          gap: 16px;
+          width: 100%;
+          min-width: 0;
+          box-sizing: border-box;
+        }
+
+        .page-title {
+          margin: 0;
+          font-size: 1.2rem;
+          font-weight: 700;
+          color: white;
+          word-break: break-word;
+          min-width: 0;
         }
 
         .user-info {
           display: flex;
           align-items: center;
-          gap: 12px;
-          font-size: 1rem;
+          justify-content: space-between;
+          gap: 10px;
+          font-size: 0.85rem;
           color: white;
           font-weight: 500;
-          margin-left: auto;
-          white-space: nowrap;
+          width: 100%;
+          min-width: 0;
           flex-wrap: wrap;
         }
 
         .btn-scan-qr {
           display: flex;
           align-items: center;
-          gap: 8px;
-          padding: 8px 16px;
+          justify-content: center;
+          gap: 6px;
+          padding: 8px 12px;
           background: rgba(255, 255, 255, 0.25);
           color: white;
           border: 2px solid rgba(255, 255, 255, 0.4);
           border-radius: 8px;
           cursor: pointer;
           font-weight: 600;
-          font-size: 0.95rem;
+          font-size: 0.8rem;
           transition: all 0.3s ease;
-          min-height: 44px;
-          min-width: 100px;
+          min-height: 40px;
+          min-width: 90px;
+          white-space: nowrap;
+          flex-shrink: 0;
         }
 
         .btn-scan-qr:hover {
@@ -199,60 +223,75 @@ export default function StatusGA() {
         .ga-checklist-container {
           display: flex;
           flex-direction: column;
-          gap: 48px;
+          gap: 20px;
+          width: 100%;
+          min-width: 0;
         }
 
         .category-section {
           background: white;
-          border-radius: 16px;
-          box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
-          padding: 32px;
-          border-left: 6px solid #1e88e5;
+          border-radius: 12px;
+          box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
+          padding: 16px 12px;
+          border-left: 4px solid #1e88e5;
           transition: transform 0.3s ease, box-shadow 0.3s ease;
+          width: 100%;
+          min-width: 0;
+          box-sizing: border-box;
         }
 
         .category-section:hover {
-          transform: translateX(4px);
-          box-shadow: 0 12px 48px rgba(0, 0, 0, 0.15);
+          transform: translateX(3px);
+          box-shadow: 0 6px 24px rgba(0, 0, 0, 0.12);
         }
 
         .category-title {
-          margin: 0 0 28px;
+          margin: 0 0 16px;
           color: #0d47a1;
-          font-size: 1.6rem;
+          font-size: 1.1rem;
           font-weight: 700;
-          border-bottom: 3px solid #e3f2fd;
-          padding-bottom: 12px;
+          border-bottom: 2px solid #e3f2fd;
+          padding-bottom: 10px;
           display: flex;
           align-items: center;
-          gap: 12px;
+          gap: 10px;
+          word-break: break-word;
         }
 
         .category-title::before {
           content: '';
-          width: 8px;
-          height: 8px;
+          width: 6px;
+          height: 6px;
           background: #1e88e5;
           border-radius: 50%;
           display: inline-block;
+          flex-shrink: 0;
         }
 
         .checklist-grid {
           display: grid;
-          grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-          gap: 24px;
+          grid-template-columns: 1fr;
+          gap: 12px;
+          width: 100%;
+          min-width: 0;
         }
 
         .checklist-card {
-          display: block;
+          display: flex;
+          flex-direction: column;
+          justify-content: space-between;
           text-decoration: none;
           background: linear-gradient(135deg, #f8f9fa 0%, #ffffff 100%);
           border: 2px solid #e8eef7;
-          border-radius: 12px;
-          padding: 20px;
-          transition: all 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+          border-radius: 10px;
+          padding: 12px;
+          transition: all 0.3s ease;
           position: relative;
           overflow: hidden;
+          min-height: 95px;
+          width: 100%;
+          min-width: 0;
+          box-sizing: border-box;
         }
 
         .checklist-card::before {
@@ -264,6 +303,7 @@ export default function StatusGA() {
           height: 100%;
           background: linear-gradient(90deg, transparent, rgba(255,255,255,0.3), transparent);
           transition: left 0.5s;
+          pointer-events: none;
         }
 
         .checklist-card:hover::before {
@@ -273,109 +313,124 @@ export default function StatusGA() {
         .checklist-card:hover {
           background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%);
           border-color: #1e88e5;
-          transform: translateY(-8px);
-          box-shadow: 0 16px 40px rgba(30, 136, 229, 0.25);
+          transform: translateY(-4px);
+          box-shadow: 0 8px 24px rgba(30, 136, 229, 0.2);
         }
 
         .card-header {
           display: flex;
           align-items: flex-start;
-          gap: 12px;
-          margin-bottom: 12px;
+          gap: 10px;
+          margin-bottom: 8px;
+          min-width: 0;
         }
 
         .card-icon {
-          font-size: 1.8rem;
+          font-size: 1.3rem;
           color: #1e88e5;
-          min-width: 32px;
+          min-width: 24px;
           text-align: center;
           flex-shrink: 0;
+          line-height: 1;
         }
 
         .card-title {
-          font-size: 1.05rem;
+          font-size: 0.9rem;
           color: #1a237e;
           font-weight: 700;
-          line-height: 1.4;
+          line-height: 1.3;
           word-break: break-word;
+          min-width: 0;
+          flex: 1;
         }
 
         .card-desc {
-          font-size: 0.9rem;
+          font-size: 0.78rem;
           color: #666;
-          line-height: 1.6;
-          margin-bottom: 12px;
-          margin-left: 44px;
+          line-height: 1.4;
+          margin-bottom: 8px;
+          margin-left: 34px;
+          word-break: break-word;
+          min-width: 0;
         }
 
         .card-action {
           display: flex;
           justify-content: flex-end;
-          margin-left: 44px;
+          margin-left: 34px;
+          margin-top: 4px;
         }
 
         .btn-arrow {
-          font-size: 1.2rem;
+          font-size: 1rem;
           color: #1e88e5;
-          opacity: 0;
-          transform: translateX(-8px);
+          opacity: 0.7;
           transition: all 0.3s ease;
+          flex-shrink: 0;
         }
 
         .checklist-card:hover .btn-arrow {
           opacity: 1;
-          transform: translateX(0);
+          transform: translateX(2px);
         }
 
-        @media (max-width: 1200px) {
+        /* ───────────────────────────────────────────────────────────
+           TABLET: min-width 480px
+           ─────────────────────────────────────────────────────────── */
+        @media (min-width: 480px) {
           .page-content {
-            margin-left: 100px;
-            padding: 24px 20px;
-          }
-        }
-
-        @media (max-width: 768px) {
-          .page-content {
-            margin-left: 0;
-            padding: 24px 16px;
+            padding: 18px 16px;
           }
 
           .header {
-            flex-direction: column;
-            align-items: flex-start;
-            margin-bottom: 32px;
-            padding: 16px;
+            flex-direction: row;
+            align-items: center;
+            justify-content: space-between;
+            padding: 16px 18px;
+            margin-bottom: 28px;
+            gap: 14px;
           }
 
           .page-title {
-            font-size: 1.6rem !important;
+            font-size: 1.3rem;
+            flex: 1;
+            min-width: 0;
           }
 
           .user-info {
-            width: 100%;
-            margin-left: 0;
+            justify-content: flex-end;
+            flex-wrap: nowrap;
             font-size: 0.9rem;
+            gap: 12px;
           }
 
           .btn-scan-qr {
-            width: 100%;
-            justify-content: center;
-          }
-
-          .checklist-grid {
-            grid-template-columns: 1fr;
-            gap: 16px;
+            font-size: 0.85rem;
+            padding: 9px 14px;
+            min-height: 42px;
+            min-width: 100px;
           }
 
           .category-section {
-            padding: 20px;
-            border-radius: 12px;
-            border-left: 4px solid #1e88e5;
+            padding: 20px 16px;
+            border-radius: 14px;
+            border-left-width: 5px;
           }
 
           .category-title {
-            font-size: 1.3rem;
-            margin-bottom: 20px;
+            font-size: 1.2rem;
+            margin-bottom: 18px;
+          }
+
+          .checklist-grid {
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            gap: 14px;
+          }
+
+          .checklist-card {
+            padding: 14px;
+            min-height: 105px;
+            border-radius: 12px;
           }
 
           .card-title {
@@ -383,53 +438,218 @@ export default function StatusGA() {
           }
 
           .card-desc {
-            font-size: 0.85rem;
-            margin-left: 40px;
-          }
-
-          .checklist-card {
-            padding: 16px;
+            font-size: 0.82rem;
+            margin-left: 38px;
           }
 
           .card-icon {
             font-size: 1.4rem;
+            min-width: 26px;
           }
         }
 
-        @media (max-width: 480px) {
+        /* ───────────────────────────────────────────────────────────
+           SMALL DESKTOP: min-width 768px (Sidebar Expanded)
+           ─────────────────────────────────────────────────────────── */
+        @media (min-width: 768px) {
           .page-content {
-            padding: 12px 8px;
+            margin-left: 120px; /* Add margin only when sidebar is expanded */
+            padding: 24px 20px;
           }
 
           .header {
-            padding: 12px;
-            margin-bottom: 20px;
+            padding: 20px 24px;
+            margin-bottom: 36px;
+            border-radius: 14px;
           }
 
           .page-title {
-            font-size: 1.3rem !important;
-          }
-
-          .btn-scan-qr {
-            font-size: 0.85rem;
-            padding: 8px 12px;
-          }
-
-          .header h1 {
             font-size: 1.5rem;
           }
 
+          .user-info {
+            font-size: 1rem;
+            gap: 14px;
+          }
+
+          .btn-scan-qr {
+            font-size: 0.95rem;
+            padding: 10px 18px;
+            min-height: 44px;
+            min-width: 110px;
+          }
+
+          .ga-checklist-container {
+            gap: 32px;
+          }
+
+          .category-section {
+            padding: 28px 24px;
+            border-radius: 16px;
+            border-left-width: 6px;
+          }
+
+          .category-section:hover {
+            transform: translateX(5px);
+          }
+
           .category-title {
-            font-size: 1.1rem;
+            font-size: 1.4rem;
+            margin-bottom: 24px;
+            padding-bottom: 12px;
+          }
+
+          .category-title::before {
+            width: 8px;
+            height: 8px;
+          }
+
+          .checklist-grid {
+            grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+            gap: 20px;
+          }
+
+          .checklist-card {
+            padding: 18px;
+            min-height: 115px;
+            border-radius: 14px;
+          }
+
+          .card-header {
+            gap: 12px;
           }
 
           .card-title {
+            font-size: 1.05rem;
+          }
+
+          .card-desc {
             font-size: 0.9rem;
+            margin-left: 44px;
+          }
+
+          .card-icon {
+            font-size: 1.6rem;
+            min-width: 30px;
+          }
+
+          .btn-arrow {
+            font-size: 1.1rem;
+            opacity: 0;
+            transform: translateX(-6px);
+          }
+
+          .checklist-card:hover .btn-arrow {
+            opacity: 1;
+            transform: translateX(0);
+          }
+        }
+
+        /* ───────────────────────────────────────────────────────────
+           LARGE DESKTOP: min-width 1024px
+           ─────────────────────────────────────────────────────────── */
+        @media (min-width: 1024px) {
+          .page-content {
+            padding: 32px 28px;
+          }
+
+          .header {
+            padding: 24px 32px;
+            margin-bottom: 48px;
+            border-radius: 16px;
+          }
+
+          .page-title {
+            font-size: 1.7rem;
           }
 
           .user-info {
-            font-size: 0.9rem;
+            font-size: 1.05rem;
           }
+
+          .btn-scan-qr {
+            font-size: 1rem;
+            padding: 10px 20px;
+            min-width: 120px;
+          }
+
+          .category-section {
+            padding: 32px 28px;
+          }
+
+          .category-title {
+            font-size: 1.6rem;
+          }
+
+          .checklist-grid {
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 24px;
+          }
+
+          .checklist-card {
+            padding: 22px;
+            min-height: 125px;
+          }
+
+          .card-title {
+            font-size: 1.1rem;
+          }
+
+          .card-desc {
+            font-size: 0.95rem;
+          }
+
+          .card-icon {
+            font-size: 1.8rem;
+          }
+        }
+
+        /* ───────────────────────────────────────────────────────────
+           EXTRA LARGE: min-width 1400px
+           ─────────────────────────────────────────────────────────── */
+        @media (min-width: 1400px) {
+          .page-content {
+            max-width: 1400px;
+            margin: 0 auto 0 120px;
+            padding: 32px 36px;
+          }
+
+          .checklist-grid {
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+          }
+
+          .category-section {
+            padding: 36px 32px;
+          }
+        }
+
+        /* ───────────────────────────────────────────────────────────
+           UTILITY: Ensure all elements respect container bounds
+           ─────────────────────────────────────────────────────────── */
+        *,
+        *::before,
+        *::after {
+          box-sizing: border-box;
+        }
+
+        img, svg, video {
+          max-width: 100%;
+          height: auto;
+          display: block;
+        }
+
+        /* Prevent horizontal scroll on all viewports */
+        html, body {
+          overflow-x: hidden;
+          width: 100%;
+          min-width: 0;
+        }
+
+        .app-page {
+          display: flex;
+          min-height: 100vh;
+          width: 100%;
+          min-width: 0;
         }
       `}</style>
     </div>

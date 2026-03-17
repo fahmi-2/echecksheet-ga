@@ -365,14 +365,7 @@ export function EChecksheetInfJalanForm() {
   return (
     <div style={{ minHeight: "100vh", background: "#f8f9fa" }}>
       <Sidebar userName={user?.fullName} />
-      <div style={{
-        paddingLeft: "95px",
-        paddingRight: "25px",
-        paddingTop: "32px",
-        paddingBottom: "32px",
-        maxWidth: "100%",
-        margin: "0 auto"
-      }}>
+      <div className="page-content">
         {/* Header */}
         <div style={{ marginBottom: "24px" }}>
           <div style={{

@@ -6,7 +6,7 @@ import { useAuth } from "@/lib/auth-context";
 import { Sidebar } from "@/components/Sidebar";
 import { ArrowLeft } from "lucide-react";
 import { format, parse, isBefore, isValid } from "date-fns";
-import { aparDataBySlug } from "@/lib/apar-data";
+import { aparDataBySlug, type AparDataItem } from "@/lib/apar-data";
 
 const areaNames: Record<string, string> = {
   "area-locker-security": "AREA LOCKER & SECURITY",
@@ -70,8 +70,25 @@ export default function InspeksiAparForm({ params }: { params: Promise<{ slug: s
   const [loading, setLoading] = useState(false);
   const [tempPhotoPreviews, setTempPhotoPreviews] = useState<Record<number, string>>({});
   const [expandedItem, setExpandedItem] = useState<number | null>(null);
+  const [showLoadMaster, setShowLoadMaster] = useState(false);
+  const [masterData, setMasterData] = useState<AparDataItem[]>([]);
+  const [loadingMaster, setLoadingMaster] = useState(false);
+  // Tambahkan di bawah fungsi parseExpDate yang sudah ada
 
-  // Akses hanya untuk inspector-ga
+// Konversi dari format dd/MM/yyyy ke yyyy-MM-dd (untuk date picker)
+const formatDateForInput = (dateStr: string | null | undefined): string => {
+  if (!dateStr || typeof dateStr !== 'string') return '';
+  const parsed = parseExpDate(dateStr);
+  return parsed ? format(parsed, 'yyyy-MM-dd') : '';
+};
+
+// Konversi dari format yyyy-MM-dd (date picker) ke dd/MM/yyyy (untuk display/storage)
+const formatDateForStorage = (dateStr: string): string => {
+  if (!dateStr) return '';
+  const parsed = parse(dateStr, 'yyyy-MM-dd', new Date());
+  return isValid(parsed) ? format(parsed, 'dd/MM/yyyy') : dateStr;
+};
+
   useEffect(() => {
     if (redirected) return;
     if (!user || user.role !== "inspector-ga") {
@@ -80,54 +97,177 @@ export default function InspeksiAparForm({ params }: { params: Promise<{ slug: s
     }
   }, [user, router, redirected]);
 
-  // Inisialisasi data
   useEffect(() => {
-    const areaName = areaNames[slug];
-    if (!areaName) {
-      alert("Area tidak ditemukan!");
-      router.push("/status-ga/inspeksi-apar");
-      return;
+  const areaName = areaNames[slug];
+  if (!areaName) {
+    alert("Area tidak ditemukan!");
+    router.push("/status-ga/inspeksi-apar");
+    return;
+  }
+  const rawData: AparDataItem[] = aparDataBySlug[slug as keyof typeof aparDataBySlug] || [];
+  const initialItems = rawData.map((item) => ({
+    no: item.no,
+    jenisApar: item.jenisApar,
+    lokasi: item.lokasi,
+    noApar: item.noApar,
+    expDate: item.expDate, // Tetap simpan dalam format dd/MM/yyyy
+    hydrotestDate: item.hydrotestDate || "",
+    // Format untuk date picker input
+    expDateInput: formatDateForInput(item.expDate), // yyyy-MM-dd
+    hydrotestDateInput: formatDateForInput(item.hydrotestDate), // yyyy-MM-dd
+    ...Object.fromEntries(checkItems.map((_, idx) => [`check${idx + 1}`, "OK"])),
+    keterangan: "",
+    tindakanPerbaikan: "",
+    pic: user?.fullName || "",
+    foto: "",
+  }));
+  setItems(initialItems);
+  
+  // 🚀 AUTO-LOAD MASTER DATA: Fetch data master dari database dan terapkan ke form
+  const autoLoadMasterData = async () => {
+    try {
+      const response = await fetch(`/api/apar/master?slug=${slug}`);
+      const result = await response.json();
+      
+      if (response.ok && result.success && result.data && result.data.length > 0) {
+        // Jika data master tersedia, langsung terapkan ke form
+        const masterData = result.data;
+        
+        // Jika master data memiliki lebih banyak item, gunakan master data
+        // Jika master data lebih sedikit atau sama, gunakan master data untuk update
+        let newItems;
+        
+        if (masterData.length > initialItems.length) {
+          // Master data memiliki lebih banyak item, gunakan semua master data
+          newItems = masterData.map((m: any, idx: number) => ({
+            no: idx + 1,
+            jenisApar: m.jenisApar || '',
+            lokasi: m.lokasi || '',
+            noApar: m.noApar || '',
+            expDate: m.expDate || '',
+            expDateInput: formatDateForInput(m.expDate),
+            hydrotestDate: m.hydrotestDate || '',
+            hydrotestDateInput: formatDateForInput(m.hydrotestDate),
+            ...Object.fromEntries(checkItems.map((_, i) => [`check${i + 1}`, 'OK'])),
+            keterangan: '',
+            tindakanPerbaikan: '',
+            pic: user?.fullName || '',
+            foto: '',
+          }));
+        } else {
+          // Master data sama atau lebih sedikit, update initial items dengan master data
+          newItems = initialItems.map((item) => {
+            const masterItem = masterData.find((m: any) => m.noApar === item.noApar);
+            if (masterItem) {
+              return {
+                ...item,
+                jenisApar: masterItem.jenisApar || item.jenisApar,
+                lokasi: masterItem.lokasi || item.lokasi,
+                expDate: masterItem.expDate || item.expDate,
+                expDateInput: formatDateForInput(masterItem.expDate),
+                hydrotestDate: masterItem.hydrotestDate || item.hydrotestDate,
+                hydrotestDateInput: formatDateForInput(masterItem.hydrotestDate),
+              };
+            }
+            return item;
+          });
+        }
+        
+        setItems(newItems);
+        console.log(`✅ Auto-load master data berhasil: ${masterData.length} item diterapkan`);
+      }
+    } catch (error) {
+      console.error('Auto-load master error:', error);
+      // Gagal load master data tidak perlu ditampilkan, cukup continue dengan data default
     }
-    const rawData = aparDataBySlug[slug as keyof typeof aparDataBySlug] || [];
-    const initialItems = rawData.map((item) => ({
-      no: item.no,
-      jenisApar: item.jenisApar,
-      lokasi: item.lokasi,
-      noApar: item.noApar,
-      expDate: item.expDate,
-      ...Object.fromEntries(checkItems.map((_, idx) => [`check${idx + 1}`, "O"])),
-      keterangan: "",
-      tindakanPerbaikan: "",
-      pic: user?.fullName || "",
-      foto: "",
-    }));
-    setItems(initialItems);
-  }, [slug, user]);
+  };
+  
+  autoLoadMasterData();
+}, [slug, user]);
 
-  const handleInputChange = (index: number, field: string, value: string) => {
-    const newItems = [...items];
-    newItems[index] = { ...newItems[index], [field]: value };
-    setItems(newItems);
+  // Fungsi untuk memuat data master dari database
+  const loadMasterData = async () => {
+    try {
+      setLoadingMaster(true);
+      const response = await fetch(`/api/apar/master?slug=${slug}`);
+      const result = await response.json();
+
+      if (response.ok && result.success) {
+        if (result.data && result.data.length > 0) {
+          setMasterData(result.data);
+          setShowLoadMaster(true);
+        } else {
+          alert('⚠️ Data master belum tersedia untuk area ini. Silakan lakukan inspeksi terlebih dahulu.');
+        }
+      } else {
+        alert('⚠️ Gagal memuat data master: ' + (result.message || 'Error tidak diketahui'));
+      }
+    } catch (error) {
+      console.error('Load master error:', error);
+      alert('❌ Terjadi kesalahan saat memuat data master');
+    } finally {
+      setLoadingMaster(false);
+    }
   };
 
-  // 🔥 UPLOAD FOTO KE API
+  // Fungsi untuk menerapkan data master ke form
+  const applyMasterData = () => {
+    if (masterData.length === 0) return;
+
+    const newItems = items.map((item, index) => {
+      // Cari data master berdasarkan noApar
+      const masterItem = masterData.find(m => m.noApar === item.noApar);
+      if (masterItem) {
+        return {
+          ...item,
+          jenisApar: masterItem.jenisApar || item.jenisApar,
+          lokasi: masterItem.lokasi || item.lokasi,
+          expDate: masterItem.expDate || item.expDate,
+          expDateInput: formatDateForInput(masterItem.expDate),
+          hydrotestDate: masterItem.hydrotestDate || item.hydrotestDate,
+          hydrotestDateInput: formatDateForInput(masterItem.hydrotestDate),
+        };
+      }
+      return item;
+    });
+
+    setItems(newItems);
+    setShowLoadMaster(false);
+    setMasterData([]);
+    alert('✅ Data master berhasil diterapkan ke form!');
+  };
+
+  const handleInputChange = (index: number, field: string, value: string) => {
+  const newItems = [...items];
+  
+  // Handle date picker input (format yyyy-MM-dd)
+  if (field === 'expDateInput' || field === 'hydrotestDateInput') {
+    const storageField = field.replace('Input', ''); // expDateInput -> expDate
+    const formattedValue = formatDateForStorage(value); // Convert ke dd/MM/yyyy
+    newItems[index] = { 
+      ...newItems[index], 
+      [field]: value,           // Simpan format yyyy-MM-dd untuk input
+      [storageField]: formattedValue // Simpan format dd/MM/yyyy untuk storage
+    };
+  } else {
+    newItems[index] = { ...newItems[index], [field]: value };
+  }
+  setItems(newItems);
+};
+
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>, index: number) => {
     const file = e.target.files?.[0];
     if (!file) return;
-
     if (!['image/jpeg', 'image/jpg', 'image/png', 'image/webp'].includes(file.type)) {
       alert('Format file tidak didukung. Gunakan JPEG, PNG, atau WEBP');
       return;
     }
-
     if (file.size > 5 * 1024 * 1024) {
       alert('Ukuran file terlalu besar. Maksimal 5MB');
       return;
     }
-
     try {
       setLoading(true);
-
       const reader = new FileReader();
       reader.onloadend = () => {
         setTempPhotoPreviews(prev => ({ ...prev, [index]: reader.result as string }));
@@ -139,36 +279,20 @@ export default function InspeksiAparForm({ params }: { params: Promise<{ slug: s
       formData.append('slug', slug);
       formData.append('lokasi', items[index].lokasi);
 
-      const response = await fetch('/api/apar/upload', {
-        method: 'POST',
-        body: formData,
-      });
-
+      const response = await fetch('/api/apar/upload', { method: 'POST', body: formData });
       const result = await response.json();
 
       if (response.ok && result.success) {
         handleInputChange(index, "foto", result.data.path);
-        setTempPhotoPreviews(prev => {
-          const newPreviews = { ...prev };
-          delete newPreviews[index];
-          return newPreviews;
-        });
+        setTempPhotoPreviews(prev => { const n = { ...prev }; delete n[index]; return n; });
         alert('✅ Foto berhasil diupload!');
       } else {
-        setTempPhotoPreviews(prev => {
-          const newPreviews = { ...prev };
-          delete newPreviews[index];
-          return newPreviews;
-        });
+        setTempPhotoPreviews(prev => { const n = { ...prev }; delete n[index]; return n; });
         alert('❌ Gagal upload foto: ' + (result.message || 'Error tidak diketahui'));
       }
     } catch (error) {
       console.error('Upload error:', error);
-      setTempPhotoPreviews(prev => {
-        const newPreviews = { ...prev };
-        delete newPreviews[index];
-        return newPreviews;
-      });
+      setTempPhotoPreviews(prev => { const n = { ...prev }; delete n[index]; return n; });
       alert('❌ Terjadi kesalahan saat upload foto');
     } finally {
       setLoading(false);
@@ -178,17 +302,11 @@ export default function InspeksiAparForm({ params }: { params: Promise<{ slug: s
 
   const handleRemoveImage = (index: number) => {
     handleInputChange(index, "foto", "");
-    setTempPhotoPreviews(prev => {
-      const newPreviews = { ...prev };
-      delete newPreviews[index];
-      return newPreviews;
-    });
+    setTempPhotoPreviews(prev => { const n = { ...prev }; delete n[index]; return n; });
   };
 
   const parseExpDate = (dateStr: string | null | undefined): Date | null => {
-    if (!dateStr || typeof dateStr !== 'string') {
-      return null;
-    }
+    if (!dateStr || typeof dateStr !== 'string') return null;
     let parsed = parse(dateStr, "dd/MM/yyyy", new Date());
     if (isValid(parsed)) return parsed;
     parsed = parse(dateStr, "dd/MM/yy", new Date());
@@ -201,24 +319,28 @@ export default function InspeksiAparForm({ params }: { params: Promise<{ slug: s
     return expDate ? isBefore(expDate, new Date()) : false;
   };
 
+  const isHydrotestExpired = (hydrotestDateString: string | null | undefined): boolean => {
+    const hydrotestDate = parseExpDate(hydrotestDateString);
+    return hydrotestDate ? isBefore(hydrotestDate, new Date()) : false;
+  };
+
   const handleShowPreview = () => {
     for (const item of items) {
       for (let i = 1; i <= checkItems.length; i++) {
         const val = item[`check${i}`];
-        if (!val || !["O", "X"].includes(val)) {
-          alert("⚠️ Semua kolom pengecekan harus diisi dengan 'O' atau 'X'!");
+        if (!val || !["OK", "NG", "OBS"].includes(val)) {
+          alert("⚠️ Semua kolom pengecekan harus diisi dengan 'OK', 'NG', atau 'OBS'!");
           return;
         }
       }
     }
-
     const ngExists = items.some((item) =>
-      Array.from({ length: checkItems.length }, (_, i) => item[`check${i + 1}`] === "X").some(Boolean)
+      Array.from({ length: checkItems.length }, (_, i) => item[`check${i + 1}`] === "NG").some(Boolean)
     );
     if (ngExists) {
       const missingKeterangan = items.some(
         (item) =>
-          Array.from({ length: checkItems.length }, (_, i) => item[`check${i + 1}`] === "X").some(Boolean) &&
+          Array.from({ length: checkItems.length }, (_, i) => item[`check${i + 1}`] === "NG").some(Boolean) &&
           (!item.keterangan || item.keterangan.trim() === "")
       );
       if (missingKeterangan) {
@@ -235,73 +357,77 @@ export default function InspeksiAparForm({ params }: { params: Promise<{ slug: s
   const handleSave = async () => {
     try {
       setLoading(true);
-
+      
+      // ✅ Validasi lengkap sebelum submit
       for (let index = 0; index < items.length; index++) {
         const item = items[index];
-        if (!item.no) throw new Error(`Baris ${index + 1}: Nomor urut tidak boleh kosong`);
-        if (!item.lokasi || item.lokasi.trim() === '') throw new Error(`Baris ${index + 1}: Lokasi wajib diisi`);
-        if (!item.noApar || item.noApar.trim() === '') throw new Error(`Baris ${index + 1}: Nomor APAR wajib diisi`);
-        if (!item.expDate || item.expDate.trim() === '') throw new Error(`Baris ${index + 1}: Exp. Date wajib diisi`);
-
+        
+        // Validasi field master data (WAJIB)
+        if (!item.jenisApar || item.jenisApar.trim() === '') {
+          throw new Error(`Baris ${index + 1}: Jenis APAR wajib diisi`);
+        }
+        if (!item.lokasi || item.lokasi.trim() === '') {
+          throw new Error(`Baris ${index + 1}: Lokasi wajib diisi`);
+        }
+        if (!item.noApar || item.noApar.trim() === '') {
+          throw new Error(`Baris ${index + 1}: Nomor APAR wajib diisi`);
+        }
+        if (!item.expDate || item.expDate.trim() === '') {
+          throw new Error(`Baris ${index + 1}: Exp. Date wajib diisi`);
+        }
+        
+        // Validasi checklist
         for (let i = 1; i <= 12; i++) {
           const checkValue = item[`check${i}`];
-          if (checkValue === undefined || checkValue === null || checkValue === '') {
-            throw new Error(`Baris ${index + 1}: Check item ${i} harus diisi dengan 'O' atau 'X'`);
-          }
-          if (checkValue !== 'O' && checkValue !== 'X') {
-            throw new Error(`Baris ${index + 1}: Check item ${i} harus diisi dengan 'O' atau 'X'`);
+          if (!checkValue || !['OK', 'NG', 'OBS'].includes(checkValue)) {
+            throw new Error(`Baris ${index + 1}: Check item ${i} harus diisi dengan 'OK', 'NG', atau 'OBS'`);
           }
         }
-
-        const hasNg = Array.from({ length: 12 }, (_, i) => item[`check${i + 1}`] === 'X').some(Boolean);
-        if (hasNg) {
-          if (!item.keterangan || item.keterangan.trim() === '') {
-            throw new Error(`Baris ${index + 1}: Keterangan wajib diisi untuk item dengan status NG`);
-          }
+        
+        // Validasi keterangan jika ada NG
+        const hasNgItem = Array.from({ length: 12 }, (_, i) => item[`check${i + 1}`] === 'NG').some(Boolean);
+        if (hasNgItem && (!item.keterangan || item.keterangan.trim() === '')) {
+          throw new Error(`Baris ${index + 1}: Keterangan wajib diisi untuk item dengan status NG`);
         }
       }
-
+      
       const submitData = {
-        date,
+        date, 
         slug,
         checker: user?.fullName || "",
         checkerNik: user?.nik || "",
         items: items.map((item) => ({
-          no: item.no,
-          jenisApar: item.jenisApar,
+          no: item.no, 
+          jenisApar: item.jenisApar, 
           lokasi: item.lokasi,
-          noApar: item.noApar,
+          noApar: item.noApar, 
           expDate: item.expDate,
-          check1: item.check1,
-          check2: item.check2,
-          check3: item.check3,
-          check4: item.check4,
-          check5: item.check5,
-          check6: item.check6,
-          check7: item.check7,
-          check8: item.check8,
-          check9: item.check9,
-          check10: item.check10,
-          check11: item.check11,
-          check12: item.check12,
-          keterangan: item.keterangan || "",
+          hydrotestDate: item.hydrotestDate || null,
+          check1: item.check1, check2: item.check2, check3: item.check3,
+          check4: item.check4, check5: item.check5, check6: item.check6,
+          check7: item.check7, check8: item.check8, check9: item.check9,
+          check10: item.check10, check11: item.check11, check12: item.check12,
+          keterangan: item.keterangan || "", 
           tindakanPerbaikan: item.tindakanPerbaikan || "",
-          pic: item.pic,
+          pic: item.pic, 
           foto: item.foto || null
         }))
       };
-
+      
       const response = await fetch('/api/apar/submit', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json', 
+          'Accept': 'application/json' 
+        },
         body: JSON.stringify(submitData),
         credentials: 'include'
       });
-
+      
       const result = await response.json();
-
+      
       if (response.ok && result.success) {
-        alert('✅ Data berhasil disimpan!');
+        alert('✅ Data berhasil disimpan! Data ini akan menjadi master untuk inspeksi berikutnya.');
         router.push(`/status-ga/inspeksi-apar/${slug}/riwayat`);
       } else {
         throw new Error(result.message || 'Gagal menyimpan data');
@@ -318,19 +444,39 @@ export default function InspeksiAparForm({ params }: { params: Promise<{ slug: s
     setExpandedItem(expandedItem === index ? null : index);
   };
 
+  const handleAddItem = () => {
+    const maxNo = Math.max(0, ...items.map(item => item.no || 0));
+    const newItem = {
+      no: maxNo + 1, jenisApar: "", lokasi: "", noApar: "", expDate: "", hydrotestDate: "",
+      ...Object.fromEntries(checkItems.map((_, idx) => [`check${idx + 1}`, "OK"])),
+      keterangan: "", tindakanPerbaikan: "", pic: user?.fullName || "", foto: "",
+    };
+    setItems([...items, newItem]);
+    setExpandedItem(items.length);
+  };
+
+  const handleDeleteItem = (index: number) => {
+    if (items.length <= 1) {
+      alert('⚠️ Minimal harus ada 1 item dalam daftar!');
+      return;
+    }
+    if (confirm('Apakah Anda yakin ingin menghapus item ini?')) {
+      const newItems = items.filter((_, i) => i !== index);
+      // Re-number the remaining items
+      const renumberedItems = newItems.map((item, i) => ({ ...item, no: i + 1 }));
+      setItems(renumberedItems);
+    }
+  };
+
   if (!user) return null;
 
   return (
     <div className="app-page">
       <Sidebar userName={user.fullName} />
-
       <div className="page-content">
         {/* Header Banner */}
         <div className="header-banner">
-          <button
-            onClick={() => router.push("/status-ga/inspeksi-apar")}
-            className="btn-back"
-          >
+          <button onClick={() => router.push("/status-ga/inspeksi-apar")} className="btn-back">
             <ArrowLeft size={18} />
             <span className="btn-back-text">Kembali</span>
           </button>
@@ -341,13 +487,32 @@ export default function InspeksiAparForm({ params }: { params: Promise<{ slug: s
           📅{" "}
           <span className="date-text">
             {new Date(date).toLocaleDateString("id-ID", {
-              weekday: "long",
-              year: "numeric",
-              month: "long",
-              day: "numeric",
+              weekday: "long", year: "numeric", month: "long", day: "numeric",
             })}
           </span>
         </p>
+
+        {/* Load Master Button */}
+        <div className="action-buttons" style={{ marginBottom: '16px', display: 'flex', gap: '10px' }}>
+          <button 
+            onClick={loadMasterData} 
+            disabled={loadingMaster || loading}
+            className="btn btn-secondary"
+            style={{
+              padding: '8px 16px',
+              backgroundColor: '#6c757d',
+              color: 'white',
+              border: 'none',
+              borderRadius: '4px',
+              cursor: loadingMaster || loading ? 'not-allowed' : 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px'
+            }}
+          >
+            {loadingMaster ? '⏳ Memuat...' : '📥 Load Master Data'}
+          </button>
+        </div>
 
         {loading && (
           <div className="loading-overlay">
@@ -356,168 +521,376 @@ export default function InspeksiAparForm({ params }: { params: Promise<{ slug: s
           </div>
         )}
 
+        {/* Load Master Modal */}
+        {showLoadMaster && (
+          <div className="modal-overlay" style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: 'rgba(0,0,0,0.5)',
+            display: 'flex',
+            justifyContent: 'center',
+            alignItems: 'center',
+            zIndex: 9999
+          }}>
+            <div className="modal-content" style={{
+              backgroundColor: 'white',
+              padding: '20px',
+              borderRadius: '8px',
+              maxWidth: '800px',
+              width: '90%',
+              maxHeight: '80vh',
+              overflow: 'auto'
+            }}>
+              <h2 style={{ marginBottom: '16px' }}>📥 Data Master Tersedia</h2>
+              <p style={{ marginBottom: '16px' }}>
+                Berikut adalah data master yang akan diterapkan ke form. Data berasal dari inspeksi terakhir.
+              </p>
+              
+              <div style={{ maxHeight: '400px', overflow: 'auto', marginBottom: '16px' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px' }}>
+                  <thead>
+                    <tr style={{ backgroundColor: '#f0f0f0' }}>
+                      <th style={{ padding: '8px', border: '1px solid #ddd' }}>No</th>
+                      <th style={{ padding: '8px', border: '1px solid #ddd' }}>Jenis APAR</th>
+                      <th style={{ padding: '8px', border: '1px solid #ddd' }}>Lokasi</th>
+                      <th style={{ padding: '8px', border: '1px solid #ddd' }}>No. APAR</th>
+                      <th style={{ padding: '8px', border: '1px solid #ddd' }}>Exp. Date</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {masterData.map((item, idx) => (
+                      <tr key={idx}>
+                        <td style={{ padding: '8px', border: '1px solid #ddd' }}>{item.no}</td>
+                        <td style={{ padding: '8px', border: '1px solid #ddd' }}>{item.jenisApar}</td>
+                        <td style={{ padding: '8px', border: '1px solid #ddd' }}>{item.lokasi}</td>
+                        <td style={{ padding: '8px', border: '1px solid #ddd' }}>{item.noApar}</td>
+                        <td style={{ padding: '8px', border: '1px solid #ddd' }}>{item.expDate}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
+                <button 
+                  onClick={() => { setShowLoadMaster(false); setMasterData([]); }}
+                  style={{
+                    padding: '8px 16px',
+                    backgroundColor: '#6c757d',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: '4px',
+                    cursor: 'pointer'
+                  }}
+                >
+                  Batal
+                </button>
+                <button 
+                  onClick={applyMasterData}
+                  style={{
+                    padding: '8px 16px',
+                    backgroundColor: '#28a745',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: '4px',
+                    cursor: 'pointer'
+                  }}
+                >
+                  ✅ Terapkan Data Master
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
         {!showPreview ? (
           <div className="card-container">
             {/* ✅ DESKTOP: Table View */}
             <div className="desktop-view">
-              <table className="checklist-table">
-                <thead>
-                  <tr>
-                    <th>No</th>
-                    <th>Jenis APAR</th>
-                    <th>Lokasi</th>
-                    <th>No. APAR</th>
-                    <th>Exp. Date</th>
-                    {checkItems.map((item, idx) => (
-                      <th key={idx} title={item.help} className="check-th">
-                        {item.short}
-                      </th>
-                    ))}
-                    <th>Keterangan</th>
-                    <th>Tindakan</th>
-                    <th>PIC</th>
-                    <th>Foto</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {items.map((item, index) => (
-                    <tr key={index}>
-                      <td className="info-cell">{item.no}</td>
-                      <td className="info-cell">{item.jenisApar}</td>
-                      <td className="info-cell">{item.lokasi}</td>
-                      <td className="info-cell">{item.noApar}</td>
-                      <td className={isExpired(item.expDate) ? "status-expired" : "info-cell"}>
-                        {item.expDate}
-                      </td>
-                      {checkItems.map((_, idx) => (
-                        <td key={idx}>
-                          <select
-                            value={item[`check${idx + 1}`]}
-                            onChange={(e) => handleInputChange(index, `check${idx + 1}`, e.target.value)}
-                            className="status-select"
-                            disabled={loading}
-                          >
-                            <option value="O">O</option>
-                            <option value="X">X</option>
-                          </select>
-                        </td>
+              <div className="table-scroll-wrapper">
+                <table className="checklist-table">
+                  <thead>
+                    <tr>
+                      <th className="sticky-col">Hapus Kolom</th>
+                      <th className="sticky-col">No</th>
+                      <th>Jenis APAR</th>
+                      <th>Lokasi</th>
+                      <th>No. APAR</th>
+                      <th>Exp. Date</th>
+                      <th>Hydrotest Date</th>
+                      {checkItems.map((item, idx) => (
+                        <th key={idx} title={item.help} className="check-th">{item.short}</th>
                       ))}
-                      <td>
-                        <input
-                          type="text"
-                          value={item.keterangan}
-                          onChange={(e) => handleInputChange(index, "keterangan", e.target.value)}
-                          placeholder="Wajib jika NG"
-                          className="notes-input"
-                          disabled={loading}
-                        />
-                      </td>
-                      <td>
-                        <input
-                          type="text"
-                          value={item.tindakanPerbaikan}
-                          onChange={(e) => handleInputChange(index, "tindakanPerbaikan", e.target.value)}
-                          placeholder="Tindakan..."
-                          className="notes-input"
-                          disabled={loading}
-                        />
-                      </td>
-                      <td>
-                        <div className="info-cell">{item.pic}</div>
-                      </td>
-                      <td>
-                        <div className="image-upload">
-                          {(items[index].foto || tempPhotoPreviews[index]) ? (
-                            <div className="image-preview">
-                              <img
-                                src={
-                                  tempPhotoPreviews[index] ||
-                                  (items[index].foto.startsWith('data:')
-                                    ? items[index].foto
-                                    : `${process.env.NEXT_PUBLIC_BASE_URL || ''}${items[index].foto}`)
-                                }
-                                alt="Preview"
-                                className="uploaded-image"
-                              />
-                              <button
-                                type="button"
-                                onClick={() => handleRemoveImage(index)}
-                                className="remove-btn"
-                                disabled={loading}
-                              >
-                                ✕
-                              </button>
-                              {loading && (
-                                <div className="upload-loading">
-                                  <div className="spinner-small"></div>
-                                </div>
-                              )}
-                            </div>
-                          ) : (
-                            <label className="file-label">
-                              📷 Unggah
-                              <input
-                                type="file"
-                                accept="image/*"
-                                onChange={(e) => handleImageUpload(e, index)}
-                                className="file-input"
-                                disabled={loading}
-                              />
-                            </label>
-                          )}
-                        </div>
-                      </td>
+                      <th>Keterangan</th>
+                      <th>Tindakan</th>
+                      <th>PIC</th>
+                      <th>Foto</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody>
+                    {items.map((item, index) => (
+                      <tr key={index}>
+                        <td className="delete-col">
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteItem(index)}
+                            className="delete-btn"
+                            disabled={loading}
+                            title="Hapus item ini"
+                          >
+                            ✕
+                          </button>
+                        </td>
+                        <td className="sticky-col">{item.no}</td>
+                        
+                        {/* ✅ Jenis APAR - Editable Input */}
+                        <td>
+                          <input
+                            type="text"
+                            value={item.jenisApar}
+                            onChange={(e) => handleInputChange(index, "jenisApar", e.target.value)}
+                            className="notes-input"
+                            disabled={loading}
+                            placeholder="Jenis APAR..."
+                          />
+                        </td>
+                        
+                        {/* ✅ Lokasi - Editable Input */}
+                        <td>
+                          <input
+                            type="text"
+                            value={item.lokasi}
+                            onChange={(e) => handleInputChange(index, "lokasi", e.target.value)}
+                            className="notes-input"
+                            disabled={loading}
+                            placeholder="Lokasi..."
+                          />
+                        </td>
+                        
+                        {/* ✅ No. APAR - Editable Input */}
+                        <td>
+                          <input
+                            type="text"
+                            value={item.noApar}
+                            onChange={(e) => handleInputChange(index, "noApar", e.target.value)}
+                            className="notes-input"
+                            disabled={loading}
+                            placeholder="No. APAR..."
+                          />
+                        </td>
+                        
+                        {/* ✅ Exp. Date - Date Picker */}
+                        <td>
+                          <input
+                            type="date"
+                            value={item.expDateInput || ''}
+                            onChange={(e) => handleInputChange(index, "expDateInput", e.target.value)}
+                            className={`status-select ${isExpired(item.expDate) ? 'status-expired' : ''}`}
+                            disabled={loading}
+                            title="Klik untuk mengubah tanggal kedaluwarsa"
+                          />
+                        </td>
+                        
+                        {/* ✅ Hydrotest Date - Date Picker */}
+                        <td>
+                          <input
+                            type="date"
+                            value={item.hydrotestDateInput || ''}
+                            onChange={(e) => handleInputChange(index, "hydrotestDateInput", e.target.value)}
+                            className={`notes-input ${isHydrotestExpired(item.hydrotestDate) ? 'status-expired' : ''}`}
+                            disabled={loading}
+                            placeholder="Pilih tanggal"
+                            title={isHydrotestExpired(item.hydrotestDate) ? '⚠️ Hydrotest sudah expired' : 'Pilih tanggal hydrotest'}
+                          />
+                        </td>
+                        
+                        {/* Checklist Items */}
+                        {checkItems.map((_, idx) => (
+                          <td key={idx}>
+                            <select
+                              value={item[`check${idx + 1}`]}
+                              onChange={(e) => handleInputChange(index, `check${idx + 1}`, e.target.value)}
+                              className="status-select"
+                              disabled={loading}
+                            >
+                              <option value="OK">OK</option>
+                              <option value="NG">NG</option>
+                              <option value="OBS">OBS</option>
+                            </select>
+                          </td>
+                        ))}
+                        
+                        {/* Keterangan, Tindakan, PIC, Foto */}
+                        <td>
+                          <input
+                            type="text"
+                            value={item.keterangan}
+                            onChange={(e) => handleInputChange(index, "keterangan", e.target.value)}
+                            placeholder="Wajib jika NG"
+                            className="notes-input"
+                            disabled={loading}
+                          />
+                        </td>
+                        <td>
+                          <input
+                            type="text"
+                            value={item.tindakanPerbaikan}
+                            onChange={(e) => handleInputChange(index, "tindakanPerbaikan", e.target.value)}
+                            placeholder="Tindakan..."
+                            className="notes-input"
+                            disabled={loading}
+                          />
+                        </td>
+                        <td><div className="info-cell">{item.pic}</div></td>
+                        <td>
+                          <div className="image-upload">
+                            {(items[index].foto || tempPhotoPreviews[index]) ? (
+                              <div className="image-preview">
+                                <img
+                                  src={
+                                    tempPhotoPreviews[index] ||
+                                    (items[index].foto.startsWith('data:')
+                                      ? items[index].foto
+                                      : `${process.env.NEXT_PUBLIC_BASE_URL || ''}${items[index].foto}`)
+                                  }
+                                  alt="Preview"
+                                  className="uploaded-image"
+                                />
+                                <button 
+                                  type="button" 
+                                  onClick={() => handleRemoveImage(index)} 
+                                  className="remove-btn" 
+                                  disabled={loading}
+                                >
+                                  ✕
+                                </button>
+                                {loading && <div className="upload-loading"><div className="spinner-small"></div></div>}
+                              </div>
+                            ) : (
+                              <label className="file-label">
+                                📷 Unggah
+                                <input 
+                                  type="file" 
+                                  accept="image/*" 
+                                  onChange={(e) => handleImageUpload(e, index)} 
+                                  className="file-input" 
+                                  disabled={loading} 
+                                />
+                              </label>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             </div>
 
             {/* ✅ MOBILE: Card View */}
             <div className="mobile-view">
               {items.map((item, index) => (
-                <div key={index} className="apar-card">
+                <div key={index} className="checklist-card">
                   <div className="card-header" onClick={() => toggleExpandItem(index)}>
                     <div className="card-no">{item.no}</div>
                     <div className="card-info">
-                      <div className="card-jenis">{item.jenisApar}</div>
+                      <div className="card-zona">{item.jenisApar}</div>
                       <div className="card-lokasi">{item.lokasi}</div>
                       <div className="card-noapar">No. APAR: {item.noApar}</div>
                     </div>
-                    <div className={`expand-icon ${expandedItem === index ? 'expanded' : ''}`}>
-                      ▼
-                    </div>
+                    <div className={`expand-icon ${expandedItem === index ? 'expanded' : ''}`}>▼</div>
                   </div>
-
                   {expandedItem === index && (
                     <div className="card-body">
-                      <div className="info-row">
-                        <span className="info-label">Exp. Date:</span>
-                        <span className={`info-value ${isExpired(item.expDate) ? 'expired' : ''}`}>
-                          {item.expDate} {isExpired(item.expDate) && '⚠️'}
-                        </span>
+                      {/* ✅ Jenis APAR - Mobile */}
+                      <div className="form-group">
+                        <label>Jenis APAR *</label>
+                        <input
+                          type="text"
+                          value={item.jenisApar}
+                          onChange={(e) => handleInputChange(index, "jenisApar", e.target.value)}
+                          className="notes-input"
+                          disabled={loading}
+                          placeholder="Jenis APAR..."
+                        />
                       </div>
-
+                      
+                      {/* ✅ Lokasi - Mobile */}
+                      <div className="form-group">
+                        <label>Lokasi *</label>
+                        <input
+                          type="text"
+                          value={item.lokasi}
+                          onChange={(e) => handleInputChange(index, "lokasi", e.target.value)}
+                          className="notes-input"
+                          disabled={loading}
+                          placeholder="Lokasi..."
+                        />
+                      </div>
+                      
+                      {/* ✅ No. APAR - Mobile */}
+                      <div className="form-group">
+                        <label>No. APAR *</label>
+                        <input
+                          type="text"
+                          value={item.noApar}
+                          onChange={(e) => handleInputChange(index, "noApar", e.target.value)}
+                          className="notes-input"
+                          disabled={loading}
+                          placeholder="No. APAR..."
+                        />
+                      </div>
+                      
+                      {/* Exp. Date - Mobile */}
+                      <div className="form-group">
+                        <label>Exp. Date *</label>
+                        <input
+                          type="date"
+                          value={item.expDateInput || ''}
+                          onChange={(e) => handleInputChange(index, "expDateInput", e.target.value)}
+                          className={`notes-input ${isExpired(item.expDate) ? 'status-expired' : ''}`}
+                          disabled={loading}
+                        />
+                        {isExpired(item.expDate) && <span className="text-warning text-sm">⚠️ Expired</span>}
+                      </div>
+                      
+                      {/* Hydrotest Date - Mobile */}
+                      <div className="form-group">
+                        <label>Hydrotest Date</label>
+                        <input
+                          type="date"
+                          value={item.hydrotestDateInput || ''}
+                          onChange={(e) => handleInputChange(index, "hydrotestDateInput", e.target.value)}
+                          className={`notes-input ${isHydrotestExpired(item.hydrotestDate) ? 'status-expired' : ''}`}
+                          disabled={loading}
+                        />
+                        {isHydrotestExpired(item.hydrotestDate) && <span className="text-warning text-sm">⚠️ Hydrotest Expired</span>}
+                      </div>
+                      
+                      {/* Checklist Section */}
                       <div className="checklist-section">
                         <h4 className="section-title">✅ Checklist Inspeksi</h4>
                         {checkItems.map((checkItem, idx) => (
                           <div key={idx} className="check-row">
-                            <label className="check-label" title={checkItem.help}>
-                              {checkItem.label}
-                            </label>
+                            <label className="check-label" title={checkItem.help}>{checkItem.label}</label>
                             <select
                               value={item[`check${idx + 1}`]}
                               onChange={(e) => handleInputChange(index, `check${idx + 1}`, e.target.value)}
                               className="check-select"
                               disabled={loading}
                             >
-                              <option value="O">O - OK</option>
-                              <option value="X">X - NG</option>
+                              <option value="OK">OK</option>
+                              <option value="NG">NG</option>
+                              <option value="OBS">OBS</option>
                             </select>
                           </div>
                         ))}
                       </div>
-
+                      
+                      {/* Keterangan & Tindakan */}
                       <div className="form-group">
                         <label>Keterangan</label>
                         <input
@@ -529,7 +902,6 @@ export default function InspeksiAparForm({ params }: { params: Promise<{ slug: s
                           disabled={loading}
                         />
                       </div>
-
                       <div className="form-group">
                         <label>Tindakan Perbaikan</label>
                         <input
@@ -541,12 +913,10 @@ export default function InspeksiAparForm({ params }: { params: Promise<{ slug: s
                           disabled={loading}
                         />
                       </div>
-
                       <div className="form-group">
                         <label>PIC</label>
-                        <div className="info-cell">{item.pic}</div>
+                        <div className="info-cell-mobile">{item.pic}</div>
                       </div>
-
                       <div className="form-group">
                         <label>Foto</label>
                         <div className="image-upload">
@@ -562,29 +932,25 @@ export default function InspeksiAparForm({ params }: { params: Promise<{ slug: s
                                 alt="Preview"
                                 className="uploaded-image"
                               />
-                              <button
-                                type="button"
-                                onClick={() => handleRemoveImage(index)}
-                                className="remove-btn"
+                              <button 
+                                type="button" 
+                                onClick={() => handleRemoveImage(index)} 
+                                className="remove-btn" 
                                 disabled={loading}
                               >
                                 ✕
                               </button>
-                              {loading && (
-                                <div className="upload-loading">
-                                  <div className="spinner-small"></div>
-                                </div>
-                              )}
+                              {loading && <div className="upload-loading"><div className="spinner-small"></div></div>}
                             </div>
                           ) : (
                             <label className="file-label file-label-large">
                               📷 Unggah Foto
-                              <input
-                                type="file"
-                                accept="image/*"
-                                onChange={(e) => handleImageUpload(e, index)}
-                                className="file-input"
-                                disabled={loading}
+                              <input 
+                                type="file" 
+                                accept="image/*" 
+                                onChange={(e) => handleImageUpload(e, index)} 
+                                className="file-input" 
+                                disabled={loading} 
                               />
                             </label>
                           )}
@@ -597,20 +963,9 @@ export default function InspeksiAparForm({ params }: { params: Promise<{ slug: s
             </div>
 
             <div className="form-actions">
-              <button
-                onClick={() => router.push("/status-ga/inspeksi-apar")}
-                className="btn-cancel"
-                disabled={loading}
-              >
-                Batal
-              </button>
-              <button
-                onClick={handleShowPreview}
-                className="btn-submit"
-                disabled={loading}
-              >
-                👁️ Preview & Simpan
-              </button>
+              <button onClick={handleAddItem} className="btn-add-item" disabled={loading}>➕ Tambah Item</button>
+              <button onClick={() => router.push("/status-ga/inspeksi-apar")} className="btn-cancel" disabled={loading}>Batal</button>
+              <button onClick={handleShowPreview} className="btn-submit" disabled={loading}>👁️ Preview & Simpan</button>
             </div>
           </div>
         ) : (
@@ -618,12 +973,12 @@ export default function InspeksiAparForm({ params }: { params: Promise<{ slug: s
             <h2 className="preview-title">🔍 Preview Data</h2>
 
             {/* ✅ DESKTOP: Preview Table */}
-            <div className="desktop-preview">
-              <div className="table-wrapper-responsive">
+            <div className="desktop-view">
+              <div className="table-scroll-wrapper">
                 <table className="simple-table">
                   <thead>
                     <tr>
-                      <th>No</th>
+                      <th className="sticky-col">No</th>
                       <th>Lokasi</th>
                       <th>No. APAR</th>
                       <th>Status</th>
@@ -633,15 +988,13 @@ export default function InspeksiAparForm({ params }: { params: Promise<{ slug: s
                   </thead>
                   <tbody>
                     {items.map((item, index) => {
-                      const hasNgItem = Array.from({ length: 12 }, (_, i) => item[`check${i + 1}`] === "X").some(Boolean);
+                      const hasNgItem = Array.from({ length: 12 }, (_, i) => item[`check${i + 1}`] === "NG").some(Boolean);
                       return (
                         <tr key={index} className={hasNgItem ? "row-ng" : ""}>
-                          <td>{item.no}</td>
+                          <td className="sticky-col">{item.no}</td>
                           <td>{item.lokasi}</td>
                           <td>{item.noApar}</td>
-                          <td className={hasNgItem ? "status-ng" : "status-ok"}>
-                            {hasNgItem ? "NG" : "OK"}
-                          </td>
+                          <td className={hasNgItem ? "status-ng" : "status-ok"}>{hasNgItem ? "NG" : "OK"}</td>
                           <td>{item.keterangan || "-"}</td>
                           <td>
                             {item.foto ? (
@@ -650,9 +1003,7 @@ export default function InspeksiAparForm({ params }: { params: Promise<{ slug: s
                                 alt="Foto"
                                 className="preview-image"
                               />
-                            ) : (
-                              "–"
-                            )}
+                            ) : "–"}
                           </td>
                         </tr>
                       );
@@ -663,10 +1014,9 @@ export default function InspeksiAparForm({ params }: { params: Promise<{ slug: s
             </div>
 
             {/* ✅ MOBILE: Preview Cards */}
-            <div className="mobile-preview">
+            <div className="mobile-view">
               {items.map((item, index) => {
-                const hasNgItem = Array.from({ length: 12 }, (_, i) => item[`check${i + 1}`] === "X").some(Boolean);
-
+                const hasNgItem = Array.from({ length: 12 }, (_, i) => item[`check${i + 1}`] === "NG").some(Boolean);
                 return (
                   <div key={index} className={`preview-card ${hasNgItem ? 'preview-card-ng' : ''}`}>
                     <div className="preview-card-header">
@@ -707,32 +1057,8 @@ export default function InspeksiAparForm({ params }: { params: Promise<{ slug: s
             </div>
 
             <div className="preview-actions">
-              <button
-                onClick={handleCancelPreview}
-                className="cancel-btn"
-                disabled={loading}
-              >
-                ← Kembali
-              </button>
-              {hasNg ? (
-                <div className="ng-actions">
-                  <button
-                    onClick={handleSave}
-                    className="save-btn"
-                    disabled={loading}
-                  >
-                    💾 Simpan
-                  </button>
-                </div>
-              ) : (
-                <button
-                  onClick={handleSave}
-                  className="save-btn"
-                  disabled={loading}
-                >
-                  💾 Simpan Data
-                </button>
-              )}
+              <button onClick={handleCancelPreview} className="cancel-btn" disabled={loading}>← Kembali</button>
+              <button onClick={handleSave} className="save-btn" disabled={loading}>💾 Simpan Data</button>
             </div>
           </div>
         )}
@@ -740,10 +1066,9 @@ export default function InspeksiAparForm({ params }: { params: Promise<{ slug: s
 
       <style jsx global>{`
         body {
-          font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
-          margin: 0;
-          padding: 0;
-          background-color: #f8fafc;
+          font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen,
+            Ubuntu, Cantarell, sans-serif;
+          margin: 0; padding: 0; background-color: #f8fafc;
         }
       `}</style>
 
@@ -756,10 +1081,10 @@ export default function InspeksiAparForm({ params }: { params: Promise<{ slug: s
 
         .page-content {
           flex: 1;
-          max-width: 1600px;
+          max-width: 1400px;
           margin: 0 auto;
           padding: 24px;
-          color: #1e293b;
+          width: 100%;
         }
 
         /* Header Banner */
@@ -791,14 +1116,8 @@ export default function InspeksiAparForm({ params }: { params: Promise<{ slug: s
           font-size: 0.9rem;
           min-height: 44px;
         }
-
-        .btn-back:hover {
-          background: rgba(255, 255, 255, 0.3);
-        }
-
-        .btn-back-text {
-          display: inline;
-        }
+        .btn-back:hover { background: rgba(255, 255, 255, 0.3); }
+        .btn-back-text { display: inline; }
 
         .page-title {
           margin: 0;
@@ -830,6 +1149,7 @@ export default function InspeksiAparForm({ params }: { params: Promise<{ slug: s
           letter-spacing: 0.3px;
         }
 
+        /* Card Container */
         .card-container {
           background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
           border-radius: 16px;
@@ -843,44 +1163,50 @@ export default function InspeksiAparForm({ params }: { params: Promise<{ slug: s
           background: linear-gradient(135deg, #0d47a1 0%, #1976d2 100%);
         }
 
-        /* Desktop View */
-        .desktop-view,
-        .desktop-preview {
-          display: block;
-          overflow-x: auto;
-          -webkit-overflow-scrolling: touch;
-        }
+        /* Desktop / Mobile Toggle */
+        .desktop-view { display: block; }
+        .mobile-view { display: none; }
 
-        .mobile-view,
-        .mobile-preview {
-          display: none;
-        }
-
-        .table-wrapper-responsive {
+        /* Table Scroll Wrapper */
+        .table-scroll-wrapper {
           overflow-x: auto;
           -webkit-overflow-scrolling: touch;
           border-radius: 8px;
           border: 1px solid rgba(255, 255, 255, 0.2);
+          margin-bottom: 24px;
         }
+        .table-scroll-wrapper::-webkit-scrollbar { height: 6px; }
+        .table-scroll-wrapper::-webkit-scrollbar-track { background: rgba(255,255,255,0.1); border-radius: 3px; }
+        .table-scroll-wrapper::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.4); border-radius: 3px; }
 
         .checklist-table,
         .simple-table {
           width: 100%;
+          min-width: max-content;
           border-collapse: collapse;
-          margin-bottom: 24px;
           color: #fff8f8;
-          min-width: 1400px;
+          font-size: 0.8rem;
+          table-layout: auto;
         }
 
         .checklist-table th,
         .checklist-table td,
         .simple-table th,
         .simple-table td {
-          padding: 12px;
+          padding: 10px 12px;
           text-align: left;
           border: 1px solid rgba(255, 255, 255, 0.2);
           color: white;
           white-space: nowrap;
+          vertical-align: middle;
+        }
+
+        .checklist-table td:nth-child(3),
+        .checklist-table td:nth-child(10),
+        .checklist-table td:nth-child(11) {
+          white-space: normal;
+          word-break: break-word;
+          max-width: 150px;
         }
 
         .checklist-table th,
@@ -893,9 +1219,20 @@ export default function InspeksiAparForm({ params }: { params: Promise<{ slug: s
           z-index: 10;
         }
 
-        .check-th {
-          text-align: center;
+        .sticky-col {
+          position: sticky;
+          left: 0;
+          background: inherit;
+          z-index: 8;
+          box-shadow: 2px 0 4px rgba(0, 0, 0, 0.2);
         }
+        .checklist-table th.sticky-col,
+        .simple-table th.sticky-col {
+          background: rgba(0, 0, 0, 0.15);
+          z-index: 15;
+        }
+
+        .check-th { text-align: center; }
 
         .status-select,
         .notes-input {
@@ -903,21 +1240,17 @@ export default function InspeksiAparForm({ params }: { params: Promise<{ slug: s
           padding: 8px 10px;
           border: 1px solid rgba(255, 255, 255, 0.4);
           border-radius: 6px;
-          font-size: 0.9rem;
+          font-size: 0.85rem;
           background: rgba(255, 255, 255, 0.9);
           color: #333;
-          min-height: 44px;
+          min-height: 40px;
         }
-
-        .status-select:focus,
-        .notes-input:focus {
+        .status-select:focus, .notes-input:focus {
           outline: none;
           border-color: #4fc3f7;
           box-shadow: 0 0 0 2px rgba(79, 195, 247, 0.3);
         }
-
-        .status-select:disabled,
-        .notes-input:disabled {
+        .status-select:disabled, .notes-input:disabled {
           background: rgba(255, 255, 255, 0.5);
           cursor: not-allowed;
         }
@@ -934,8 +1267,106 @@ export default function InspeksiAparForm({ params }: { params: Promise<{ slug: s
           font-weight: bold;
         }
 
-        /* Mobile Card Styles */
-        .apar-card,
+        .status-ng {
+          background: rgba(244, 67, 54, 0.3);
+          color: #ffcdd2;
+          font-weight: bold;
+          border-radius: 4px;
+          padding: 4px 8px;
+        }
+        .status-ok {
+          background: rgba(76, 175, 80, 0.3);
+          color: #c8e6c9;
+          font-weight: bold;
+          border-radius: 4px;
+          padding: 4px 8px;
+        }
+        .row-ng { background: rgba(244, 67, 54, 0.1); }
+
+        /* Image Upload */
+        .image-upload {
+          display: flex;
+          justify-content: center;
+          align-items: center;
+          min-height: 44px;
+        }
+
+        .file-label {
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          padding: 8px 16px;
+          background: rgba(255, 255, 255, 0.9);
+          color: #333;
+          border-radius: 6px;
+          font-size: 0.9rem;
+          cursor: pointer;
+          transition: background 0.2s;
+          min-height: 44px;
+        }
+        .file-label-large { width: 100%; padding: 12px 16px; }
+        .file-label:hover { background: rgba(255, 255, 255, 1); }
+        .file-input { display: none; }
+
+        .image-preview {
+          position: relative;
+          width: 80px;
+          height: 80px;
+        }
+
+        .uploaded-image {
+          width: 100%;
+          height: 100%;
+          object-fit: cover;
+          border-radius: 6px;
+          border: 2px solid white;
+        }
+
+        .preview-image {
+          max-width: 80px;
+          max-height: 80px;
+          object-fit: cover;
+          border-radius: 6px;
+          border: 2px solid white;
+          width: 100%;
+          height: 100%;
+        }
+
+        .remove-btn {
+          position: absolute;
+          top: -8px;
+          right: -8px;
+          background: #f44336;
+          color: white;
+          border: 2px solid white;
+          border-radius: 50%;
+          width: 24px;
+          height: 24px;
+          font-size: 14px;
+          cursor: pointer;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          padding: 0;
+          transition: all 0.2s;
+          min-height: 24px;
+          min-width: 24px;
+        }
+        .remove-btn:hover { background: #d32f2f; transform: scale(1.1); }
+        .remove-btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+
+        .upload-loading {
+          position: absolute;
+          top: 0; left: 0; right: 0; bottom: 0;
+          background: rgba(0, 0, 0, 0.5);
+          display: flex;
+          justify-content: center;
+          align-items: center;
+          border-radius: 6px;
+        }
+
+        /* Mobile Card View */
+        .checklist-card,
         .preview-card {
           background: rgba(255, 255, 255, 0.1);
           border-radius: 12px;
@@ -960,16 +1391,13 @@ export default function InspeksiAparForm({ params }: { params: Promise<{ slug: s
           transition: background 0.2s;
           min-height: 44px;
         }
-
         .card-header:hover,
-        .preview-card-header:hover {
-          background: rgba(0, 0, 0, 0.2);
-        }
+        .preview-card-header:hover { background: rgba(0, 0, 0, 0.2); }
 
         .card-no,
         .preview-card-no {
-          width: 40px;
-          height: 40px;
+          width: 36px;
+          height: 36px;
           background: #1976d2;
           color: white;
           border-radius: 50%;
@@ -977,7 +1405,7 @@ export default function InspeksiAparForm({ params }: { params: Promise<{ slug: s
           align-items: center;
           justify-content: center;
           font-weight: 700;
-          font-size: 1.1rem;
+          font-size: 1rem;
           flex-shrink: 0;
         }
 
@@ -988,91 +1416,41 @@ export default function InspeksiAparForm({ params }: { params: Promise<{ slug: s
           font-weight: 600;
           font-size: 0.8rem;
         }
+        .preview-card-status.status-ok { background: rgba(76, 175, 80, 0.3); color: #c8e6c9; }
+        .preview-card-status.status-ng { background: rgba(244, 67, 54, 0.3); color: #ffcdd2; }
 
-        .preview-card-status.ok {
-          background: rgba(76, 175, 80, 0.3);
-          color: #c8e6c9;
-        }
-
-        .preview-card-status.ng {
-          background: rgba(244, 67, 54, 0.3);
-          color: #ffcdd2;
-        }
-
-        .card-info {
-          flex: 1;
-          min-width: 0;
-        }
-
-        .card-jenis {
-          font-size: 0.85rem;
-          color: rgba(255, 255, 255, 0.8);
-          margin-bottom: 4px;
-        }
-
-        .card-lokasi {
-          font-size: 1rem;
-          font-weight: 600;
-          color: white;
-          word-break: break-word;
-          margin-bottom: 4px;
-        }
-
-        .card-noapar {
-          font-size: 0.85rem;
-          color: rgba(255, 255, 255, 0.9);
-        }
+        .card-info { flex: 1; min-width: 0; }
+        .card-zona { font-size: 0.85rem; color: rgba(255, 255, 255, 0.8); margin-bottom: 4px; }
+        .card-lokasi { font-size: 1rem; font-weight: 600; color: white; word-break: break-word; margin-bottom: 4px; }
+        .card-noapar { font-size: 0.8rem; color: rgba(255, 255, 255, 0.9); }
 
         .expand-icon {
           font-size: 1.2rem;
           color: rgba(255, 255, 255, 0.8);
           transition: transform 0.3s ease;
         }
-
-        .expand-icon.expanded {
-          transform: rotate(180deg);
-        }
+        .expand-icon.expanded { transform: rotate(180deg); }
 
         .card-body,
-        .preview-card-body {
-          padding: 16px;
-          background: rgba(0, 0, 0, 0.1);
-        }
+        .preview-card-body { padding: 16px; background: rgba(0, 0, 0, 0.1); }
 
-        .info-row {
-          display: flex;
-          justify-content: space-between;
-          align-items: center;
-          padding: 12px;
-          background: rgba(255, 255, 255, 0.1);
-          border-radius: 8px;
-          margin-bottom: 16px;
-        }
-
-        .info-label {
-          font-weight: 600;
-          color: rgba(255, 255, 255, 0.9);
-        }
-
-        .info-value {
+        .info-cell-mobile {
+          padding: 8px 10px;
+          background: rgba(255, 255, 255, 0.15);
+          border-radius: 6px;
           color: white;
           font-weight: 500;
+          font-size: 0.9rem;
         }
+        .info-cell-mobile.expired { color: #ffcdd2; font-weight: 700; }
 
-        .info-value.expired {
-          color: #ffcdd2;
-          font-weight: 700;
-        }
-
-        .checklist-section {
-          margin-bottom: 16px;
-        }
+        .checklist-section { margin-bottom: 14px; }
 
         .section-title {
-          font-size: 1rem;
+          font-size: 0.95rem;
           font-weight: 600;
           color: white;
-          margin-bottom: 12px;
+          margin-bottom: 10px;
           padding-bottom: 8px;
           border-bottom: 2px solid rgba(255, 255, 255, 0.2);
         }
@@ -1081,40 +1459,33 @@ export default function InspeksiAparForm({ params }: { params: Promise<{ slug: s
           display: flex;
           justify-content: space-between;
           align-items: center;
-          padding: 10px 0;
+          padding: 8px 0;
           border-bottom: 1px solid rgba(255, 255, 255, 0.1);
         }
-
-        .check-row:last-child {
-          border-bottom: none;
-        }
+        .check-row:last-child { border-bottom: none; }
 
         .check-label {
-          font-size: 0.9rem;
+          font-size: 0.85rem;
           color: rgba(255, 255, 255, 0.9);
           flex: 1;
-          padding-right: 12px;
+          padding-right: 10px;
         }
 
         .check-select {
-          padding: 8px 12px;
+          width: 100%;
+          padding: 8px 10px;
           border: 1px solid rgba(255, 255, 255, 0.4);
           border-radius: 6px;
-          font-size: 0.9rem;
+          font-size: 0.85rem;
           background: rgba(255, 255, 255, 0.9);
           color: #333;
-          min-width: 100px;
-          min-height: 44px;
+          min-height: 40px;
+          min-width: 90px;
         }
+        .check-select:disabled { background: rgba(255, 255, 255, 0.5); cursor: not-allowed; }
 
-        .form-group {
-          margin-bottom: 16px;
-        }
-
-        .form-group:last-child {
-          margin-bottom: 0;
-        }
-
+        .form-group { margin-bottom: 16px; }
+        .form-group:last-child { margin-bottom: 0; }
         .form-group label {
           display: block;
           margin-bottom: 6px;
@@ -1131,11 +1502,7 @@ export default function InspeksiAparForm({ params }: { params: Promise<{ slug: s
           border-bottom: 1px solid rgba(255, 255, 255, 0.1);
           gap: 12px;
         }
-
-        .preview-row:last-child {
-          border-bottom: none;
-        }
-
+        .preview-row:last-child { border-bottom: none; }
         .preview-label {
           font-size: 0.85rem;
           color: rgba(255, 255, 255, 0.8);
@@ -1143,7 +1510,6 @@ export default function InspeksiAparForm({ params }: { params: Promise<{ slug: s
           min-width: 80px;
           flex-shrink: 0;
         }
-
         .preview-value {
           font-size: 0.9rem;
           color: white;
@@ -1151,7 +1517,6 @@ export default function InspeksiAparForm({ params }: { params: Promise<{ slug: s
           text-align: right;
           flex: 1;
         }
-
         .preview-card-image {
           width: 60px;
           height: 60px;
@@ -1161,93 +1526,7 @@ export default function InspeksiAparForm({ params }: { params: Promise<{ slug: s
           cursor: pointer;
         }
 
-        .image-upload {
-          display: flex;
-          justify-content: center;
-          align-items: center;
-          min-height: 44px;
-        }
-
-        .file-label {
-          display: inline-block;
-          padding: 10px 16px;
-          background: rgba(255, 255, 255, 0.9);
-          color: #333;
-          border-radius: 6px;
-          font-size: 0.9rem;
-          cursor: pointer;
-          transition: background 0.2s;
-          min-height: 44px;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-        }
-
-        .file-label-large {
-          width: 100%;
-          padding: 12px 16px;
-        }
-
-        .file-label:hover {
-          background: rgba(255, 255, 255, 1);
-        }
-
-        .file-input {
-          display: none;
-        }
-
-        .image-preview {
-          position: relative;
-          width: 80px;
-          height: 80px;
-        }
-
-        .uploaded-image,
-        .preview-image {
-          width: 100%;
-          height: 100%;
-          object-fit: cover;
-          border-radius: 6px;
-          border: 2px solid white;
-        }
-
-        .preview-image {
-          max-width: 80px;
-          max-height: 80px;
-        }
-
-        .remove-btn {
-          position: absolute;
-          top: -8px;
-          right: -8px;
-          background: #f44336;
-          color: white;
-          border: 2px solid white;
-          border-radius: 50%;
-          width: 24px;
-          height: 24px;
-          font-size: 14px;
-          cursor: pointer;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          padding: 0;
-          transition: all 0.2s;
-          min-height: 24px;
-          min-width: 24px;
-        }
-
-        .remove-btn:hover {
-          background: #d32f2f;
-          transform: scale(1.1);
-        }
-
-        .remove-btn:disabled {
-          opacity: 0.5;
-          cursor: not-allowed;
-          transform: none;
-        }
-
+        /* Form Actions & Buttons */
         .form-actions,
         .preview-actions {
           display: flex;
@@ -1259,9 +1538,9 @@ export default function InspeksiAparForm({ params }: { params: Promise<{ slug: s
 
         .btn-cancel,
         .btn-submit,
+        .btn-add-item,
         .cancel-btn,
-        .save-btn,
-        .report-btn {
+        .save-btn {
           padding: 12px 24px;
           border: none;
           border-radius: 8px;
@@ -1273,50 +1552,27 @@ export default function InspeksiAparForm({ params }: { params: Promise<{ slug: s
           min-width: 120px;
         }
 
-        .btn-cancel,
-        .cancel-btn {
+        .btn-cancel, .cancel-btn {
           background: rgba(255, 255, 255, 0.2);
           color: white;
         }
+        .btn-cancel:hover, .cancel-btn:hover { background: rgba(255, 255, 255, 0.3); }
+        .btn-cancel:disabled, .cancel-btn:disabled { opacity: 0.5; cursor: not-allowed; }
 
-        .btn-cancel:hover,
-        .cancel-btn:hover {
-          background: rgba(255, 255, 255, 0.3);
-        }
-
-        .btn-cancel:disabled,
-        .cancel-btn:disabled {
-          opacity: 0.5;
-          cursor: not-allowed;
-        }
-
-        .btn-submit {
-          background: #4caf50;
+        .btn-add-item {
+          background: rgba(79, 195, 247, 0.8);
           color: white;
         }
+        .btn-add-item:hover { background: rgba(79, 195, 247, 1); }
+        .btn-add-item:disabled { opacity: 0.5; cursor: not-allowed; }
 
-        .btn-submit:hover {
-          background: #43a047;
-        }
+        .btn-submit { background: #4caf50; color: white; }
+        .btn-submit:hover { background: #43a047; }
+        .btn-submit:disabled { opacity: 0.5; cursor: not-allowed; }
 
-        .btn-submit:disabled {
-          opacity: 0.5;
-          cursor: not-allowed;
-        }
-
-        .save-btn {
-          background: #2e7d32;
-          color: white;
-        }
-
-        .save-btn:hover {
-          background: #1b5e20;
-        }
-
-        .save-btn:disabled {
-          opacity: 0.5;
-          cursor: not-allowed;
-        }
+        .save-btn { background: #2e7d32; color: white; }
+        .save-btn:hover { background: #1b5e20; }
+        .save-btn:disabled { opacity: 0.5; cursor: not-allowed; }
 
         .preview-title {
           margin: 0 0 24px;
@@ -1326,39 +1582,10 @@ export default function InspeksiAparForm({ params }: { params: Promise<{ slug: s
           font-weight: 700;
         }
 
-        .status-ng {
-          background: rgba(244, 67, 54, 0.3);
-          color: #ffcdd2;
-          font-weight: bold;
-          border-radius: 4px;
-          padding: 4px 8px;
-        }
-
-        .status-ok {
-          background: rgba(76, 175, 80, 0.3);
-          color: #c8e6c9;
-          font-weight: bold;
-          border-radius: 4px;
-          padding: 4px 8px;
-        }
-
-        .row-ng {
-          background: rgba(244, 67, 54, 0.1);
-        }
-
-        .ng-actions {
-          display: flex;
-          gap: 12px;
-          flex-wrap: wrap;
-        }
-
-        /* Loading Overlay */
+        /* Loading */
         .loading-overlay {
           position: fixed;
-          top: 0;
-          left: 0;
-          right: 0;
-          bottom: 0;
+          top: 0; left: 0; right: 0; bottom: 0;
           background: rgba(0, 0, 0, 0.7);
           display: flex;
           flex-direction: column;
@@ -1378,19 +1605,6 @@ export default function InspeksiAparForm({ params }: { params: Promise<{ slug: s
           margin-bottom: 16px;
         }
 
-        .upload-loading {
-          position: absolute;
-          top: 0;
-          left: 0;
-          right: 0;
-          bottom: 0;
-          background: rgba(0, 0, 0, 0.5);
-          display: flex;
-          justify-content: center;
-          align-items: center;
-          border-radius: 6px;
-        }
-
         .spinner-small {
           width: 24px;
           height: 24px;
@@ -1400,40 +1614,20 @@ export default function InspeksiAparForm({ params }: { params: Promise<{ slug: s
           animation: spin 0.8s linear infinite;
         }
 
-        @keyframes spin {
-          to { transform: rotate(360deg); }
-        }
+        @keyframes spin { to { transform: rotate(360deg); } }
 
-        /* ✅ TABLET RESPONSIVE */
+        /* Responsive: Tablet */
         @media (max-width: 1024px) {
-          .page-content {
-            padding: 20px 16px;
-          }
-
-          .page-title {
-            font-size: 1.2rem;
-          }
-
-          .checklist-table,
-          .simple-table {
-            min-width: 1200px;
-            font-size: 0.85rem;
-          }
-
-          .checklist-table th,
-          .checklist-table td,
-          .simple-table th,
-          .simple-table td {
-            padding: 10px 8px;
-          }
+          .page-content { padding: 20px 16px; }
+          .page-title { font-size: 1.4rem; }
+          .checklist-table, .simple-table { font-size: 0.82rem; }
+          .checklist-table th, .checklist-table td,
+          .simple-table th, .simple-table td { padding: 8px 10px; }
         }
 
-        /* ✅ MOBILE RESPONSIVE */
+        /* Mobile: Toggle Table → Cards */
         @media (max-width: 768px) {
-          .page-content {
-            padding: 16px 12px;
-            margin-left: 0;
-          }
+          .page-content { padding: 16px 12px; margin-left: 0; }
 
           .header-banner {
             padding: 12px 16px;
@@ -1441,265 +1635,87 @@ export default function InspeksiAparForm({ params }: { params: Promise<{ slug: s
             align-items: flex-start;
             gap: 12px;
           }
+          .btn-back { width: 100%; justify-content: center; }
+          .page-title { font-size: 1.3rem; width: 100%; }
+          .subtitle { font-size: 0.9rem; width: 100%; }
+          .date-text { font-size: 1rem; width: 100%; text-align: center; }
 
-          .btn-back {
-            width: 100%;
-            justify-content: center;
-          }
+          .card-container { padding: 16px 12px; }
 
-          .btn-back-text {
-            display: inline;
-          }
+          .desktop-view { display: none; }
+          .mobile-view { display: block; }
 
-          .page-title {
-            font-size: 1.1rem;
-            width: 100%;
-            text-align: center;
-          }
-
-          .subtitle {
-            font-size: 0.9rem;
-            width: 100%;
-          }
-
-          .date-text {
-            font-size: 1rem;
-            width: 100%;
-            text-align: center;
-          }
-
-          .card-container {
-            padding: 16px 12px;
-          }
-
-          /* Hide desktop table, show mobile cards */
-          .desktop-view,
-          .desktop-preview {
-            display: none;
-          }
-
-          .mobile-view,
-          .mobile-preview {
-            display: block;
-          }
-
-          .form-actions,
-          .preview-actions,
-          .ng-actions {
+          .form-actions, .preview-actions {
             flex-direction: column;
             gap: 12px;
           }
-
-          .btn-cancel,
-          .btn-submit,
-          .cancel-btn,
-          .save-btn,
-          .report-btn {
+          .btn-cancel, .btn-submit, .btn-add-item, .cancel-btn, .save-btn {
             width: 100%;
             min-height: 52px;
             font-size: 1rem;
           }
 
-          .checklist-table,
-          .simple-table {
-            min-width: 900px;
-            font-size: 0.8rem;
-          }
-
-          .checklist-table th,
-          .checklist-table td,
-          .simple-table th,
-          .simple-table td {
-            padding: 8px 6px;
-          }
-
-          .status-select,
-          .notes-input {
-            font-size: 0.9rem;
-            min-height: 44px;
-          }
-
-          .image-preview {
-            width: 70px;
-            height: 70px;
-          }
-
-          .preview-image {
-            max-width: 70px;
-            max-height: 70px;
-          }
-
-          .card-no,
-          .preview-card-no {
-            width: 36px;
-            height: 36px;
-            font-size: 1rem;
-          }
-
-          .card-lokasi {
-            font-size: 0.95rem;
-          }
-
-          .preview-label {
-            min-width: 70px;
-            font-size: 0.8rem;
-          }
-
-          .preview-value {
-            font-size: 0.85rem;
-          }
-
-          .preview-card-image {
-            width: 50px;
-            height: 50px;
-          }
-
-          .check-label {
-            font-size: 0.85rem;
-          }
-
-          .check-select {
-            min-width: 90px;
-          }
+          .image-preview { width: 70px; height: 70px; }
+          .preview-image { max-width: 70px; max-height: 70px; }
+          .card-no { width: 32px; height: 32px; font-size: 0.9rem; }
+          .card-lokasi { font-size: 0.95rem; }
+          .preview-label { min-width: 70px; font-size: 0.8rem; }
+          .preview-value { font-size: 0.85rem; }
+          .preview-card-image { width: 55px; height: 55px; }
         }
 
-        /* ✅ SMALL MOBILE */
+        /* Small Mobile */
         @media (max-width: 480px) {
-          .page-content {
-            padding: 12px 8px;
-          }
+          .page-content { padding: 12px 8px; }
+          .header-banner { padding: 10px 12px; }
+          .page-title { font-size: 1.1rem; }
+          .subtitle { font-size: 0.85rem; }
+          .date-text { font-size: 0.9rem; padding: 3px 8px; }
+          .card-container { padding: 12px 8px; }
 
-          .header-banner {
-            padding: 10px 12px;
-          }
-
-          .page-title {
-            font-size: 1rem;
-          }
-
-          .subtitle {
-            font-size: 0.85rem;
-          }
-
-          .date-text {
-            font-size: 0.9rem;
-            padding: 3px 8px;
-          }
-
-          .card-container {
-            padding: 12px 8px;
-          }
-
-          .card-header,
-          .preview-card-header {
-            padding: 12px;
-          }
-
-          .card-no,
-          .preview-card-no {
-            width: 32px;
-            height: 32px;
-            font-size: 0.9rem;
-          }
-
-          .card-body,
-          .preview-card-body {
-            padding: 12px;
-          }
-
-          .info-row {
-            padding: 10px;
-          }
-
-          .section-title {
-            font-size: 0.95rem;
-          }
-
-          .check-row {
-            padding: 8px 0;
-          }
-
-          .check-label {
-            font-size: 0.8rem;
-          }
-
-          .check-select {
-            min-width: 80px;
-            font-size: 0.85rem;
-            padding: 6px 10px;
-          }
-
-          .form-group label {
-            font-size: 0.85rem;
-          }
-
-          .status-select,
-          .notes-input {
-            font-size: 0.85rem;
-            min-height: 44px;
-          }
-
-          .file-label {
-            padding: 10px 14px;
-            font-size: 0.85rem;
-            min-height: 44px;
-          }
-
-          .file-label-large {
-            padding: 12px 14px;
-          }
-
-          .image-preview {
-            width: 60px;
-            height: 60px;
-          }
-
-          .preview-image {
-            max-width: 60px;
-            max-height: 60px;
-          }
-
-          .btn-cancel,
-          .btn-submit,
-          .cancel-btn,
-          .save-btn,
-          .report-btn {
+          .card-header, .preview-card-header { padding: 12px; }
+          .card-no, .preview-card-no { width: 28px; height: 28px; font-size: 0.85rem; }
+          .card-body, .preview-card-body { padding: 12px; }
+          .check-row { padding: 7px 0; }
+          .check-label { font-size: 0.75rem; }
+          .check-select { min-width: 80px; font-size: 0.85rem; }
+          .form-group label { font-size: 0.85rem; }
+          .status-select, .notes-input { font-size: 0.9rem; min-height: 44px; }
+          .file-label { padding: 10px 14px; font-size: 0.85rem; min-height: 44px; }
+          .file-label-large { padding: 12px 14px; }
+          .image-preview { width: 60px; height: 60px; }
+          .preview-image { max-width: 60px; max-height: 60px; }
+          .btn-cancel, .btn-submit, .btn-add-item, .cancel-btn, .save-btn {
             min-height: 56px;
             font-size: 0.95rem;
             padding: 14px 20px;
           }
+          .preview-title { font-size: 1.3rem; }
+          .preview-label { min-width: 60px; font-size: 0.7rem; }
+          .preview-value { font-size: 0.8rem; }
+          .preview-card-image { width: 45px; height: 45px; }
+        }
 
-          .checklist-table,
-          .simple-table {
-            min-width: 700px;
-            font-size: 0.75rem;
+        /* Touch friendly */
+        @media (hover: none) and (pointer: coarse) {
+          .status-select, .notes-input, .check-select, .file-label {
+            font-size: 16px;
+            min-height: 44px;
           }
-
-          .checklist-table th,
-          .checklist-table td,
-          .simple-table th,
-          .simple-table td {
-            padding: 6px 4px;
+          .btn-back, .btn-cancel, .btn-submit, .btn-add-item, .cancel-btn, .save-btn {
+            min-height: 44px;
           }
-
-          .preview-title {
-            font-size: 1.3rem;
-          }
-
-          .preview-label {
-            min-width: 60px;
-            font-size: 0.75rem;
-          }
-
-          .preview-value {
-            font-size: 0.8rem;
-          }
-
-          .preview-card-image {
-            width: 45px;
-            height: 45px;
+          .remove-btn {
+            min-height: 44px;
+            min-width: 44px;
+            width: 44px;
+            height: 44px;
           }
         }
+
+        *, *::before, *::after { box-sizing: border-box; }
+        img, svg, video { max-width: 100%; height: auto; display: block; }
+        html, body { overflow-x: hidden; width: 100%; min-width: 0; }
       `}</style>
     </div>
   );

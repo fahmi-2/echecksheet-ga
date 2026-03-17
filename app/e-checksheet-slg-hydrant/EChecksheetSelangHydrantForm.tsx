@@ -408,14 +408,7 @@ export function EChecksheetSelangHydrantForm() {
   return (
     <div style={{ minHeight: "100vh", background: "#f8f9fa" }}>
       <Sidebar userName={user.fullName} />
-      <div style={{
-        paddingLeft: "95px",
-        paddingRight: "25px",
-        paddingTop: "32px",
-        paddingBottom: "32px",
-        maxWidth: "100%",
-        margin: "0 auto"
-      }}>
+      <div className="page-content">
         {/* Header */}
         <div style={{ marginBottom: "24px" }}>
           <div style={{
@@ -454,7 +447,7 @@ export function EChecksheetSelangHydrantForm() {
           <div style={{ 
             display: "grid", 
             gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", 
-            gap: "12px" 
+            gap: "12px",
           }}>
             <div style={{ color: "black" }}>
               <strong>Zona:</strong> {zona}
@@ -464,9 +457,6 @@ export function EChecksheetSelangHydrantForm() {
             </div>
             <div style={{ color: "black" }}>
               <strong>Lokasi:</strong> {lokasi}
-            </div>
-            <div style={{ color: "black" }}>
-              <strong>PIC Default:</strong> {picDefault}
             </div>
             <div style={{ color: "black" }}>
               <strong>Inspector:</strong> {user.fullName}

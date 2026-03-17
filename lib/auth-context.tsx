@@ -22,7 +22,7 @@ export interface User {
   role: Role;
 }
 
-interface AuthContextType {
+export interface AuthContextType {
   user: User | null;
   currentUser: User | null;
   loading: boolean;

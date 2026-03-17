@@ -408,16 +408,9 @@ export function GaSelangHydrantContent() {
   return (
     <div style={{ minHeight: "100vh", background: "#f8f9fa" }}>
       <Sidebar userName={user.fullName} />
-      <div style={{
-        paddingLeft: "96px",
-        paddingRight: "20px",
-        paddingTop: "24px",
-        paddingBottom: "24px",
-        maxWidth: "1400px",
-        margin: "0 auto"
-      }}>
+      <div className="page-content">
         {/* Header */}
-        <div style={{ marginBottom: "28px" }} className="header">
+        <div className="header">
           <button 
             onClick={() => router.push("/status-ga")}
             className="btn-back"

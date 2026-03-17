@@ -6,10 +6,9 @@ import { useAuth } from "@/lib/auth-context";
 import { Sidebar } from "@/components/Sidebar";
 import QrScanner from 'qr-scanner';
 import { ArrowLeft } from "lucide-react";
-// ✅ Import API helper yang reusable
-import { 
-  getAreasByType, 
-  getAvailableDates, 
+import {
+  getAreasByType,
+  getAvailableDates,
   getChecklistByDate,
   getItemsByType,
   ChecklistItem
@@ -25,8 +24,6 @@ interface Area {
 export function GaInspeksiHydrantContent() {
   const router = useRouter();
   const { user, loading } = useAuth();
-  
-  // ✅ Hardcode type slug untuk page ini
   const TYPE_SLUG = 'inspeksi-hydrant';
   
   const [isMounted, setIsMounted] = useState(false);
@@ -47,60 +44,51 @@ export function GaInspeksiHydrantContent() {
   const [isScanning, setIsScanning] = useState(false);
   const [showImageModal, setShowImageModal] = useState(false);
   const [currentImageUrl, setCurrentImageUrl] = useState("");
-  const videoRef = useRef(null);
+  const videoRef = useRef<HTMLVideoElement>(null);
   const qrScannerRef = useRef<QrScanner | null>(null);
 
-  // ✅ Load inspection items dari API
+  // Load inspection items dari API
   useEffect(() => {
     const loadItems = async () => {
       try {
         const items = await getItemsByType(TYPE_SLUG);
-        console.log('✅ Loaded inspection items:', items);
         setInspectionItems(items);
       } catch (error) {
-        console.error("❌ Failed to load checklist items:", error);
+        console.error("Failed to load checklist items:", error);
       }
     };
     loadItems();
   }, []);
 
-  // ✅ Load areas dari API berdasarkan type
+  // Load areas dari API berdasarkan type
   useEffect(() => {
     const loadAreas = async () => {
       try {
         const data = await getAreasByType(TYPE_SLUG);
-        console.log('✅ Loaded areas:', data);
         setAreas(data);
       } catch (error) {
-        console.error("❌ Failed to load areas:", error);
+        console.error("Failed to load areas:", error);
       }
     };
     loadAreas();
   }, []);
 
-  // ✅ Load status untuk semua area SEKALI SAJA setelah areas loaded
+  // Load status untuk semua area
   useEffect(() => {
     if (areas.length === 0 || isLoadingStatuses) return;
-    
     const loadAllStatuses = async () => {
       setIsLoadingStatuses(true);
-      console.log('🔄 Loading statuses for all areas...');
-      
       const statusMap: Record<number, { statusLabel: string; statusColor: string; lastCheck: string }> = {};
 
       for (const area of areas) {
         try {
           const dates = await getAvailableDates(TYPE_SLUG, area.id);
-          
           if (dates.length > 0) {
-            const latest = dates[0]; // Dates sudah sorted DESC dari API
+            const latest = dates[0];
             statusMap[area.id] = {
               statusLabel: "Checked",
               statusColor: "#43a047",
-              lastCheck: new Date(latest).toLocaleDateString("id-ID", { 
-                day: "numeric", 
-                month: "short" 
-              })
+              lastCheck: new Date(latest).toLocaleDateString("id-ID", { day: "numeric", month: "short" })
             };
           } else {
             statusMap[area.id] = {
@@ -110,7 +98,7 @@ export function GaInspeksiHydrantContent() {
             };
           }
         } catch (error) {
-          console.error(`❌ Error loading status for area ${area.id}:`, error);
+          console.error(`Error loading status for area ${area.id}:`, error);
           statusMap[area.id] = {
             statusLabel: "Error",
             statusColor: "#f44336",
@@ -119,7 +107,6 @@ export function GaInspeksiHydrantContent() {
         }
       }
 
-      console.log('✅ All statuses loaded:', statusMap);
       setAreaStatuses(statusMap);
       setIsLoadingStatuses(false);
     };
@@ -138,31 +125,26 @@ export function GaInspeksiHydrantContent() {
     }
   }, [user, loading, router]);
 
-  // ✅ Open detail dengan load data dari API
+  // Open detail dengan load data dari API
   const openDetail = async (area: Area) => {
     setSelectedArea(area);
     setShowModal(true);
     setIsLoading(true);
     try {
-      // Load available dates
       const dates = await getAvailableDates(TYPE_SLUG, area.id);
-      console.log('📅 Available dates:', dates);
       setAvailableDates(dates);
-
+      
       if (dates.length > 0) {
-        const latestDate = dates[0]; // Sudah sorted DESC
+        const latestDate = dates[0];
         setSelectedDateInModal(latestDate);
-
-        // Load checklist data untuk tanggal terbaru
         const data = await getChecklistByDate(TYPE_SLUG, area.id, latestDate);
-        console.log('📦 Loaded checklist data:', data);
         setChecksheetData(data);
       } else {
         setChecksheetData(null);
         setSelectedDateInModal("");
       }
     } catch (error) {
-      console.error("❌ Error loading detail:", error);
+      console.error("Error loading detail:", error);
       setChecksheetData(null);
       setAvailableDates([]);
       setSelectedDateInModal("");
@@ -180,41 +162,31 @@ export function GaInspeksiHydrantContent() {
     setShowModal(false);
   };
 
-  // ✅ Load data ketika tanggal berubah
+  // Load data ketika tanggal berubah
   useEffect(() => {
     if (!selectedArea || !selectedDateInModal || !showModal) return;
-    
     const loadData = async () => {
       setIsLoading(true);
       try {
-        console.log('📥 Loading data for date:', selectedDateInModal);
         const data = await getChecklistByDate(TYPE_SLUG, selectedArea.id, selectedDateInModal);
-        console.log('📦 Received data:', data);
         setChecksheetData(data);
       } catch (error) {
-        console.error("❌ Error loading checklist:", error);
+        console.error("Error loading checklist:", error);
         setChecksheetData(null);
       } finally {
         setIsLoading(false);
       }
     };
-
     loadData();
   }, [selectedDateInModal, selectedArea, showModal]);
 
   // Filter data berdasarkan kategori dan search
   const filteredData = areas.filter(item => {
-    // Gunakan field 'location' sebagai zona
     const zona = item.location || '';
-    // Tentukan jenis hydrant berdasarkan nomor area
     let jenisHydrant = 'HYDRANT INDOOR';
-
-    // Area 27-33 = HYDRANT PILLAR
     if (item.no >= 27 && item.no <= 33) {
       jenisHydrant = 'HYDRANT PILLAR';
-    } 
-    // Area 36 = HYDRANT OUTDOOR
-    else if (item.no === 36) {
+    } else if (item.no === 36) {
       jenisHydrant = 'HYDRANT OUTDOOR';
     }
 
@@ -225,12 +197,11 @@ export function GaInspeksiHydrantContent() {
     );
   });
 
-  // ✅ Fungsi buka modal gambar
+  // Fungsi buka modal gambar
   const openImageModal = (url: string) => {
     setCurrentImageUrl(url);
     setShowImageModal(true);
   };
-
   const closeImageModal = () => {
     setShowImageModal(false);
     setCurrentImageUrl("");
@@ -252,7 +223,6 @@ export function GaInspeksiHydrantContent() {
   useEffect(() => {
     if (!isScanning || !videoRef.current) return;
     const video = videoRef.current;
-
     const onScanSuccess = (result: string) => {
       console.log("QR Scanned:", result);
       setIsScanning(false);
@@ -263,7 +233,6 @@ export function GaInspeksiHydrantContent() {
 
       try {
         let urlStr = result.trim();
-
         if (urlStr.startsWith('http')) {
           const url = new URL(urlStr);
           if (url.pathname === '/e-checksheet-hydrant') {
@@ -271,12 +240,10 @@ export function GaInspeksiHydrantContent() {
             return;
           }
         }
-
         if (urlStr.startsWith('/e-checksheet-hydrant?')) {
           router.push(urlStr);
           return;
         }
-
         alert("Invalid QR code. Please scan a valid hydrant inspection QR.");
       } catch (err) {
         alert("Invalid QR format.");
@@ -287,12 +254,7 @@ export function GaInspeksiHydrantContent() {
       console.warn("QR scan error:", error);
     };
 
-    qrScannerRef.current = new QrScanner(
-      video,
-      onScanSuccess,
-      onScanError
-    );
-
+    qrScannerRef.current = new QrScanner(video, onScanSuccess, onScanError);
     qrScannerRef.current.start();
 
     return () => {
@@ -317,71 +279,56 @@ export function GaInspeksiHydrantContent() {
   return (
     <div style={{ minHeight: "100vh", background: "#f7f9fc" }}>
       <Sidebar userName={user.fullName} />
-      <div style={{ 
-        paddingLeft: "96px", 
-        paddingRight: "20px", 
-        paddingTop: "24px", 
-        paddingBottom: "24px", 
-        maxWidth: "1400px", 
-        margin: "0 auto" 
-      }}>
+      <div className="page-content">
         {/* Header */}
-        <div style={{ marginBottom: "28px" }}>
-          <div className="header">
+        <div className="header">
           <button
             className="btn-back"
             onClick={() => router.push("/status-ga")}
+            aria-label="Kembali ke halaman utama"
           >
             <ArrowLeft size={18} />
             Kembali
           </button>
-          <div className="text-header">
-            <h1 style={{ 
-              margin: "0 0 6px 0", 
-              color: "white", 
-              fontSize: "26px", 
-              fontWeight: "600", 
-              letterSpacing: "-0.5px" 
-            }}>
+          <div className="header-text">
+            <h1>
               🚒 Hydrant Inspection Dashboard
             </h1>
-            <p style={{ 
-              margin: 0, 
-              color: "#e3f2fd", 
-              fontSize: "14px", 
-              fontWeight: "400" 
-            }}>
+            <p>
               Monthly inspection schedule and maintenance records
             </p>
           </div>
-          </div>
+        </div>
 
           {/* Dropdown + Search */}
-          <div style={{
-            background: "white",
-            borderRadius: "8px",
-            padding: "16px 20px",
-            marginBottom: "24px",
-            boxShadow: "0 1px 3px rgba(0,0,0,0.08)",
-            border: "1px solid #e0e0e0",
-            display: "flex",
-            gap: "16px",
-            flexWrap: "wrap",
-            alignItems: "flex-end"
-          }}>
-            <div style={{ flex: 1, minWidth: "200px" }}>
-              <label 
-                htmlFor="category-select" 
-                style={{ 
-                  display: "block", 
-                  marginBottom: "6px", 
-                  fontSize: "14px", 
-                  fontWeight: "500", 
-                  color: "#424242" 
+          <div
+            style={{
+              background: "white",
+              borderRadius: "8px",
+              padding: "16px 20px",
+              marginBottom: "24px",
+              boxShadow: "0 1px 3px rgba(0,0,0,0.08)",
+              border: "1px solid #e0e0e0",
+              display: "flex",
+              gap: "16px",
+              alignItems: "flex-end"
+            }}
+          >
+            {/* Dropdown */}
+            <div style={{ flex: 1 }}>
+              <label
+                htmlFor="category-select"
+                style={{
+                  display: "block",
+                  marginBottom: "6px",
+                  fontSize: "14px",
+                  fontWeight: "500",
+                  color: "#424242"
                 }}
               >
                 Hydrant Type:
               </label>
+
               <select
                 id="category-select"
                 value={selectedCategory}
@@ -403,52 +350,44 @@ export function GaInspeksiHydrantContent() {
               </select>
             </div>
 
-            <div style={{ flex: 1, minWidth: "200px", position: "relative" }}>
-              <label 
-                htmlFor="search-input" 
-                style={{ 
-                  display: "block", 
-                  marginBottom: "6px", 
-                  fontSize: "14px", 
-                  fontWeight: "500", 
-                  color: "#424242" 
+            {/* Search */}
+            <div style={{ flex: 2 }}>
+              <label
+                htmlFor="search-input"
+                style={{
+                  display: "block",
+                  marginBottom: "6px",
+                  fontSize: "14px",
+                  fontWeight: "500",
+                  color: "#424242"
                 }}
               >
                 Search Location or Zone:
               </label>
-              <div style={{ position: "relative" }}>
-                <input
-                  id="search-input"
-                  type="text"
-                  placeholder="e.g. KANTIN, BARAT..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  style={{
-                    width: "100%",
-                    padding: "10px 40px 10px 16px",
-                    border: "1px solid #d0d0d0",
-                    borderRadius: "6px",
-                    fontSize: "14px",
-                    color: "#333",
-                    outline: "none",
-                    fontFamily: "inherit"
-                  }}
-                />
-              </div>
+
+              <input
+                id="search-input"
+                type="text"
+                placeholder="e.g. KANTIN, BARAT..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                style={{
+                  width: "100%",
+                  padding: "10px 16px",
+                  border: "1px solid #d0d0d0",
+                  borderRadius: "6px",
+                  fontSize: "14px",
+                  color: "#333",
+                  outline: "none",
+                  fontFamily: "inherit"
+                }}
+              />
             </div>
           </div>
 
           {/* Loading Status Indicator */}
           {isLoadingStatuses && (
-            <div style={{ 
-              padding: "12px 20px", 
-              background: "#fff3cd", 
-              borderRadius: "6px",
-              marginBottom: "16px",
-              color: "#856404",
-              fontSize: "13px",
-              textAlign: "center"
-            }}>
+            <div style={{ padding: "12px 20px", background: "#fff3cd", borderRadius: "6px", marginBottom: "16px", color: "#856404", fontSize: "13px", textAlign: "center" }}>
               ⏳ Loading status data...
             </div>
           )}
@@ -462,62 +401,15 @@ export function GaInspeksiHydrantContent() {
             border: "1px solid #e0e0e0"
           }}>
             <div style={{ overflowX: "auto" }}>
-              <table style={{ 
-                width: "100%", 
-                borderCollapse: "collapse", 
-                fontSize: "14px", 
-                minWidth: "700px" 
-              }}>
+              <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "14px", minWidth: "700px" }}>
                 <thead>
                   <tr style={{ borderBottom: "2px solid #e0e0e0" }}>
-                    <th style={{ 
-                      padding: "14px 16px", 
-                      textAlign: "center", 
-                      background: "#fafafa", 
-                      fontWeight: "600", 
-                      color: "#424242", 
-                      fontSize: "13px" 
-                    }}>No</th>
-                    <th style={{ 
-                      padding: "14px 16px", 
-                      textAlign: "left", 
-                      background: "#fafafa", 
-                      fontWeight: "600", 
-                      color: "#424242", 
-                      fontSize: "13px" 
-                    }}>Location</th>
-                    <th style={{ 
-                      padding: "14px 16px", 
-                      textAlign: "center", 
-                      background: "#fafafa", 
-                      fontWeight: "600", 
-                      color: "#424242", 
-                      fontSize: "13px" 
-                    }}>Zone</th>
-                    <th style={{ 
-                      padding: "14px 16px", 
-                      textAlign: "center", 
-                      background: "#fafafa", 
-                      fontWeight: "600", 
-                      color: "#424242", 
-                      fontSize: "13px" 
-                    }}>Type</th>
-                    <th style={{ 
-                      padding: "14px 16px", 
-                      textAlign: "center", 
-                      background: "#fafafa", 
-                      fontWeight: "600", 
-                      color: "#424242", 
-                      fontSize: "13px" 
-                    }}>Status</th>
-                    <th style={{ 
-                      padding: "14px 16px", 
-                      textAlign: "center", 
-                      background: "#fafafa", 
-                      fontWeight: "600", 
-                      color: "#424242", 
-                      fontSize: "13px" 
-                    }}>Actions</th>
+                    <th style={{ padding: "14px 16px", textAlign: "center", background: "#fafafa", fontWeight: "600", color: "#424242", fontSize: "13px" }}>No</th>
+                    <th style={{ padding: "14px 16px", textAlign: "left", background: "#fafafa", fontWeight: "600", color: "#424242", fontSize: "13px" }}>Location</th>
+                    <th style={{ padding: "14px 16px", textAlign: "center", background: "#fafafa", fontWeight: "600", color: "#424242", fontSize: "13px" }}>Zone</th>
+                    <th style={{ padding: "14px 16px", textAlign: "center", background: "#fafafa", fontWeight: "600", color: "#424242", fontSize: "13px" }}>Type</th>
+                    <th style={{ padding: "14px 16px", textAlign: "center", background: "#fafafa", fontWeight: "600", color: "#424242", fontSize: "13px" }}>Status</th>
+                    <th style={{ padding: "14px 16px", textAlign: "center", background: "#fafafa", fontWeight: "600", color: "#424242", fontSize: "13px" }}>Actions</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -531,8 +423,7 @@ export function GaInspeksiHydrantContent() {
                     } else if (area.no === 36) {
                       jenisHydrant = 'HYDRANT OUTDOOR';
                     }
-                    
-                    // ✅ Ambil status dari state yang sudah di-load
+                     
                     const status = areaStatuses[area.id] || {
                       statusLabel: "Loading...",
                       statusColor: "#757575",
@@ -540,50 +431,21 @@ export function GaInspeksiHydrantContent() {
                     };
 
                     return (
-                      <tr 
-                        key={area.id} 
-                        style={{ 
-                          borderBottom: idx === filteredData.length - 1 ? "none" : "1px solid #f0f0f0" 
-                        }}
-                      >
-                        <td style={{ 
-                          padding: "14px 16px", 
-                          textAlign: "center", 
-                          fontWeight: "600", 
-                          color: "#1976d2" 
-                        }}>
+                      <tr key={area.id} style={{ borderBottom: idx === filteredData.length - 1 ? "none" : "1px solid #f0f0f0" }}>
+                        <td style={{ padding: "14px 16px", textAlign: "center", fontWeight: "600", color: "#1976d2" }}>
                           {area.no}
                         </td>
-                        <td style={{ 
-                          padding: "14px 16px", 
-                          fontWeight: "500", 
-                          color: "#424242" 
-                        }}>
+                        <td style={{ padding: "14px 16px", fontWeight: "500", color: "#424242" }}>
                           {parts[0]}
                         </td>
-                        <td style={{ 
-                          padding: "14px 16px", 
-                          textAlign: "center", 
-                          fontWeight: "600", 
-                          color: "#616161" 
-                        }}>
+                        <td style={{ padding: "14px 16px", textAlign: "center", fontWeight: "600", color: "#616161" }}>
                           {zona}
                         </td>
-                        <td style={{ 
-                          padding: "14px 16px", 
-                          textAlign: "center", 
-                          fontWeight: "600", 
-                          color: "#616161" 
-                        }}>
+                        <td style={{ padding: "14px 16px", textAlign: "center", fontWeight: "600", color: "#616161" }}>
                           {jenisHydrant}
                         </td>
                         <td style={{ padding: "14px 16px", textAlign: "center" }}>
-                          <div style={{ 
-                            display: "flex", 
-                            flexDirection: "column", 
-                            alignItems: "center", 
-                            gap: "4px" 
-                          }}>
+                          <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "4px" }}>
                             <span style={{
                               padding: "4px 12px",
                               background: status.statusColor,
@@ -595,20 +457,13 @@ export function GaInspeksiHydrantContent() {
                             }}>
                               {status.statusLabel}
                             </span>
-                            <span style={{ 
-                              fontSize: "11px", 
-                              color: "#9e9e9e" 
-                            }}>
+                            <span style={{ fontSize: "11px", color: "#9e9e9e" }}>
                               {status.lastCheck}
                             </span>
                           </div>
                         </td>
                         <td style={{ padding: "14px 16px" }}>
-                          <div style={{ 
-                            display: "flex", 
-                            gap: "8px", 
-                            justifyContent: "center" 
-                          }}>
+                          <div style={{ display: "flex", gap: "8px", justifyContent: "center" }}>
                             <button
                               onClick={() => openDetail(area)}
                               style={{
@@ -649,7 +504,7 @@ export function GaInspeksiHydrantContent() {
             </div>
           </div>
 
-          {/* Modal Detail */}
+          {/* MODAL DETAIL - UPDATED: Konsisten dengan EChecksheetHydrantForm */}
           {showModal && selectedArea && (
             <div
               onClick={closeDetail}
@@ -671,9 +526,9 @@ export function GaInspeksiHydrantContent() {
                 onClick={(e) => e.stopPropagation()}
                 style={{
                   background: "white",
-                  borderRadius: "8px",
+                  borderRadius: "12px",
                   width: "95%",
-                  maxWidth: "1400px",
+                  maxWidth: "1600px",
                   maxHeight: "90vh",
                   overflow: "hidden",
                   boxShadow: "0 8px 32px rgba(0,0,0,0.2)",
@@ -681,42 +536,34 @@ export function GaInspeksiHydrantContent() {
                   flexDirection: "column"
                 }}
               >
+                {/* Modal Header */}
                 <div style={{
                   display: "flex",
                   justifyContent: "space-between",
                   alignItems: "center",
-                  padding: "20px 24px",
-                  background: "#f5f5f5",
+                  padding: "16px 24px",
+                  background: "linear-gradient(135deg, #1976d2 0%, #1565c0 100%)",
                   borderBottom: "1px solid #e0e0e0"
                 }}>
                   <div>
-                    <h2 style={{ 
-                      margin: "0 0 4px 0", 
-                      color: "#212121", 
-                      fontSize: "20px", 
-                      fontWeight: "600" 
-                    }}>
-                      Inspection History - Unit #{selectedArea.no}
+                    <h2 style={{ margin: "0 0 4px 0", color: "white", fontSize: "18px", fontWeight: "600" }}>
+                      📋 Inspection History - Unit #{selectedArea.no}
                     </h2>
-                    <p style={{ 
-                      margin: "0", 
-                      color: "#616161", 
-                      fontSize: "14px" 
-                    }}>
-                      {selectedArea.name}
+                    <p style={{ margin: 0, color: "rgba(255,255,255,0.9)", fontSize: "13px" }}>
+                      {selectedArea.name} • {selectedArea.location}
                     </p>
                   </div>
                   <button 
                     onClick={closeDetail} 
                     style={{ 
-                      background: "transparent", 
+                      background: "rgba(255,255,255,0.2)", 
                       border: "none", 
-                      fontSize: "28px", 
+                      fontSize: "24px", 
                       cursor: "pointer", 
-                      color: "#757575",
-                      padding: "0",
-                      width: "32px",
-                      height: "32px",
+                      color: "white",
+                      width: "36px",
+                      height: "36px",
+                      borderRadius: "50%",
                       display: "flex",
                       alignItems: "center",
                       justifyContent: "center"
@@ -726,17 +573,9 @@ export function GaInspeksiHydrantContent() {
                   </button>
                 </div>
 
-                <div style={{ 
-                  padding: "16px 24px", 
-                  background: "white", 
-                  borderBottom: "1px solid #e0e0e0" 
-                }}>
-                  <label style={{ 
-                    fontWeight: "500", 
-                    color: "#424242", 
-                    marginRight: "12px", 
-                    fontSize: "14px" 
-                  }}>
+                {/* Date Selector */}
+                <div style={{ padding: "12px 24px", background: "#f5f5f5", borderBottom: "1px solid #e0e0e0" }}>
+                  <label style={{ fontWeight: "600", color: "#424242", marginRight: "12px", fontSize: "13px" }}>
                     Inspection Date:
                   </label>
                   <select
@@ -745,14 +584,15 @@ export function GaInspeksiHydrantContent() {
                     disabled={availableDates.length === 0}
                     style={{
                       color: "#212121",
-                      padding: "7px 12px",
-                      border: "1px solid #d0d0d0",
-                      borderRadius: "5px",
-                      fontSize: "14px",
+                      padding: "8px 12px",
+                      border: "1px solid #1976d2",
+                      borderRadius: "6px",
+                      fontSize: "13px",
                       fontWeight: "500",
-                      minWidth: "160px",
+                      minWidth: "180px",
                       outline: "none",
-                      cursor: availableDates.length > 0 ? "pointer" : "not-allowed"
+                      cursor: availableDates.length > 0 ? "pointer" : "not-allowed",
+                      background: "white"
                     }}
                   >
                     {availableDates.length === 0 ? (
@@ -762,11 +602,7 @@ export function GaInspeksiHydrantContent() {
                         <option value="">-- Select Date --</option>
                         {availableDates.map(date => (
                           <option key={date} value={date}>
-                            {new Date(date).toLocaleDateString("id-ID", { 
-                              day: "2-digit", 
-                              month: "short", 
-                              year: "numeric" 
-                            })}
+                            {new Date(date).toLocaleDateString("id-ID", { day: "2-digit", month: "short", year: "numeric" })}
                           </option>
                         ))}
                       </>
@@ -774,291 +610,172 @@ export function GaInspeksiHydrantContent() {
                   </select>
                 </div>
 
-                <div style={{ 
-                  padding: "24px", 
-                  overflowY: "auto", 
-                  flex: 1, 
-                  background: "#fafafa" 
-                }}>
+                {/* Modal Body - Scrollable Table */}
+                <div style={{ padding: "16px 24px", overflowY: "auto", flex: 1, background: "#fafafa" }}>
                   {!selectedDateInModal ? (
-                    <div style={{ 
-                      textAlign: "center", 
-                      padding: "60px 20px", 
-                      color: "#757575" 
-                    }}>
-                      <div style={{ 
-                        fontSize: "48px", 
-                        marginBottom: "12px", 
-                        opacity: 0.5 
-                      }}>
-                        📅
-                      </div>
-                      <p style={{ 
-                        fontSize: "15px", 
-                        fontWeight: "500", 
-                        margin: 0 
-                      }}>
+                    <div style={{ textAlign: "center", padding: "40px 20px", color: "#757575" }}>
+                      <div style={{ fontSize: "40px", marginBottom: "12px", opacity: 0.5 }}>📅</div>
+                      <p style={{ fontSize: "14px", fontWeight: "500", margin: 0 }}>
                         {availableDates.length === 0 
                           ? "📭 No inspection data available for this unit" 
                           : "👆 Please select an inspection date"}
                       </p>
                     </div>
+                  ) : isLoading ? (
+                    <div style={{ textAlign: "center", padding: "40px", color: "#1976d2" }}>
+                      <div style={{ fontSize: "32px", marginBottom: "12px" }}>⏳</div>
+                      <p>Loading data...</p>
+                    </div>
+                  ) : !checksheetData ? (
+                    <div style={{ textAlign: "center", padding: "40px", color: "#9e9e9e" }}>
+                      ❌ No data found for this date
+                    </div>
                   ) : (
                     <div style={{ overflowX: "auto" }}>
-                      {(() => {
-                        if (!checksheetData) {
-                          return (
-                            <div style={{ 
-                              textAlign: "center", 
-                              padding: "40px", 
-                              color: "#9e9e9e" 
-                            }}>
-                              ❌ No data found for this date
-                            </div>
-                          );
-                        }
-
-                        return (
-                          <div>
-                            <table style={{ 
-                              width: "100%", 
-                              borderCollapse: "collapse", 
-                              fontSize: "12px", 
-                              minWidth: "1600px", 
-                              border: "1px solid #e0e0e0", 
-                              background: "white" 
-                            }}>
-                              <thead>
-                                <tr style={{ background: "#f5f5f5" }}>
-                                  {Array.from({ length: 20 }, (_, i) => i + 1).map((num) => (
-                                    <th key={num} style={{
-                                      padding: "8px",
-                                      border: "1px solid #e0e0e0",
-                                      fontWeight: "600",
-                                      color: "#424242",
-                                      textAlign: "center",
-                                      fontSize: "11px",
-                                      minWidth: "100px",
-                                      wordWrap: "break-word",
-                                      lineHeight: "1.2"
-                                    }}>
-                                      {num}
-                                    </th>
-                                  ))}
-                                  <th style={{ 
-                                    padding: "8px", 
-                                    border: "1px solid #e0e0e0", 
-                                    fontWeight: "600", 
-                                    color: "#424242", 
-                                    textAlign: "center", 
-                                    fontSize: "11px" 
-                                  }}>
-                                    Findings
-                                  </th>
-                                  <th style={{ 
-                                    padding: "8px", 
-                                    border: "1px solid #e0e0e0", 
-                                    fontWeight: "600", 
-                                    color: "#424242", 
-                                    textAlign: "center", 
-                                    fontSize: "11px" 
-                                  }}>
-                                    Corrective Action
-                                  </th>
-                                  <th style={{ 
-                                    padding: "8px", 
-                                    border: "1px solid #e0e0e0", 
-                                    fontWeight: "600", 
-                                    color: "#424242", 
-                                    textAlign: "center", 
-                                    fontSize: "11px" 
-                                  }}>
-                                    PIC
-                                  </th>
-                                  <th style={{ 
-                                    padding: "8px", 
-                                    border: "1px solid #e0e0e0", 
-                                    fontWeight: "600", 
-                                    color: "#424242", 
-                                    textAlign: "center", 
-                                    fontSize: "11px" 
-                                  }}>
-                                    Due Date
-                                  </th>
-                                  <th style={{ 
-                                    padding: "8px", 
-                                    border: "1px solid #e0e0e0", 
-                                    fontWeight: "600", 
-                                    color: "#424242", 
-                                    textAlign: "center", 
-                                    fontSize: "11px" 
-                                  }}>
-                                    Verify
-                                  </th>
-                                </tr>
-                              </thead>
-                              <tbody>
-                                <tr>
-                                  {Array.from({ length: 20 }, (_, i) => {
-                                    const itemKey = `item${i + 1}`;
-                                    const entry = checksheetData[itemKey];
-                                    const value = entry?.hasilPemeriksaan || "-";
-                                    return (
-                                      <td key={i} style={{
-                                        padding: "8px",
-                                        border: "1px solid #e0e0e0",
-                                        textAlign: "center",
-                                        fontWeight: "600",
-                                        background: value === "OK" ? "#e8f5e9" : value === "NG" ? "#ffebee" : "#fff",
-                                        color: value === "OK" ? "#2e7d32" : value === "NG" ? "#c62828" : "#757575",
-                                        fontSize: "11px"
-                                      }}>
-                                        {value}
-                                      </td>
-                                    );
-                                  })}
-                                  <td style={{ 
-                                    padding: "8px", 
-                                    border: "1px solid #e0e0e0", 
-                                    lineHeight: "1.4", 
-                                    fontSize: "11px" 
-                                  }}>
-                                    {checksheetData.item1?.keteranganTemuan || "-"}
-                                  </td>
-                                  <td style={{ 
-                                    padding: "8px", 
-                                    border: "1px solid #e0e0e0", 
-                                    lineHeight: "1.4", 
-                                    fontSize: "11px" 
-                                  }}>
-                                    {checksheetData.item1?.tindakanPerbaikan || "-"}
-                                  </td>
-                                  <td style={{ 
-                                    padding: "8px", 
-                                    border: "1px solid #e0e0e0", 
-                                    textAlign: "center", 
-                                    fontSize: "11px" 
-                                  }}>
-                                    {checksheetData.item1?.pic || "-"}
-                                  </td>
-                                  <td style={{ 
-                                    padding: "8px", 
-                                    border: "1px solid #e0e0e0", 
-                                    textAlign: "center", 
-                                    fontSize: "11px" 
-                                  }}>
-                                    {checksheetData.item1?.dueDate 
-                                      ? new Date(checksheetData.item1.dueDate).toLocaleDateString("id-ID", { 
-                                          day: "2-digit", 
-                                          month: "short",
-                                          year: "numeric"
-                                        })
-                                      : "-"}
-                                  </td>
-                                  <td style={{ 
-                                    padding: "8px", 
-                                    border: "1px solid #e0e0e0", 
-                                    textAlign: "center", 
-                                    fontSize: "11px" 
-                                  }}>
-                                    {checksheetData.item1?.verify || "-"}
-                                  </td>
-                                </tr>
-                              </tbody>
-                            </table>
+                      <table style={{ 
+                        width: "100%", 
+                        borderCollapse: "collapse", 
+                        fontSize: "12px", 
+                        minWidth: "1400px",
+                        background: "white",
+                        borderRadius: "8px",
+                        overflow: "hidden",
+                        boxShadow: "0 1px 3px rgba(0,0,0,0.08)"
+                      }}>
+                        <thead>
+                          <tr style={{ background: "linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%)", borderBottom: "2px solid #1976d2" }}>
+                            <th style={{ padding: "12px 10px", border: "1px solid #bbdefb", fontWeight: "700", color: "#1565c0", textAlign: "center", width: "50px" }}>No</th>
+                            <th style={{ padding: "12px 10px", border: "1px solid #bbdefb", fontWeight: "700", color: "#1565c0", textAlign: "left", minWidth: "200px" }}>Item Check</th>
+                            <th style={{ padding: "12px 10px", border: "1px solid #bbdefb", fontWeight: "700", color: "#1565c0", textAlign: "center", width: "90px" }}>Hasil</th>
+                            <th style={{ padding: "12px 10px", border: "1px solid #bbdefb", fontWeight: "700", color: "#1565c0", textAlign: "center", width: "80px" }}>Metode</th>
+                            <th style={{ padding: "12px 10px", border: "1px solid #bbdefb", fontWeight: "700", color: "#1565c0", textAlign: "center", minWidth: "140px" }}>Keterangan Temuan</th>
+                            <th style={{ padding: "12px 10px", border: "1px solid #bbdefb", fontWeight: "700", color: "#1565c0", textAlign: "center", minWidth: "140px" }}>Tindakan Perbaikan</th>
+                            <th style={{ padding: "12px 10px", border: "1px solid #bbdefb", fontWeight: "700", color: "#1565c0", textAlign: "center", width: "90px" }}>PIC</th>
+                            <th style={{ padding: "12px 10px", border: "1px solid #bbdefb", fontWeight: "700", color: "#1565c0", textAlign: "center", width: "100px" }}>Due Date</th>
+                            <th style={{ padding: "12px 10px", border: "1px solid #bbdefb", fontWeight: "700", color: "#1565c0", textAlign: "center", width: "90px" }}>Verify</th>
+                            <th style={{ padding: "12px 10px", border: "1px solid #bbdefb", fontWeight: "700", color: "#1565c0", textAlign: "center", minWidth: "150px" }}>Dokumentasi</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {inspectionItems.map((item, index) => {
+                            const itemData = checksheetData[item.item_key];
+                            const itemImages = itemData?.images || [];
+                            const hasilValue = itemData?.hasilPemeriksaan || "-";
                             
-                            {/* ✅ TAMPILKAN FOTO DOKUMENTASI DI SINI */}
-                            {checksheetData.item1?.images && checksheetData.item1.images.length > 0 && (
-                              <div style={{ marginTop: "24px" }}>
-                                <h3 style={{ 
-                                  margin: "0 0 12px 0", 
-                                  fontSize: "14px", 
-                                  fontWeight: "600", 
-                                  color: "#212121" 
-                                }}>
-                                  📸 Documentation Photos ({checksheetData.item1.images.length})
-                                </h3>
-                                <div style={{ 
-                                  display: "flex", 
-                                  flexWrap: "wrap", 
-                                  gap: "12px", 
-                                  justifyContent: "flex-start" 
-                                }}>
-                                  {checksheetData.item1.images.map((imgUrl: string, idx: number) => (
-                                    <div 
-                                      key={idx} 
-                                      style={{ 
-                                        width: "120px", 
-                                        height: "120px", 
-                                        overflow: "hidden", 
-                                        borderRadius: "6px", 
-                                        border: "1px solid #ddd",
-                                        cursor: "pointer"
-                                      }}
-                                      onClick={() => openImageModal(imgUrl)}
-                                    >
-                                      <img
-                                        src={imgUrl}
-                                        alt={`doc-${idx}`}
-                                        style={{
-                                          width: "100%",
-                                          height: "100%",
-                                          objectFit: "cover"
+                            return (
+                              <tr key={item.id} style={{ borderBottom: "1px solid #e0e0e0", background: index % 2 === 0 ? "#ffffff" : "#f9f9f9" }}>
+                                <td style={{ padding: "10px", border: "1px solid #e0e0e0", textAlign: "center", fontWeight: "600", color: "#555" }}>{index + 1}</td>
+                                <td style={{ padding: "10px", border: "1px solid #e0e0e0" }}>
+                                  <div style={{ fontWeight: "600", color: "#212121", marginBottom: "2px" }}>{item.item_check}</div>
+                                  {item.item_group && <div style={{ fontSize: "11px", color: "#757575" }}>{item.item_group}</div>}
+                                </td>
+                                <td style={{ padding: "10px", border: "1px solid #e0e0e0", textAlign: "center" }}>
+                                  <span style={{
+                                    padding: "4px 12px",
+                                    borderRadius: "4px",
+                                    fontWeight: "600",
+                                    fontSize: "11px",
+                                    background: hasilValue === "OK" ? "#e8f5e9" : hasilValue === "NG" ? "#ffebee" : "#f5f5f5",
+                                    color: hasilValue === "OK" ? "#2e7d32" : hasilValue === "NG" ? "#c62828" : "#757575"
+                                  }}>
+                                    {hasilValue}
+                                  </span>
+                                </td>
+                                <td style={{ padding: "10px", border: "1px solid #e0e0e0", textAlign: "center", color: "#757575", fontSize: "11px" }}>
+                                  {item.method || "Visual"}
+                                </td>
+                                <td style={{ padding: "10px", border: "1px solid #e0e0e0", color: "#424242", fontSize: "11px", lineHeight: "1.4" }}>
+                                  {itemData?.keteranganTemuan || "-"}
+                                </td>
+                                <td style={{ padding: "10px", border: "1px solid #e0e0e0", color: "#424242", fontSize: "11px", lineHeight: "1.4" }}>
+                                  {itemData?.tindakanPerbaikan || "-"}
+                                </td>
+                                <td style={{ padding: "10px", border: "1px solid #e0e0e0", textAlign: "center", fontSize: "11px", fontWeight: "500" }}>
+                                  {itemData?.pic || "-"}
+                                </td>
+                                <td style={{ padding: "10px", border: "1px solid #e0e0e0", textAlign: "center", fontSize: "11px" }}>
+                                  {itemData?.dueDate 
+                                    ? new Date(itemData.dueDate).toLocaleDateString("id-ID", { day: "2-digit", month: "short" })
+                                    : "-"}
+                                </td>
+                                <td style={{ padding: "10px", border: "1px solid #e0e0e0", textAlign: "center", fontSize: "11px", fontWeight: "500" }}>
+                                  {itemData?.verify || "-"}
+                                </td>
+                                <td style={{ padding: "10px", border: "1px solid #e0e0e0" }}>
+                                  {itemImages.length > 0 ? (
+                                    <div style={{ display: "flex", flexWrap: "wrap", gap: "4px" }}>
+                                      {itemImages.slice(0, 3).map((imgUrl: string, idx: number) => (
+                                        <div 
+                                          key={idx} 
+                                          style={{ 
+                                            width: "40px", 
+                                            height: "40px", 
+                                            borderRadius: "4px", 
+                                            overflow: "hidden", 
+                                            border: "1px solid #ddd",
+                                            cursor: "pointer"
+                                          }}
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            openImageModal(imgUrl);
+                                          }}
+                                        >
+                                          <img
+                                            src={imgUrl}
+                                            alt={`doc-${idx}`}
+                                            style={{ width: "100%", height: "100%", objectFit: "cover" }}
+                                          />
+                                        </div>
+                                      ))}
+                                      {itemImages.length > 3 && (
+                                        <div style={{ 
+                                          width: "40px", 
+                                          height: "40px", 
+                                          borderRadius: "4px", 
+                                          background: "#1976d2", 
+                                          color: "white", 
+                                          display: "flex", 
+                                          alignItems: "center", 
+                                          justifyContent: "center",
+                                          fontSize: "10px",
+                                          fontWeight: "600",
+                                          cursor: "pointer"
                                         }}
-                                      />
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          openImageModal(itemImages[0]);
+                                        }}
+                                        >
+                                          +{itemImages.length - 3}
+                                        </div>
+                                      )}
                                     </div>
-                                  ))}
-                                </div>
-                              </div>
-                            )}
-
-                            <div style={{ 
-                              marginTop: "20px", 
-                              padding: "12px", 
-                              background: "#f9f9f9", 
-                              borderRadius: "6px", 
-                              border: "1px solid #e0e0e0" 
-                            }}>
-                              <p style={{ 
-                                margin: "0 0 4px 0", 
-                                fontSize: "11px", 
-                                color: "#757575" 
-                              }}>
-                                Inspector
-                              </p>
-                              <p style={{ 
-                                margin: "0", 
-                                fontSize: "13px", 
-                                fontWeight: "500", 
-                                color: "#424242" 
-                              }}>
-                                {checksheetData.item1?.inspector || "N/A"}
-                              </p>
-                            </div>
-                          </div>
-                        );
-                      })()}
+                                  ) : (
+                                    <span style={{ color: "#9e9e9e", fontSize: "11px" }}>No images</span>
+                                  )}
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
                     </div>
                   )}
                 </div>
 
-                <div style={{ 
-                  padding: "16px 24px", 
-                  background: "#f5f5f5", 
-                  borderTop: "1px solid #e0e0e0", 
-                  textAlign: "right" 
-                }}>
+                {/* Modal Footer */}
+                <div style={{ padding: "12px 24px", background: "#f5f5f5", borderTop: "1px solid #e0e0e0", textAlign: "right" }}>
                   <button 
                     onClick={closeDetail} 
                     style={{ 
-                      padding: "9px 20px", 
+                      padding: "10px 24px", 
                       background: "#757575", 
                       color: "white", 
                       border: "none", 
-                      borderRadius: "5px", 
+                      borderRadius: "6px", 
                       fontWeight: "500",
                       cursor: "pointer",
-                      fontSize: "14px"
+                      fontSize: "13px"
                     }}
                   >
                     Close
@@ -1088,7 +805,7 @@ export function GaInspeksiHydrantContent() {
                 if (qrScannerRef.current) {
                   qrScannerRef.current.destroy();
                   qrScannerRef.current = null;
-                }
+                } 
               }}
             >
               <div
@@ -1102,10 +819,7 @@ export function GaInspeksiHydrantContent() {
                   width: "100%",
                 }}
               >
-                <h3 style={{ 
-                  margin: "0 0 12px 0", 
-                  color: "#212121" 
-                }}>
+                <h3 style={{ margin: "0 0 12px 0", color: "#212121" }}>
                   Scan Hydrant QR Code
                 </h3>
                 <video
@@ -1117,11 +831,7 @@ export function GaInspeksiHydrantContent() {
                     background: "#000"
                   }}
                 />
-                <p style={{ 
-                  fontSize: "13px", 
-                  color: "#666", 
-                  marginTop: "12px" 
-                }}>
+                <p style={{ fontSize: "13px", color: "#666", marginTop: "12px" }}>
                   Point your camera at the QR code on the hydrant
                 </p>
                 <button
@@ -1178,11 +888,7 @@ export function GaInspeksiHydrantContent() {
                     border: "3px solid white"
                   }}
                 />
-                <div style={{ 
-                  marginTop: "16px", 
-                  color: "white", 
-                  fontSize: "14px" 
-                }}>
+                <div style={{ marginTop: "16px", color: "white", fontSize: "14px" }}>
                   Click outside to close
                 </div>
               </div>
@@ -1237,7 +943,7 @@ export function GaInspeksiHydrantContent() {
                 font-size: 14px !important;
                 min-height: 36px !important;
                 width: 100% !important;
-                padding: 8px 8px !important;
+                padding: 8px 8px !important; 
               }
 
               button {
@@ -1288,7 +994,7 @@ export function GaInspeksiHydrantContent() {
                 font-size: 14px !important;
                 min-height: 34px !important;
                 width: 100% !important;
-                padding: 6px 6px !important;
+                padding: 6px 6px !important; 
               }
 
               button {
@@ -1304,7 +1010,6 @@ export function GaInspeksiHydrantContent() {
               }
             }
           `}</style>
-        </div>
       </div>
     </div>
   );

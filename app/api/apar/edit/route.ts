@@ -17,6 +17,7 @@ interface AparItem {
   lokasi: string;
   noApar: string;
   expDate: string;
+  hydrotestDate?: string | null;
   check1: string;
   check2: string;
   check3: string;
@@ -91,10 +92,10 @@ export async function PUT(request: NextRequest) {
         
         for (let i = 1; i <= 12; i++) {
           const checkValue = item[`check${i}` as keyof AparItem] as string;
-          if (!checkValue || !['O', 'X'].includes(checkValue)) {
-            console.error(`❌ [API] Item ${index + 1}: Check${i} harus 'O' atau 'X'`);
+          if (!checkValue || !['OK', 'NG', 'OBS'].includes(checkValue)) {
+            console.error(`❌ [API] Item ${index + 1}: Check${i} harus 'OK', 'NG', atau 'OBS'`);
             return NextResponse.json(
-              { success: false, message: `Item ${index + 1}: Check${i} harus diisi dengan 'O' atau 'X'` },
+              { success: false, message: `Item ${index + 1}: Check${i} harus diisi dengan 'OK', 'NG', atau 'OBS'` },
               { status: 400 }
             );
           }
@@ -157,15 +158,15 @@ export async function PUT(request: NextRequest) {
             
             await client.query(
               `INSERT INTO apar_items (
-                record_id, no, jenis_apar, lokasi, no_apar, exp_date,
+                record_id, no, jenis_apar, lokasi, no_apar, exp_date, hydrotest_date,
                 check1, check2, check3, check4, check5, check6,
                 check7, check8, check9, check10, check11, check12,
                 keterangan, tindakan_perbaikan, pic, foto
               ) VALUES (
-                $1, $2, $3, $4, $5, $6,
-                $7, $8, $9, $10, $11, $12,
-                $13, $14, $15, $16, $17, $18,
-                $19, $20, $21, $22
+                $1, $2, $3, $4, $5, $6, $7,
+                $8, $9, $10, $11, $12, $13,
+                $14, $15, $16, $17, $18, $19,
+                $20, $21, $22, $23
               )`,
               [
                 data.recordId,
@@ -174,6 +175,7 @@ export async function PUT(request: NextRequest) {
                 item.lokasi,
                 item.noApar,
                 item.expDate,
+                item.hydrotestDate || null,
                 item.check1,
                 item.check2,
                 item.check3,
@@ -210,17 +212,18 @@ export async function PUT(request: NextRequest) {
               await client.query(
                 `UPDATE apar_items 
                  SET 
-                   no = $1, jenis_apar = $2, lokasi = $3, no_apar = $4, exp_date = $5,
-                   check1 = $6, check2 = $7, check3 = $8, check4 = $9, check5 = $10, check6 = $11,
-                   check7 = $12, check8 = $13, check9 = $14, check10 = $15, check11 = $16, check12 = $17,
-                   keterangan = $18, tindakan_perbaikan = $19, pic = $20, foto = $21
-                 WHERE id = $22 AND record_id = $23`,
+                   no = $1, jenis_apar = $2, lokasi = $3, no_apar = $4, exp_date = $5, hydrotest_date = $6,
+                   check1 = $7, check2 = $8, check3 = $9, check4 = $10, check5 = $11, check6 = $12,
+                   check7 = $13, check8 = $14, check9 = $15, check10 = $16, check11 = $17, check12 = $18,
+                   keterangan = $19, tindakan_perbaikan = $20, pic = $21, foto = $22
+                 WHERE id = $23 AND record_id = $24`,
                 [
                   item.no,
                   item.jenisApar,
                   item.lokasi,
                   item.noApar,
                   item.expDate,
+                  item.hydrotestDate || null,
                   item.check1,
                   item.check2,
                   item.check3,
@@ -245,15 +248,15 @@ export async function PUT(request: NextRequest) {
             } else if (!item.itemId || item._action === 'create') {
               await client.query(
                 `INSERT INTO apar_items (
-                  record_id, no, jenis_apar, lokasi, no_apar, exp_date,
+                  record_id, no, jenis_apar, lokasi, no_apar, exp_date, hydrotest_date,
                   check1, check2, check3, check4, check5, check6,
                   check7, check8, check9, check10, check11, check12,
                   keterangan, tindakan_perbaikan, pic, foto
                 ) VALUES (
-                  $1, $2, $3, $4, $5, $6,
-                  $7, $8, $9, $10, $11, $12,
-                  $13, $14, $15, $16, $17, $18,
-                  $19, $20, $21, $22
+                  $1, $2, $3, $4, $5, $6, $7,
+                  $8, $9, $10, $11, $12, $13,
+                  $14, $15, $16, $17, $18, $19,
+                  $20, $21, $22, $23
                 )`,
                 [
                   data.recordId,
@@ -262,6 +265,7 @@ export async function PUT(request: NextRequest) {
                   item.lokasi,
                   item.noApar,
                   item.expDate,
+                  item.hydrotestDate || null,
                   item.check1,
                   item.check2,
                   item.check3,

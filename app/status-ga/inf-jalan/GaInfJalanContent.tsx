@@ -164,7 +164,7 @@ export function GaInfJalanContent() {
     
     console.log('🔍 Searching for area to auto-open:', openAreaParam);
     const found = areas.find((item) => {
-      const parts = item.name.split(' \u0007 ');
+      const parts = item.name.split(' • ');
       return parts[0] === openAreaParam;
     });
 
@@ -255,7 +255,7 @@ export function GaInfJalanContent() {
 
   // Filter data berdasarkan kategori dan search
   const filteredData = areas.filter(item => {
-    const parts = item.name.split(' \u0007 ');
+    const parts = item.name.split(' • ');
     const namaArea = item.name;
     const kategori = item.category || "";
     const lokasi = item.location || "";
@@ -294,16 +294,9 @@ export function GaInfJalanContent() {
   return (
     <div style={{ minHeight: "100vh", background: "#f8f9fa" }}>
       <Sidebar userName={user?.fullName} />
-      <div style={{ 
-        paddingLeft: "96px", 
-        paddingRight: "20px", 
-        paddingTop: "24px", 
-        paddingBottom: "24px", 
-        maxWidth: "1400px", 
-        margin: "0 auto" 
-      }}>
+      <div className="page-content">
         {/* Header */}
-        <div style={{ marginBottom: "28px" }} className="header">
+        <div className="header">
           <button
             onClick={() => router.push("/status-ga")}
             className="btn-back"
@@ -312,20 +305,8 @@ export function GaInfJalanContent() {
             <ArrowLeft size={18} />
             Kembali
           </button>
-          
-          <div style={{
-            background: "#1976d2",
-            borderRadius: "8px",
-            padding: "20px 24px",
-            boxShadow: "0 2px 8px rgba(0,0,0,0.1)"
-          }}>
-            <h1 style={{ 
-              margin: "0 0 6px 0", 
-              color: "white", 
-              fontSize: "26px", 
-              fontWeight: "600", 
-              letterSpacing: "-0.5px" 
-            }}>
+          <div className="text-header">
+            <h1>
               🛣️ GA Infrastruktur Jalan
             </h1>
             <p style={{ 
@@ -426,7 +407,7 @@ export function GaInfJalanContent() {
               </thead>
               <tbody>
                 {filteredData.map((area) => {
-                  const parts = area.name.split(' \u0007 ');
+                  const parts = area.name.split(' • ');
                   const namaArea = parts[0] || '';
                   const kategori = parts[1] || '';
                   const lokasi = parts[2] || '';
@@ -569,10 +550,10 @@ export function GaInfJalanContent() {
                     Detail Area Jalan - {selectedArea.no}
                   </h2>
                   <p style={{ margin: "4px 0", color: "#1e88e5", fontSize: "clamp(12px, 3vw, 14px)", fontWeight: "500" }}>
-                    {selectedArea.name.split(' \u0007 ')[0]}
+                    {selectedArea.name.split(' • ')[0]}
                   </p>
                   <p style={{ margin: "0", color: "#777", fontSize: "clamp(11px, 2.5vw, 12px)" }}>
-                    {selectedArea.name.split(' \u0007 ')[1]} - {selectedArea.name.split(' \u0007 ')[2]}
+                    {selectedArea.name.split(' • ')[1]} - {selectedArea.name.split(' • ')[2]}
                   </p>
                 </div>
                 <button

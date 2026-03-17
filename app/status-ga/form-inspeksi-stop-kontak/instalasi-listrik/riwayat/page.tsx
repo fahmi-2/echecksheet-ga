@@ -836,37 +836,68 @@ export default function RiwayatStopKontak() {
           }
         }
 
-        /* ✅ MOBILE RESPONSIVE (≤ 768px) */
+        /* ✅ TABLET OPTIMIZATION (768px - 1024px) */
+        @media (max-width: 1024px) {
+          .page-content {
+            width: 100%;
+            margin-left: 0;
+            padding: 18px 14px;
+          }
+
+          h1 {
+            font-size: 1.5rem;
+            margin-bottom: 18px;
+          }
+
+          .back-btn {
+            padding: 10px 14px;
+            font-size: 0.9rem;
+          }
+
+          .modal-container {
+            max-width: 85vw;
+            max-height: 90vh;
+          }
+
+          .form-grid {
+            grid-template-columns: repeat(2, 1fr);
+            gap: 14px;
+          }
+        }
+
+        /* ✅ MOBILE RESPONSIVE (480px - 767px) */
         @media (max-width: 768px) {
           .page-content {
             width: 100%;
             margin-left: 0;
-            padding: 16px 12px;
+            padding: 12px 8px;
           }
 
           .back-btn {
             width: 100%;
             justify-content: center;
-            min-height: 48px;
+            min-height: 44px;
+            padding: 10px 12px;
+            margin-bottom: 16px;
           }
 
           h1 {
-            font-size: 1.4rem;
-            margin-bottom: 20px;
+            font-size: 1.3rem;
+            margin-bottom: 16px;
           }
 
           .card-header {
-            padding: 16px;
+            padding: 12px;
             flex-direction: column;
-            align-items: flex-start;
-            gap: 12px;
+            align-items: stretch;
+            gap: 10px;
           }
 
           .header-info {
             width: 100%;
             flex-direction: column;
             align-items: flex-start;
-            gap: 12px;
+            gap: 8px;
           }
 
           .header-text {
@@ -874,11 +905,12 @@ export default function RiwayatStopKontak() {
           }
 
           .header-text h3 {
-            font-size: 1.1rem;
+            font-size: 1rem;
+            font-weight: 600;
           }
 
           .header-text .tanggal {
-            font-size: 0.9rem;
+            font-size: 0.85rem;
           }
 
           .header-text .waktu {
@@ -887,22 +919,23 @@ export default function RiwayatStopKontak() {
 
           .status-ok,
           .status-nok {
-            width: 100%;
-            text-align: center;
-            padding: 10px 16px;
+            padding: 8px 12px;
+            font-size: 0.85rem;
+            align-self: flex-start;
           }
 
           .expand-icon {
-            position: absolute;
-            right: 16px;
-            top: 50%;
-            transform: translateY(-50%);
+            position: static;
+            transform: none;
+            margin-top: 4px;
+            text-align: right;
           }
 
           .meta-info {
             grid-template-columns: 1fr;
-            gap: 12px;
-            padding: 12px;
+            gap: 8px;
+            padding: 10px;
+            margin-bottom: 12px;
           }
 
           .meta-item {
@@ -913,15 +946,18 @@ export default function RiwayatStopKontak() {
 
           .meta-label {
             font-size: 0.8rem;
+            min-width: 100px;
           }
 
           .meta-value {
-            font-size: 0.9rem;
+            font-size: 0.85rem;
+            text-align: right;
           }
 
           .detail-table {
             font-size: 0.85rem;
-            min-width: 500px;
+            min-width: 100%;
+            overflow-x: auto;
           }
 
           .detail-table th,
@@ -934,79 +970,178 @@ export default function RiwayatStopKontak() {
           }
 
           .col-hasil {
-            width: 100px;
+            width: 90px;
           }
 
           .hasil-ok,
           .hasil-nok {
             font-size: 0.8rem;
             padding: 4px 10px;
-            min-width: 50px;
           }
 
           .item-detail {
             font-size: 0.8rem;
           }
 
-          .card-actions {
-            flex-direction: column;
-            gap: 12px;
+          .card-body {
+            padding: 12px;
           }
 
-          .btn-view {
+          .card-actions {
+            flex-direction: column;
+            gap: 8px;
+            margin-top: 8px;
+          }
+
+          .btn-edit,
+          .btn-delete {
             width: 100%;
-            justify-content: center;
-            min-height: 48px;
+            min-height: 44px;
+            padding: 10px 12px;
+            font-size: 0.9rem;
+          }
+
+          .modal-overlay {
+            padding: 8px;
+          }
+
+          .modal-container {
+            width: 100%;
+            max-width: 100%;
+            max-height: 95vh;
+            border-radius: 12px 12px 0 0;
+          }
+
+          .modal-header {
+            padding: 12px;
+            border-radius: 12px 12px 0 0;
+          }
+
+          .modal-header h3 {
+            font-size: 1.1rem;
+          }
+
+          .modal-close {
+            width: 28px;
+            height: 28px;
+          }
+
+          .modal-tabs {
+            padding: 6px 8px;
+            gap: 2px;
+            overflow-x: auto;
+          }
+
+          .tab-btn {
+            padding: 8px 12px;
+            font-size: 0.8rem;
+            white-space: nowrap;
+          }
+
+          .modal-body {
+            padding: 12px;
+            max-height: calc(95vh - 200px);
+            overflow-y: auto;
+          }
+
+          .form-grid {
+            grid-template-columns: 1fr;
+            gap: 10px;
+          }
+
+          .form-group {
+            gap: 4px;
+          }
+
+          .form-group label {
+            font-size: 0.85rem;
+          }
+
+          .form-input,
+          .form-textarea {
+            padding: 8px 10px;
+            font-size: 0.9rem;
+            min-height: 40px;
+          }
+
+          .items-edit-list {
+            gap: 8px;
+          }
+
+          .edit-item-card {
+            padding: 10px;
+            border-radius: 8px;
+          }
+
+          .edit-item-header {
+            gap: 6px;
+            margin-bottom: 8px;
+            padding-bottom: 8px;
+          }
+
+          .item-badge {
+            font-size: 0.75rem;
+            padding: 3px 10px;
+          }
+
+          .item-lokasi-edit {
+            font-size: 0.9rem;
+          }
+
+          .status-select {
+            font-size: 0.85rem;
+            padding: 6px 8px;
+            min-height: 40px;
+          }
+
+          .form-textarea-small {
+            font-size: 0.85rem;
+            padding: 8px 10px;
+            min-height: 60px;
+          }
+
+          .modal-footer {
+            padding: 12px;
+            flex-direction: column-reverse;
+            gap: 8px;
+          }
+
+          .btn-modal-cancel,
+          .btn-modal-save {
+            width: 100%;
+            padding: 12px 16px;
+            min-height: 44px;
             font-size: 0.9rem;
           }
         }
 
-        /* ✅ SMALL MOBILE (≤ 480px) */
-        @media (max-width: 480px) {
+        /* ✅ SMALL MOBILE (320px - 479px) */
+        @media (max-width: 479px) {
           .page-content {
-            padding: 12px 8px;
+            padding: 8px 6px;
           }
 
           .back-btn {
-            padding: 10px 14px;
-            font-size: 0.9rem;
-            min-height: 44px;
+            padding: 8px 10px;
+            font-size: 0.8rem;
+            margin-bottom: 12px;
           }
 
           h1 {
-            font-size: 1.2rem;
-            margin-bottom: 16px;
-          }
-
-          .empty-state {
-            padding: 40px 16px;
-          }
-
-          .empty-icon {
-            font-size: 3rem;
-          }
-
-          .empty-state p {
-            font-size: 1rem;
-          }
-
-          .btn-primary {
-            width: 100%;
-            padding: 12px 24px;
-            font-size: 0.95rem;
-            min-height: 48px;
+            font-size: 1.15rem;
+            margin-bottom: 12px;
           }
 
           .card-header {
-            padding: 14px 12px;
+            padding: 10px;
           }
 
           .header-text h3 {
-            font-size: 1rem;
+            font-size: 0.95rem;
           }
 
           .header-text .tanggal {
-            font-size: 0.85rem;
+            font-size: 0.8rem;
           }
 
           .header-text .waktu {
@@ -1016,28 +1151,30 @@ export default function RiwayatStopKontak() {
           .status-ok,
           .status-nok {
             font-size: 0.8rem;
-            padding: 8px 12px;
+            padding: 6px 10px;
           }
 
           .card-body {
-            padding: 14px 12px;
+            padding: 10px;
           }
 
           .meta-info {
-            padding: 12px;
+            padding: 10px;
+            gap: 6px;
           }
 
           .meta-label {
             font-size: 0.75rem;
+            min-width: 90px;
           }
 
           .meta-value {
-            font-size: 0.85rem;
+            font-size: 0.8rem;
           }
 
           .detail-table {
             font-size: 0.8rem;
-            min-width: 450px;
+            min-width: 100%;
           }
 
           .detail-table th,
@@ -1049,55 +1186,38 @@ export default function RiwayatStopKontak() {
             width: 45px;
           }
 
-          .col-hasil {
-            width: 90px;
-          }
-
           .hasil-ok,
           .hasil-nok {
             font-size: 0.75rem;
-            padding: 4px 8px;
-            min-width: 45px;
+            padding: 3px 8px;
           }
 
-          .item-name {
+          .modal-body {
+            max-height: calc(95vh - 180px);
+            padding: 10px;
+          }
+
+          .form-grid {
+            gap: 8px;
+          }
+
+          .form-input,
+          .form-textarea,
+          .status-select {
+            padding: 6px 8px;
+            font-size: 0.8rem;
+          }
+
+          .form-textarea-small {
+            min-height: 50px;
+          }
+
+          .btn-modal-cancel,
+          .btn-modal-save {
+            padding: 10px 12px;
             font-size: 0.85rem;
-          }
-
-          .item-detail {
-            font-size: 0.75rem;
-          }
-
-          .btn-view {
-            padding: 10px 20px;
-            font-size: 0.85rem;
-            min-height: 44px;
           }
         }
-
-        /* ✅ EXTRA SMALL MOBILE (≤ 360px) */
-        @media (max-width: 360px) {
-          .page-content {
-            padding: 10px 6px;
-          }
-
-          h1 {
-            font-size: 1.1rem;
-          }
-
-          .back-btn {
-            font-size: 0.85rem;
-            padding: 8px 12px;
-            min-height: 40px;
-          }
-
-          .card-header {
-            padding: 12px 10px;
-          }
-
-          .header-text h3 {
-            font-size: 0.95rem;
-          }
 
           .header-text .tanggal {
             font-size: 0.8rem;
@@ -1272,10 +1392,10 @@ export default function RiwayatStopKontak() {
 .form-input,
 .form-textarea {
   padding: 10px 12px;
-  border: 1px solid #cbd5e1;
+  border: 1px solid #cbd5e1;s
   border-radius: 8px;
   font-size: 0.95rem;
-  color : #1e293b;
+  
 }
 
 .form-input:focus,

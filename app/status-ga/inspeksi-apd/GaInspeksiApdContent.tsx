@@ -402,44 +402,20 @@ export function GaInspeksiApdContent() {
   return (
     <div style={{ minHeight: "100vh", background: "#f7f9fc" }}>
       <Sidebar userName={user?.fullName} />
-      <div style={{
-        paddingLeft: "95px",
-        paddingRight: "25px",
-        paddingBottom: "32px",
-        paddingTop: "32px",
-        maxWidth: "1400px",
-        margin: "0 auto"
-      }}>
-        <div style={{ marginBottom: "28px" }} className="header">
+      <div className="page-content">
+        <div className="header">
           <button
             onClick={() => router.push("/status-ga")}
             className="btn-back"
           >
             <ArrowLeft size={18} /> Kembali
           </button>
-          
-          <div style={{
-            background: "#1976d2",
-            borderRadius: "8px",
-            padding: "20px 24px",
-            boxShadow: "0 2px 8px rgba(0,0,0,0.1)"
-          }}>
-            <h1 style={{ 
-              margin: "0 0 6px 0", 
-              color: "white", 
-              fontSize: "26px", 
-              fontWeight: "600", 
-              letterSpacing: "-0.5px" 
-            }}>
-              🛡️ APD Inspection Dashboard
+          <div className="text-header">
+            <h1>
+              APD Inspection Dashboard
             </h1>
-            <p style={{ 
-              margin: 0, 
-              color: "#e3f2fd", 
-              fontSize: "14px", 
-              fontWeight: "400" 
-            }}>
-              Monthly inspection schedule and maintenance records for Personal Protective Equipment
+            <p>
+              Monthly inspection schedule and maintenance records
             </p>
           </div>
         </div>
@@ -658,7 +634,7 @@ export function GaInspeksiApdContent() {
               background: "rgba(0,0,0,0.5)",
               display: "flex",
               justifyContent: "center",
-              alignItems: "center",
+              alignItems: "ce nter",
               zIndex: 1000,
               padding: "20px"
             }}

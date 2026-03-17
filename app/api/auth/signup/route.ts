@@ -86,7 +86,8 @@ export async function POST(request: NextRequest) {
     // Hash password
     const hashedPassword = await bcrypt.hash(password, 10);
 
-    // Generate ID unik
+    // Generate ID unik - lebih baik pakai UUID untuk production
+    // Tapi untuk kompatibilitas dengan sistem lama, kita pertahankan format lama
     const userId = `user_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
 
     console.log('💾 Creating new user:', userId);
@@ -96,7 +97,7 @@ export async function POST(request: NextRequest) {
       `INSERT INTO users 
        (id, username, full_name, nik, department, role, password_hash, is_active, created_at)
        VALUES ($1, $2, $3, $4, $5, $6, $7, TRUE, CURRENT_TIMESTAMP)
-       RETURNING id, username, role`,
+       RETURNING id, username, full_name, nik, department, role`,
       [
         userId,
         username.trim(),
@@ -111,26 +112,45 @@ export async function POST(request: NextRequest) {
     const newUser = insertResult.rows[0];
     console.log('✅ User created successfully:', newUser);
     
+    // ⚠️ SECURITY: Jangan return password hash atau data sensitif
     return NextResponse.json(
       { 
         success: true, 
         message: 'Pendaftaran berhasil! Silakan login.',
-        userId: newUser.id
+        user: {
+          id: newUser.id,
+          username: newUser.username,
+          fullName: newUser.full_name,
+          nik: newUser.nik,
+          department: newUser.department,
+          role: newUser.role,
+        }
       },
       { status: 201 }
     );
-  } catch (error) {
+  } catch (error: any) {
     console.error('❌ Signup error:', error);
     
-    // Handle PostgreSQL specific errors
-    if (error instanceof Error) {
-      // Unique constraint violation
-      if (error.message.includes('unique') || error.message.includes('duplicate')) {
-        return NextResponse.json(
-          { error: 'Username atau NIK sudah terdaftar!' },
-          { status: 409 }
-        );
-      }
+    // PostgreSQL specific error handling
+    if (error.code === '23505') { // Unique constraint violation
+      return NextResponse.json(
+        { error: 'Username atau NIK sudah terdaftar!' },
+        { status: 409 }
+      );
+    }
+    
+    if (error.code === '23502') { // NOT NULL violation
+      return NextResponse.json(
+        { error: 'Data wajib tidak boleh kosong!' },
+        { status: 400 }
+      );
+    }
+    
+    if (error.code === '28P01') { // Invalid password for PostgreSQL connection
+      return NextResponse.json(
+        { error: 'Kesalahan koneksi database. Hubungi administrator.' },
+        { status: 500 }
+      );
     }
     
     return NextResponse.json(
