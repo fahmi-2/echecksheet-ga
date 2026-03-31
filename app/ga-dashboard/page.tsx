@@ -32,12 +32,43 @@ ChartJS.register(
   BarElement, ArcElement, Tooltip, Legend, Filler
 );
 
-// ✅ FORM_TYPES imported dari dashboard-config.ts (single source of truth)
 type FormType = typeof FORM_TYPES[number];
 
-/** Cari config form berdasarkan value */
 function findForm(value: string): FormType {
   return FORM_TYPES.find(f => f.value === value) ?? FORM_TYPES[0];
+}
+
+// ─────────────────────────────────────────────────────────────
+// HOOK: useSidebarWidth
+// Mendengarkan CustomEvent "sidebarToggle" dari Sidebar.tsx
+// Sidebar mengirim: { detail: { expanded: boolean, width: number } }
+// ─────────────────────────────────────────────────────────────
+function useSidebarWidth() {
+  const COLLAPSED_W = 70;  // sama dengan SIDEBAR_COLLAPSED_W di Sidebar.tsx
+  const EXPANDED_W  = 240; // sama dengan SIDEBAR_EXPANDED_W  di Sidebar.tsx
+
+  const [sidebarW, setSidebarW] = useState(COLLAPSED_W);
+
+  useEffect(() => {
+    // Baca CSS variable yang di-set Sidebar saat mount
+    const readCssVar = () => {
+      const v = getComputedStyle(document.documentElement)
+        .getPropertyValue('--sidebar-w').trim();
+      if (v) setSidebarW(parseInt(v));
+    };
+    readCssVar();
+
+    // Dengarkan event toggle dari Sidebar
+    const onToggle = (e: Event) => {
+      const { width } = (e as CustomEvent<{ expanded: boolean; width: number }>).detail;
+      setSidebarW(width);
+    };
+
+    window.addEventListener('sidebarToggle', onToggle);
+    return () => window.removeEventListener('sidebarToggle', onToggle);
+  }, []);
+
+  return sidebarW;
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -56,6 +87,9 @@ interface DashboardStats {
 export default function GADashboard() {
   const { user } = useAuth();
   const tableContainerRef = useRef<HTMLDivElement>(null);
+
+  // ✅ Reactive sidebar width
+  const sidebarW = useSidebarWidth();
 
   const [selectedForm, setSelectedForm] = useState<string>('All Category');
   const [activeMonth, setActiveMonth] = useState<number>(new Date().getMonth());
@@ -76,39 +110,20 @@ export default function GADashboard() {
     setError(null);
     try {
       const form = findForm(selectedForm);
-
       const firstDay = new Date(activeYear, activeMonth, 1);
       const lastDay  = new Date(activeYear, activeMonth + 1, 0);
       const dateFrom = firstDay.toISOString().split('T')[0];
       const dateTo   = lastDay.toISOString().split('T')[0];
 
-      // Bangun params untuk analytics endpoint
-      const analyticsParams = {
-        slug: form.slug,
-        dateFrom,
-        dateTo,
-        period: 'daily',
-      };
-
-      // Untuk backward compat jika getFormConfig masih dipakai di mapper
+      const analyticsParams = { slug: form.slug, dateFrom, dateTo, period: 'daily' };
       const formConfig = getFormConfig(selectedForm) ?? {
-        slug: form.slug,
-        label: form.label,
-        analyticsEndpoint: '/api/analytics',
+        slug: form.slug, label: form.label, analyticsEndpoint: '/api/analytics',
       };
 
       const [analyticsResult, topUsersResult, historyResult] = await Promise.allSettled([
         fetchAnalytics(formConfig.analyticsEndpoint ?? '/api/analytics', analyticsParams),
         fetchTopUsers('/analytics/top-users', analyticsParams),
-        fetchHistory(
-          '/analytics/history',
-          form.slug,
-          undefined,  // ✅ FIX: area parameter tidak digunakan, filter by slug di API
-          itemsPerPage,
-          dateFrom,
-          dateTo,
-          currentPage
-        ),
+        fetchHistory('/analytics/history', form.slug, undefined, itemsPerPage, dateFrom, dateTo, currentPage),
       ]);
 
       let analytics: AnalyticsResponse | null = null;
@@ -126,9 +141,7 @@ export default function GADashboard() {
 
       const mappedData = mapAnalyticsToDashboard(
         analytics?.data?.length ? analytics.data : null,
-        formConfig.label,
-        topUsers,
-        historyData
+        formConfig.label, topUsers, historyData
       );
       setDashboardData(mappedData);
       setLastRefresh(new Date());
@@ -145,13 +158,11 @@ export default function GADashboard() {
 
   useEffect(() => { loadDashboardData(); }, [loadDashboardData]);
 
-  // Auto-refresh 1 jam
   useEffect(() => {
     const id = setInterval(loadDashboardData, 3_600_000);
     return () => clearInterval(id);
   }, [loadDashboardData]);
 
-  // Event-driven refresh
   useEffect(() => {
     const cleanup = onDashboardRefresh((formType?: string) => {
       if (shouldRefreshForForm(selectedForm, formType)) loadDashboardData();
@@ -159,14 +170,12 @@ export default function GADashboard() {
     return cleanup;
   }, [selectedForm, loadDashboardData]);
 
-  // Visibility-based refresh
   useEffect(() => {
     const fn = () => { if (document.visibilityState === 'visible') loadDashboardData(); };
     document.addEventListener('visibilitychange', fn);
     return () => document.removeEventListener('visibilitychange', fn);
   }, [loadDashboardData]);
 
-  // Scroll restore after page change
   useEffect(() => {
     if (scrollPosition > 0 && tableContainerRef.current) {
       window.scrollTo({ top: scrollPosition, behavior: 'smooth' });
@@ -176,11 +185,10 @@ export default function GADashboard() {
 
   // ── Pagination helpers ─────────────────────────────────────
   const scrollToTable = () => {
-    if (tableContainerRef.current)
-      setScrollPosition(tableContainerRef.current.offsetTop - 100);
+    if (tableContainerRef.current) setScrollPosition(tableContainerRef.current.offsetTop - 100);
   };
-  const handlePreviousPage = () => { if (currentPage > 1)          { scrollToTable(); setCurrentPage(p => p - 1); } };
-  const handleNextPage     = () => { if (currentPage < totalPages)  { scrollToTable(); setCurrentPage(p => p + 1); } };
+  const handlePreviousPage = () => { if (currentPage > 1)         { scrollToTable(); setCurrentPage(p => p - 1); } };
+  const handleNextPage     = () => { if (currentPage < totalPages) { scrollToTable(); setCurrentPage(p => p + 1); } };
   const handlePageChange   = (p: number) => { scrollToTable(); setCurrentPage(p); };
 
   const getPageNumbers = () => {
@@ -211,13 +219,10 @@ export default function GADashboard() {
       datasets: [{
         label: 'Total Inspeksi',
         data: dashboardData.trendData.map(item => item.count),
-        borderColor: '#1976d2',
-        backgroundColor: 'rgba(25, 118, 210, 0.1)',
+        borderColor: '#1976d2', backgroundColor: 'rgba(25,118,210,0.1)',
         fill: true, tension: 0.4,
-        pointBackgroundColor: '#1976d2',
-        pointBorderColor: '#fff',
-        pointBorderWidth: 2,
-        pointRadius: 4, pointHoverRadius: 6,
+        pointBackgroundColor: '#1976d2', pointBorderColor: '#fff',
+        pointBorderWidth: 2, pointRadius: 4, pointHoverRadius: 6,
       }],
     };
   }, [dashboardData]);
@@ -242,7 +247,7 @@ export default function GADashboard() {
     };
   }, [dashboardData]);
 
-  const topUsers   = useMemo(() => dashboardData?.topUsers   || [], [dashboardData]);
+  const topUsers    = useMemo(() => dashboardData?.topUsers    || [], [dashboardData]);
   const historyData = useMemo(() => dashboardData?.historyData || [], [dashboardData]);
 
   // ── Helpers ────────────────────────────────────────────────
@@ -273,9 +278,14 @@ export default function GADashboard() {
   if (!user) return null;
   const userName = user.fullName || 'User';
 
-  // ── Group options for select ───────────────────────────────
   const legacyForms = FORM_TYPES.filter(f => f.group === 'legacy');
   const gaForms     = FORM_TYPES.filter(f => f.group === 'ga');
+
+  // ✅ Inline style reaktif — margin-left ikut sidebarW
+  const mainStyle: React.CSSProperties = {
+    marginLeft: sidebarW,
+    transition: 'margin-left 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+  };
 
   // ─────────────────────────────────────────────────────────────
   // RENDER
@@ -283,26 +293,27 @@ export default function GADashboard() {
   return (
     <>
       <style>{`
-        /* ─── VARIABLES ─── */
         :root {
           --db-blue: #1565c0;
           --db-blue-light: #1e88e5;
-          --db-sidebar: 75px;
           --db-radius: 12px;
           --db-shadow: 0 2px 8px rgba(0,0,0,0.08);
           --db-border: #e5e7eb;
           --db-bg: #f5f7fa;
         }
 
-        /* ─── LAYOUT ─── */
         .db-wrap { display: flex; min-height: 100vh; background: var(--db-bg); }
+
+        /* ✅ db-main tidak pakai margin-left di CSS — dikontrol via inline style */
         .db-main {
-          flex: 1; margin-left: var(--db-sidebar);
-          padding: 24px 20px 48px; max-width: 1440px;
-          min-width: 0; box-sizing: border-box;
+          flex: 1;
+          padding: 24px 20px 48px;
+          max-width: 1440px;
+          min-width: 0;
+          box-sizing: border-box;
         }
 
-        /* ─── HEADER ─── */
+        /* ── HEADER ── */
         .db-header {
           background: linear-gradient(135deg, #1565c0 0%, #0d47a1 100%);
           color: #fff; padding: 20px 24px; border-radius: var(--db-radius);
@@ -328,20 +339,9 @@ export default function GADashboard() {
           font-size: 13px; cursor: pointer; min-width: 200px; min-height: 36px;
         }
         .db-filter-select:focus { outline: 2px solid #64b5f6; }
-
-        /* optgroup label styling */
         .db-filter-select optgroup { font-weight: 700; color: #1565c0; }
 
-        /* ─── FORM GROUP BADGE ─── */
-        .db-form-group-badge {
-          display: inline-block;
-          padding: 2px 10px; border-radius: 20px; font-size: 11px;
-          font-weight: 700; margin-left: 8px; vertical-align: middle;
-        }
-        .db-form-group-badge.legacy { background: #dbeafe; color: #1d4ed8; }
-        .db-form-group-badge.ga     { background: #d1fae5; color: #065f46; }
-
-        /* ─── MONTH NAV ─── */
+        /* ── MONTH NAV ── */
         .db-month-nav {
           display: flex; align-items: center; justify-content: center;
           gap: 16px; background: #fff; border-radius: var(--db-radius);
@@ -359,7 +359,7 @@ export default function GADashboard() {
           color: var(--db-blue); min-width: 160px; text-align: center;
         }
 
-        /* ─── LOADING / ERROR ─── */
+        /* ── LOADING / ERROR ── */
         .db-loading {
           text-align: center; padding: 60px 20px; background: #fff;
           border-radius: var(--db-radius); box-shadow: var(--db-shadow);
@@ -383,7 +383,7 @@ export default function GADashboard() {
         }
         .db-retry-btn:hover { background: #b91c1c; }
 
-        /* ─── STATS GRID ─── */
+        /* ── STATS GRID ── */
         .db-stats {
           display: grid; grid-template-columns: repeat(4, 1fr);
           gap: 16px; margin-bottom: 20px;
@@ -402,13 +402,13 @@ export default function GADashboard() {
         .db-stat-val  { font-size: clamp(22px,5vw,32px); font-weight: 800; line-height: 1; margin-bottom: 6px; }
         .db-stat-lbl  { font-size: 12px; font-weight: 500; opacity: .92; }
 
-        /* ─── CHART BOXES ─── */
+        /* ── CHART BOXES ── */
         .db-chart-box {
           background: #fff; border-radius: var(--db-radius);
           padding: 20px; box-shadow: var(--db-shadow); margin-bottom: 20px;
         }
         .db-chart-title { margin: 0 0 16px; font-size: clamp(13px,2.5vw,16px); font-weight: 700; color: #1e293b; }
-        .db-chart-area    { height: 340px; }
+        .db-chart-area     { height: 340px; }
         .db-chart-area--sm { height: 260px; }
         .db-charts-grid {
           display: grid; grid-template-columns: 1fr 1fr;
@@ -416,7 +416,7 @@ export default function GADashboard() {
         }
         .db-empty { text-align: center; color: #94a3b8; padding: 40px 20px; font-size: 14px; }
 
-        /* ─── TOP USERS ─── */
+        /* ── TOP USERS ── */
         .db-top-users { display: flex; flex-direction: column; gap: 10px; }
         .db-user-item {
           display: flex; align-items: center; gap: 12px;
@@ -428,9 +428,9 @@ export default function GADashboard() {
           border-radius: 50%; display: flex; align-items: center; justify-content: center;
           font-weight: 700; font-size: 13px; flex-shrink: 0;
         }
-        .db-user-body { flex: 1; min-width: 0; }
-        .db-user-row  { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; gap: 8px; }
-        .db-user-name { font-weight: 600; color: #1e293b; font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .db-user-body  { flex: 1; min-width: 0; }
+        .db-user-row   { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; gap: 8px; }
+        .db-user-name  { font-weight: 600; color: #1e293b; font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
         .db-user-count {
           background: var(--db-blue); color: #fff; padding: 3px 12px;
           border-radius: 12px; font-weight: 700; font-size: 12px; flex-shrink: 0;
@@ -438,14 +438,14 @@ export default function GADashboard() {
         .db-progress { height: 7px; background: #e5e7eb; border-radius: 4px; overflow: hidden; }
         .db-progress-fill { height: 100%; background: linear-gradient(90deg,#10b981,#059669); border-radius: 4px; transition: width .4s; }
 
-        /* ─── HISTORY SECTION ─── */
+        /* ── HISTORY SECTION ── */
         .db-section { background: #fff; border-radius: var(--db-radius); padding: 20px; box-shadow: var(--db-shadow); }
         .db-section-head {
           display: flex; justify-content: space-between; align-items: center;
           margin-bottom: 16px; padding-bottom: 14px; border-bottom: 2px solid var(--db-border);
           flex-wrap: wrap; gap: 10px;
         }
-        .db-section-title { margin: 0; font-size: clamp(14px,3vw,18px); font-weight: 700; color: #1e293b; }
+        .db-section-title  { margin: 0; font-size: clamp(14px,3vw,18px); font-weight: 700; color: #1e293b; }
         .db-section-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
         .db-record-badge {
           color: #6b7280; font-size: 12px; background: #f3f4f6;
@@ -458,7 +458,7 @@ export default function GADashboard() {
         }
         .db-refresh-btn:hover { background: #0d47a1; }
 
-        /* ─── HISTORY TABLE ─── */
+        /* ── HISTORY TABLE ── */
         .db-table-scroll {
           overflow-x: auto; -webkit-overflow-scrolling: touch;
           max-height: 420px; overflow-y: auto;
@@ -484,7 +484,7 @@ export default function GADashboard() {
         .db-ok-count { color: #059669; font-weight: 700; }
         .db-empty-row { text-align: center; color: #9ca3af; padding: 48px; font-size: 15px; }
 
-        /* ─── PAGINATION ─── */
+        /* ── PAGINATION ── */
         .db-pagination {
           display: flex; justify-content: center; align-items: center;
           gap: 8px; margin-top: 16px; padding-top: 16px;
@@ -506,7 +506,7 @@ export default function GADashboard() {
         .db-page-num:hover { background: #f3f4f6; border-color: var(--db-blue); }
         .db-page-num.active { background: var(--db-blue); color: #fff; border-color: var(--db-blue); }
 
-        /* ─── MOBILE HISTORY CARDS ─── */
+        /* ── MOBILE HISTORY CARDS ── */
         .db-history-cards { display: none; }
         .db-hcard {
           border: 1px solid var(--db-border); border-radius: 8px; padding: 12px 14px;
@@ -525,17 +525,19 @@ export default function GADashboard() {
         .db-hcard-key { color: #9ca3af; font-weight: 600; text-transform: uppercase; letter-spacing: .3px; }
         .db-hcard-val { color: #334155; font-weight: 500; }
 
-        /* ─── RESPONSIVE ─── */
+        /* ── RESPONSIVE ── */
         @media (max-width: 1200px) {
-          .db-main { margin-left: 80px; padding: 20px 16px 48px; }
+          .db-main { padding: 20px 16px 48px; }
           .db-stats { grid-template-columns: repeat(2,1fr); gap: 12px; }
         }
         @media (max-width: 1024px) {
           .db-charts-grid { grid-template-columns: 1fr; }
           .db-chart-area--sm { height: 280px; }
         }
+
+        /* ✅ Mobile: override inline margin-left agar kembali ke 0 */
         @media (max-width: 768px) {
-          .db-main { margin-left: 0; padding: 12px 10px 60px; }
+          .db-main { margin-left: 0 !important; padding: 12px 10px 60px; }
           .db-header { padding: 14px 16px; margin-bottom: 14px; }
           .db-header-inner { flex-direction: column; gap: 10px; }
           .db-filter-wrap { width: 100%; box-sizing: border-box; }
@@ -583,7 +585,8 @@ export default function GADashboard() {
       <Sidebar userName={userName} />
 
       <div className="db-wrap">
-        <main className="db-main">
+        {/* ✅ inline style untuk margin-left reaktif */}
+        <main className="db-main" style={mainStyle}>
 
           {/* ── Header ── */}
           <div className="db-header">
@@ -602,17 +605,12 @@ export default function GADashboard() {
                   onChange={(e) => { setSelectedForm(e.target.value); setCurrentPage(1); }}
                   className="db-filter-select"
                 >
-                  {/* All */}
                   <option value="All Category">📋 All Category</option>
-
-                  {/* Legacy group */}
                   <optgroup label="── Legacy Forms ──">
                     {legacyForms.map(f => (
                       <option key={f.value} value={f.value}>{f.label}</option>
                     ))}
                   </optgroup>
-
-                  {/* GA Unified group */}
                   <optgroup label="── GA Checksheet ──">
                     {gaForms.map(f => (
                       <option key={f.value} value={f.value}>{f.label}</option>
@@ -701,9 +699,8 @@ export default function GADashboard() {
                 </div>
               </div>
 
-              {/* Charts Grid: Distribution + Top Users */}
+              {/* Charts Grid */}
               <div className="db-charts-grid">
-                {/* Distribution */}
                 <div className="db-chart-box" style={{ marginBottom: 0 }}>
                   <h3 className="db-chart-title">📊 Distribusi OK/NG per Area</h3>
                   <div className="db-chart-area--sm">
@@ -722,7 +719,6 @@ export default function GADashboard() {
                   </div>
                 </div>
 
-                {/* Top Users */}
                 <div className="db-chart-box" style={{ marginBottom: 0 }}>
                   <h3 className="db-chart-title">🏆 Top Inspector</h3>
                   <div className="db-top-users">

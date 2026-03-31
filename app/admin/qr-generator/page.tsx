@@ -27,10 +27,43 @@ function authFetch(url: string, options: RequestInit = {}): Promise<Response> {
 }
 
 // ──────────────────────────────────────────────────────────────────────────────
-// GA DATA STRUCTURES (dari scripts/generate-all-qr-v2.js)
+// HOOK: useSidebarWidth
+// Mendengarkan CustomEvent "sidebarToggle" yang di-dispatch oleh Sidebar.tsx.
+// Sidebar mengirim: { detail: { expanded: boolean, width: number } }
+// Nilai collapsed = 70px, expanded = 240px — sesuai konstanta di Sidebar.tsx
+// ──────────────────────────────────────────────────────────────────────────────
+function useSidebarWidth() {
+  const COLLAPSED_W = 70;   // harus sama dengan SIDEBAR_COLLAPSED_W di Sidebar.tsx
+  const EXPANDED_W  = 240;  // harus sama dengan SIDEBAR_EXPANDED_W  di Sidebar.tsx
+
+  const [sidebarW, setSidebarW] = useState(COLLAPSED_W);
+
+  useEffect(() => {
+    // Baca CSS variable yang di-set Sidebar saat mount (sudah pasti akurat)
+    const readCssVar = () => {
+      const v = getComputedStyle(document.documentElement)
+        .getPropertyValue("--sidebar-w").trim();
+      if (v) setSidebarW(parseInt(v));
+    };
+    readCssVar();
+
+    // Dengarkan event toggle dari Sidebar
+    const onToggle = (e: Event) => {
+      const { width } = (e as CustomEvent<{ expanded: boolean; width: number }>).detail;
+      setSidebarW(width);
+    };
+
+    window.addEventListener("sidebarToggle", onToggle);
+    return () => window.removeEventListener("sidebarToggle", onToggle);
+  }, []);
+
+  return sidebarW;
+}
+
+// ──────────────────────────────────────────────────────────────────────────────
+// GA DATA STRUCTURES
 // ──────────────────────────────────────────────────────────────────────────────
 
-// ✅ Fire Alarm Zones (18 zones)
 const FIRE_ALARM_ZONES: Record<string, string> = {
   "zona-1": "Lobby & Hydrant Main Office",
   "zona-2": "EXIM",
@@ -52,7 +85,6 @@ const FIRE_ALARM_ZONES: Record<string, string> = {
   "zona-23": "Bawah Mezzanine, Ministore WHS",
 };
 
-// ✅ Hydrant List (36 hydrants)
 const HYDRANT_LIST = [
   { no: 1, lokasi: "KANTIN", zona: "BARAT", jenisHydrant: "HYDRANT INDOOR" },
   { no: 2, lokasi: "AUDITORIUM", zona: "BARAT", jenisHydrant: "HYDRANT INDOOR" },
@@ -92,7 +124,6 @@ const HYDRANT_LIST = [
   { no: 36, lokasi: "DEPAN POWER HOUSE A", zona: "UTARA", jenisHydrant: "HYDRANT OUTDOOR" },
 ];
 
-// ✅ APAR Slugs (30 areas)
 const APAR_SLUGS = [
   "area-locker-security", "area-kantin", "area-auditorium", "area-main-office", "exim",
   "area-genba-a", "area-mezzanine-genba-a", "jig-proto-1-area-receiving", "stock-control-area",
@@ -104,14 +135,12 @@ const APAR_SLUGS = [
   "mesin-raychem-genba-c"
 ];
 
-// ✅ Toilet Areas (12 areas)
 const TOILET_AREAS = [
   "toilet-driver", "toilet-bea-cukai", "toilet-parkir", "toilet-c2", "toilet-c1",
   "toilet-d", "toilet-auditorium", "toilet-whs", "toilet-b1", "toilet-a",
   "toilet-lobby", "toilet-office-main"
 ];
 
-// ✅ Lift Barang Units (6 units)
 const LIFT_BARANG_UNITS = [
   { no: 1, namaLift: "Lift Barang Produksi", area: "Genba A Lt. 2", lokasi: "Produksi Genba A" },
   { no: 2, namaLift: "Lift Barang Genba B", area: "Genba B Lt. 2", lokasi: "Produksi Genba B" },
@@ -121,7 +150,6 @@ const LIFT_BARANG_UNITS = [
   { no: 6, namaLift: "Lift Barang Warehouse", area: "Warehouse Lt. 2", lokasi: "Area Warehouse" },
 ];
 
-// ✅ Panel Names (20 panels)
 const PANEL_NAMES = [
   { no: 1, namaPanel: "MCC Sump 1", area: "Pintu 3 Genba A" },
   { no: 2, namaPanel: "MCC Sump 2", area: "Pintu 1 Genba A" },
@@ -145,7 +173,6 @@ const PANEL_NAMES = [
   { no: 20, namaPanel: "Segitiga", area: "Area Segitiga" },
 ];
 
-// ✅ Lainnya
 const SMOKE_DETECTOR_AREAS = ["area-1", "area-2", "area-3", "area-4", "area-5"];
 const EMERGENCY_AREAS = ["genba-a", "genba-b", "genba-c", "warehouse", "office", "pump-room", "power-house", "training-room", "auditorium"];
 const EXIT_LAMP_CATEGORIES = ["exit-lamp", "titik-kumpul", "pintu-darurat"];
@@ -192,7 +219,7 @@ function loadQRScript(cb: () => void) {
 }
 
 // ──────────────────────────────────────────────────────────────────────────────
-// QR CARD COMPONENT (dengan TITLE di atas)
+// QR CARD COMPONENT
 // ──────────────────────────────────────────────────────────────────────────────
 function QRCard({ config, index }: { config: QRConfig; index: number }) {
   const wrapperRef = useRef<HTMLDivElement>(null);
@@ -217,12 +244,7 @@ function QRCard({ config, index }: { config: QRConfig; index: number }) {
           colorLight: "#ffffff",
           correctLevel: window.QRCode.CorrectLevel.M
         });
-        
-        // Tunggu sebentar sebelum mark as loaded untuk memastikan QR fully rendered
-        setTimeout(() => {
-          setLoaded(true);
-        }, 200);
-        
+        setTimeout(() => { setLoaded(true); }, 200);
       } catch {}
     });
 
@@ -234,97 +256,59 @@ function QRCard({ config, index }: { config: QRConfig; index: number }) {
   }, [config.url]);
 
   const downloadQR = async () => {
-  // Pastikan QR sudah fully loaded
-  if (!loaded) {
-    alert("QR code belum siap. Mohon tunggu sebentar.");
-    return;
-  }
+    if (!loaded) { alert("QR code belum siap. Mohon tunggu sebentar."); return; }
+    await new Promise(resolve => setTimeout(resolve, 300));
 
-  // Tunggu sebentar untuk memastikan rendering selesai
-  await new Promise(resolve => setTimeout(resolve, 300));
+    let src = qrRef.current?.querySelector("canvas") as HTMLCanvasElement | null;
+    let imgElement = qrRef.current?.querySelector("img") as HTMLImageElement | null;
+    if (!src && !imgElement) { alert("QR belum siap. Silakan coba lagi."); return; }
 
-  // qrcodejs creates an <img> element, not canvas - support both
-  let src = qrRef.current?.querySelector("canvas") as HTMLCanvasElement | null;
-  let imgElement = qrRef.current?.querySelector("img") as HTMLImageElement | null;
-  
-  if (!src && !imgElement) { 
-    alert("QR belum siap. Silakan coba lagi."); 
-    return; 
-  }
+    let actualWidth = 0, actualHeight = 0;
+    let srcData: HTMLCanvasElement | HTMLImageElement = src || imgElement!;
+    if (src) { actualWidth = src.width; actualHeight = src.height; }
+    else if (imgElement) { actualWidth = imgElement.naturalWidth || imgElement.width || 172; actualHeight = imgElement.naturalHeight || imgElement.height || 172; }
+    if (actualWidth === 0 || actualHeight === 0) { actualWidth = 172; actualHeight = 172; }
 
-  // Get actual dimensions from the source
-  let actualWidth = 0;
-  let actualHeight = 0;
-  let srcData: HTMLCanvasElement | HTMLImageElement = src || imgElement!;
-  
-  if (src) {
-    actualWidth = src.width;
-    actualHeight = src.height;
-  } else if (imgElement) {
-    // Use natural dimensions for img element
-    actualWidth = imgElement.naturalWidth || imgElement.width || 172;
-    actualHeight = imgElement.naturalHeight || imgElement.height || 172;
-  }
+    const titleHeight = 60;
+    const qrSize = Math.max(actualWidth, actualHeight, 172);
+    const ec = document.createElement("canvas");
+    ec.width = qrSize + 40;
+    ec.height = qrSize + titleHeight + 20;
+    const ctx = ec.getContext("2d")!;
 
-  // Ensure we have valid dimensions
-  if (actualWidth === 0 || actualHeight === 0) {
-    actualWidth = 172;
-    actualHeight = 172;
-  }
+    ctx.fillStyle = "#ffffff";
+    ctx.fillRect(0, 0, ec.width, ec.height);
+    ctx.fillStyle = "#0d47a1";
+    ctx.font = "bold 16px Arial";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
 
-  // Buat canvas dengan space untuk TITLE - use actual QR dimensions
-  const titleHeight = 60;
-  const qrSize = Math.max(actualWidth, actualHeight, 172); // Minimum 172px
-  const ec = document.createElement("canvas");
-  ec.width = qrSize + 40; // Add padding left/right
-  ec.height = qrSize + titleHeight + 20; // Add padding bottom
-  const ctx = ec.getContext("2d")!;
-
-  // Background putih
-  ctx.fillStyle = "#ffffff";
-  ctx.fillRect(0, 0, ec.width, ec.height);
-
-  // Draw TITLE di atas
-  ctx.fillStyle = "#0d47a1";
-  ctx.font = "bold 16px Arial";
-  ctx.textAlign = "center";
-  ctx.textBaseline = "middle";
-
-  // Wrap title jika terlalu panjang
-  const maxWidth = ec.width - 20;
-  const words = config.title.split(" ");
-  let lines: string[] = [];
-  let currentLine = "";
-  for (const word of words) {
-    const testLine = currentLine + (currentLine ? " " : "") + word;
-    const metrics = ctx.measureText(testLine);
-    if (metrics.width > maxWidth && currentLine) {
-      lines.push(currentLine);
-      currentLine = word;
-    } else {
-      currentLine = testLine;
+    const maxWidth = ec.width - 20;
+    const words = config.title.split(" ");
+    let lines: string[] = [];
+    let currentLine = "";
+    for (const word of words) {
+      const testLine = currentLine + (currentLine ? " " : "") + word;
+      if (ctx.measureText(testLine).width > maxWidth && currentLine) { lines.push(currentLine); currentLine = word; }
+      else { currentLine = testLine; }
     }
-  }
-  if (currentLine) lines.push(currentLine);
+    if (currentLine) lines.push(currentLine);
 
-  const lineHeight = 20;
-  const startY = 15 + (lines.length > 1 ? 5 : 10);
-  lines.forEach((line, idx) => {
-    ctx.fillText(line, ec.width / 2, startY + idx * lineHeight);
-  });
+    const lineHeight = 20;
+    const startY = 15 + (lines.length > 1 ? 5 : 10);
+    lines.forEach((line, idx) => { ctx.fillText(line, ec.width / 2, startY + idx * lineHeight); });
 
-  // Draw QR code di bawah title - use actual dimensions to prevent cutoff
-  const qrX = (ec.width - qrSize) / 2;
-  ctx.drawImage(srcData, qrX, titleHeight, qrSize, qrSize);
+    const qrX = (ec.width - qrSize) / 2;
+    ctx.drawImage(srcData, qrX, titleHeight, qrSize, qrSize);
 
-  // Download dengan filename yang sanitized
-  const a = document.createElement("a");
-  a.download = `QR_${sanitizeFileName(config.title)}.png`;
-  a.href = ec.toDataURL("image/png");
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-};
+    const a = document.createElement("a");
+    a.download = `QR_${sanitizeFileName(config.title)}.png`;
+    a.href = ec.toDataURL("image/png");
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+  };
+
   return (
     <div className="qr-card">
       <div className="qr-header">
@@ -376,128 +360,49 @@ function sanitizeFileName(str: string) {
 }
 
 // ──────────────────────────────────────────────────────────────────────────────
-// GENERATOR FUNCTIONS (mengembalikan array QRConfig)
+// GENERATOR FUNCTIONS
 // ──────────────────────────────────────────────────────────────────────────────
-
 function generateFireAlarmQR(): QRConfig[] {
-  return Object.entries(FIRE_ALARM_ZONES).map(([zona, desc]) => ({
-    type: "Fire Alarm",
-    title: `Fire Alarm - ${zona}`,
-    url: `echecksheet:///status-ga/fire-alarm/${zona}`,
-    description: desc,
-  }));
+  return Object.entries(FIRE_ALARM_ZONES).map(([zona, desc]) => ({ type: "Fire Alarm", title: `Fire Alarm - ${zona}`, url: `echecksheet:///status-ga/fire-alarm/${zona}`, description: desc }));
 }
-
 function generateHydrantQR(): QRConfig[] {
-  return HYDRANT_LIST.map(h => ({
-    type: "Hydrant",
-    title: `Hydrant #${String(h.no).padStart(2, '0')} - ${h.lokasi}`,
-    // ✅ FIXED: Route /e-checksheet-hydrant dengan params lengkap
-    url: `echecksheet:///e-checksheet-hydrant?no=${h.no}&lokasi=${encodeURIComponent(h.lokasi)}&zona=${encodeURIComponent(h.zona)}&jenisHydrant=${encodeURIComponent(h.jenisHydrant)}`,
-    description: `${h.jenisHydrant} • Zona ${h.zona}`,
-  }));
+  return HYDRANT_LIST.map(h => ({ type: "Hydrant", title: `Hydrant #${String(h.no).padStart(2, '0')} - ${h.lokasi}`, url: `echecksheet:///e-checksheet-hydrant?no=${h.no}&lokasi=${encodeURIComponent(h.lokasi)}&zona=${encodeURIComponent(h.zona)}&jenisHydrant=${encodeURIComponent(h.jenisHydrant)}`, description: `${h.jenisHydrant} • Zona ${h.zona}` }));
 }
-
 function generateAparQR(): QRConfig[] {
-  return APAR_SLUGS.map(slug => ({
-    type: "APAR",
-    title: `APAR - ${slug.replace(/-/g, " ")}`,
-    url: `echecksheet:///status-ga/inspeksi-apar/${slug}`,
-  }));
+  return APAR_SLUGS.map(slug => ({ type: "APAR", title: `APAR - ${slug.replace(/-/g, " ")}`, url: `echecksheet:///status-ga/inspeksi-apar/${slug}` }));
 }
-
 function generateToiletQR(): QRConfig[] {
-  return TOILET_AREAS.map(areaId => ({
-    type: "Toilet",
-    title: `Toilet - ${areaId.replace(/-/g, " ")}`,
-    url: `echecksheet:///status-ga/checksheet-toilet/${areaId}`,
-  }));
+  return TOILET_AREAS.map(areaId => ({ type: "Toilet", title: `Toilet - ${areaId.replace(/-/g, " ")}`, url: `echecksheet:///status-ga/checksheet-toilet/${areaId}` }));
 }
-
 function generateLiftBarangQR(): QRConfig[] {
-  return LIFT_BARANG_UNITS.map(lift => ({
-    type: "Lift Barang",
-    title: `Lift Barang - ${lift.namaLift}`,
-    url: `echecksheet:///status-ga/lift-barang?openLift=${encodeURIComponent(lift.namaLift)}`,
-    description: `${lift.area} • ${lift.lokasi}`,
-  }));
+  return LIFT_BARANG_UNITS.map(lift => ({ type: "Lift Barang", title: `Lift Barang - ${lift.namaLift}`, url: `echecksheet:///status-ga/lift-barang?openLift=${encodeURIComponent(lift.namaLift)}`, description: `${lift.area} • ${lift.lokasi}` }));
 }
-
 function generateSelangHydrantQR(): QRConfig[] {
-  return HYDRANT_LIST.map(h => ({
-    type: "Selang Hydrant",
-    title: `Selang Hydrant #${h.no} - ${h.lokasi}`,
-    // ✅ FIXED: Route /e-checksheet-selang-hydrant dengan params lengkap
-    url: `echecksheet:///e-checksheet-selang-hydrant?no=${h.no}&lokasi=${encodeURIComponent(h.lokasi)}&zona=${encodeURIComponent(h.zona)}&jenisHydrant=${encodeURIComponent(h.jenisHydrant)}`,
-    description: `${h.jenisHydrant} • Zona ${h.zona}`,
-  }));
+  return HYDRANT_LIST.map(h => ({ type: "Selang Hydrant", title: `Selang Hydrant #${h.no} - ${h.lokasi}`, url: `echecksheet:///e-checksheet-selang-hydrant?no=${h.no}&lokasi=${encodeURIComponent(h.lokasi)}&zona=${encodeURIComponent(h.zona)}&jenisHydrant=${encodeURIComponent(h.jenisHydrant)}`, description: `${h.jenisHydrant} • Zona ${h.zona}` }));
 }
-
 function generateSmokeDetectorQR(): QRConfig[] {
-  return SMOKE_DETECTOR_AREAS.map(area => ({
-    type: "Smoke Detector",
-    title: `Smoke Detector - ${area}`,
-    // ✅ FIXED: Gunakan param 'area' yang sesuai dengan page tujuan
-    url: `echecksheet:///status-ga/smoke-detector?area=${encodeURIComponent(area)}`,
-  }));
+  return SMOKE_DETECTOR_AREAS.map(area => ({ type: "Smoke Detector", title: `Smoke Detector - ${area}`, url: `echecksheet:///status-ga/smoke-detector?area=${encodeURIComponent(area)}` }));
 }
 function generateEmergencyQR(): QRConfig[] {
-  return EMERGENCY_AREAS.map(area => ({
-    type: "Emergency Lamp",
-    title: `Emergency Lamp - ${area.replace(/-/g, " ")}`,
-    url: `echecksheet:///status-ga/inspeksi-emergency/${area}`,
-  }));
+  return EMERGENCY_AREAS.map(area => ({ type: "Emergency Lamp", title: `Emergency Lamp - ${area.replace(/-/g, " ")}`, url: `echecksheet:///status-ga/inspeksi-emergency/${area}` }));
 }
-
 function generateExitLampQR(): QRConfig[] {
-  return EXIT_LAMP_CATEGORIES.map(cat => ({
-    type: "Exit Lamp",
-    title: `Exit Lamp - ${cat.replace(/-/g, " ")}`,
-    url: `echecksheet:///status-ga/exit-lamp-pintu-darurat/${cat}`,
-  }));
+  return EXIT_LAMP_CATEGORIES.map(cat => ({ type: "Exit Lamp", title: `Exit Lamp - ${cat.replace(/-/g, " ")}`, url: `echecksheet:///status-ga/exit-lamp-pintu-darurat/${cat}` }));
 }
-
 function generatePanelQR(): QRConfig[] {
-  return PANEL_NAMES.map(panel => ({
-    type: "Panel",
-    title: `Panel - ${panel.namaPanel}`,
-    // ✅ FIXED: Route /e-checksheet-panel dengan params yang sesuai
-    url: `echecksheet:///e-checksheet-panel?namaPanel=${encodeURIComponent(panel.namaPanel)}&area=${encodeURIComponent(panel.area)}`,
-    description: panel.area,
-  }));
+  return PANEL_NAMES.map(panel => ({ type: "Panel", title: `Panel - ${panel.namaPanel}`, url: `echecksheet:///e-checksheet-panel?namaPanel=${encodeURIComponent(panel.namaPanel)}&area=${encodeURIComponent(panel.area)}`, description: panel.area }));
 }
-
 function generateStopKontakQR(): QRConfig[] {
-  return STOP_KONTAK_TYPES.map(type => ({
-    type: "Stop Kontak",
-    title: `Stop Kontak - ${type.replace(/-/g, " ")}`,
-    url: `echecksheet:///status-ga/form-inspeksi-stop-kontak/${type}`,
-  }));
+  return STOP_KONTAK_TYPES.map(type => ({ type: "Stop Kontak", title: `Stop Kontak - ${type.replace(/-/g, " ")}`, url: `echecksheet:///status-ga/form-inspeksi-stop-kontak/${type}` }));
 }
-
 function generateInfJalanQR(): QRConfig[] {
-  return INF_JALAN_AREAS.map(area => ({
-    type: "Infrastruktur Jalan",
-    title: `Infrastruktur Jalan - ${area.replace(/-/g, " ")}`,
-    // ✅ FIXED: Route /e-checksheet-ga-inf-jalan dengan param area
-    url: `echecksheet:///e-checksheet-ga-inf-jalan?area=${encodeURIComponent(area)}`,
-  }));
+  return INF_JALAN_AREAS.map(area => ({ type: "Infrastruktur Jalan", title: `Infrastruktur Jalan - ${area.replace(/-/g, " ")}`, url: `echecksheet:///e-checksheet-ga-inf-jalan?area=${encodeURIComponent(area)}` }));
 }
-
 function generateTgListrikQR(): QRConfig[] {
-  return TG_LISTRIK_AREAS.map(area => ({
-    type: "Tangga Listrik",
-    title: `Tangga Listrik - ${area.replace(/-/g, " ")}`,
-    url: `echecksheet:///status-ga/tg-listrik?openArea=${encodeURIComponent(area)}`,
-  }));
+  return TG_LISTRIK_AREAS.map(area => ({ type: "Tangga Listrik", title: `Tangga Listrik - ${area.replace(/-/g, " ")}`, url: `echecksheet:///status-ga/tg-listrik?openArea=${encodeURIComponent(area)}` }));
 }
-
 function generateLiftBarangPreventifQR(): QRConfig[] {
-  return LIFT_BARANG_SUB_TYPES.map(subType => ({
-    type: "Lift Preventif",
-    title: `Lift Barang ${subType.charAt(0).toUpperCase() + subType.slice(1)}`,
-    url: `echecksheet:///status-ga/inspeksi-preventif-lift-barang/${subType}`,
-  }));
+  return LIFT_BARANG_SUB_TYPES.map(subType => ({ type: "Lift Preventif", title: `Lift Barang ${subType.charAt(0).toUpperCase() + subType.slice(1)}`, url: `echecksheet:///status-ga/inspeksi-preventif-lift-barang/${subType}` }));
 }
 
 // ──────────────────────────────────────────────────────────────────────────────
@@ -507,14 +412,15 @@ export default function QRGeneratorPage() {
   const router = useRouter();
   const { user, loading: authLoading, isInitialized } = useAuth();
 
-  // State utama
+  // ✅ Reactive sidebar width
+  const sidebarW = useSidebarWidth();
+
   const [selectedCategory, setSelectedCategory] = useState<string>("fire-alarm");
   const [searchQuery, setSearchQuery] = useState("");
   const [qrConfigs, setQrConfigs] = useState<QRConfig[]>([]);
   const [isGenerated, setIsGenerated] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
 
-  // Kategori checksheet GA
   const categories = [
     { id: "fire-alarm", label: "🔥 Fire Alarm", count: Object.keys(FIRE_ALARM_ZONES).length, generator: generateFireAlarmQR },
     { id: "hydrant", label: "💧 Hydrant", count: HYDRANT_LIST.length, generator: generateHydrantQR },
@@ -532,35 +438,26 @@ export default function QRGeneratorPage() {
     { id: "lift-preventif", label: "🔧 Lift Preventif", count: LIFT_BARANG_SUB_TYPES.length, generator: generateLiftBarangPreventifQR },
   ];
 
-  // Auth check
   useEffect(() => {
     if (!isInitialized || authLoading) return;
     if (!user) { router.push("/login-page"); return; }
     if (!["admin", "superadmin"].includes(user.role)) router.push("/home");
   }, [user, authLoading, isInitialized, router]);
 
-  // Generate QR configs saat category berubah
   useEffect(() => {
     const cat = categories.find(c => c.id === selectedCategory);
     if (cat) {
       setIsLoading(true);
-      // Simulasi loading kecil untuk UX
-      setTimeout(() => {
-        setQrConfigs(cat.generator());
-        setIsGenerated(true);
-        setIsLoading(false);
-      }, 150);
+      setTimeout(() => { setQrConfigs(cat.generator()); setIsGenerated(true); setIsLoading(false); }, 150);
     }
   }, [selectedCategory]);
 
-  // Filter berdasarkan search
   const filteredConfigs = qrConfigs.filter(cfg =>
     cfg.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
     cfg.url.toLowerCase().includes(searchQuery.toLowerCase()) ||
     (cfg.description?.toLowerCase().includes(searchQuery.toLowerCase()) ?? false)
   );
 
-  // Handle generate all (untuk testing)
   const handleGenerateAll = () => {
     setIsLoading(true);
     setTimeout(() => {
@@ -588,13 +485,23 @@ export default function QRGeneratorPage() {
 
   const selectedCat = categories.find(c => c.id === selectedCategory);
 
+  // ✅ Inline style yang reaktif terhadap sidebarW (hanya desktop, mobile pakai CSS override)
+  const mainStyle: React.CSSProperties = {
+    marginLeft: sidebarW,
+    padding: 24,
+    minHeight: "100vh",
+    background: "#f0f4f8",
+    // Smooth transition ikut animasi sidebar
+    transition: "margin-left 0.3s cubic-bezier(0.4, 0, 0.2, 1)",
+  };
+
   return (
     <>
       <Sidebar userName={user.fullName || user.username} />
-      <main className="mc">
+      <main className="mc" style={mainStyle}>
         {/* Header */}
         <div className="ph">
-          <button onClick={() => router.back()} className="bb">←</button>
+          
           <div>
             <h1 className="ht">🔲 QR Generator - General Affairs</h1>
             <p className="hs">Buat & unduh QR Code untuk semua checksheet GA dengan TITLE untuk printing</p>
@@ -698,7 +605,9 @@ export default function QRGeneratorPage() {
       </main>
 
       <style jsx>{`
-        .mc { margin-left: 80px; padding: 24px; min-height: 100vh; background: #f0f4f8; }
+        /* ── Desktop: margin-left dikontrol inline via sidebarW ── */
+        .mc { padding: 24px; min-height: 100vh; background: #f0f4f8; }
+
         .ph { background: linear-gradient(135deg, #1e3a5f, #1e88e5); border-radius: 16px; padding: 20px 24px; display: flex; align-items: center; gap: 16px; margin-bottom: 20px; box-shadow: 0 4px 16px rgba(30,136,229,.25); }
         .bb { background: rgba(255,255,255,.15); border: none; color: white; width: 40px; height: 40px; border-radius: 10px; cursor: pointer; font-size: 20px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
         .ht { margin: 0 0 4px; font-size: 22px; font-weight: 700; color: white; }
@@ -746,8 +655,15 @@ export default function QRGeneratorPage() {
         
         @keyframes spin { to { transform: rotate(360deg) } }
         
+        /* ── Mobile: sidebar biasanya overlay/hidden, main ambil full width ── */
         @media (max-width: 768px) {
-          .mc { margin-left: 0; padding: 12px; }
+          .mc {
+            /* Override inline style saat mobile — margin-left reset ke 0 */
+            margin-left: 0 !important;
+            padding: 12px;
+          }
+          .ht { font-size: 16px; }
+          .hs { font-size: 11px; }
           .qr-grid { grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 12px; }
           .toolbar { flex-direction: column; align-items: stretch; }
           .search-box { max-width: 100%; }

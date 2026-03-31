@@ -247,9 +247,7 @@ export default function RiwayatApdPage() {
           </div>
         </div>
 
-        <div className="user-info">
-          <span>Selamat datang, {user.fullName}</span>
-        </div>
+     
 
         {/* Filter Tanggal */}
         <div className="date-filter">
@@ -630,7 +628,7 @@ export default function RiwayatApdPage() {
         .page-content {
           flex: 1;
           width: calc(100% - 280px);
-          margin-left: 280px;
+          margin-left: 100px;
           padding: 24px;
           max-width: 1400px;
         }

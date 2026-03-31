@@ -1,7 +1,7 @@
 // app/home/page.tsx
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import Link from "next/link";
 import type { LucideIcon } from "lucide-react";
 import {
@@ -33,25 +33,71 @@ interface ActivityItem {
   status: "OK" | "NG";
 }
 
+// ─────────────────────────────────────────────────────────────
+// HOOK: useSidebarWidth - Mendengarkan event dari Sidebar.tsx
+// ─────────────────────────────────────────────────────────────
+function useSidebarWidth(isMobile: boolean) {
+  const COLLAPSED_W = 70;
+  const EXPANDED_W = 240;
+  const [sidebarW, setSidebarW] = useState(COLLAPSED_W);
+
+  useEffect(() => {
+    // Jika mobile, selalu return 0 (sidebar pakai overlay + transform)
+    if (isMobile) {
+      setSidebarW(0);
+      return;
+    }
+
+    // Baca CSS variable yang di-set Sidebar saat mount
+    const readCssVar = () => {
+      const v = getComputedStyle(document.documentElement)
+        .getPropertyValue("--sidebar-w").trim();
+      if (v) setSidebarW(parseInt(v));
+    };
+    readCssVar();
+
+    // Dengarkan event toggle dari Sidebar
+    const onToggle = (e: Event) => {
+      const { width } = (e as CustomEvent<{ expanded: boolean; width: number }>).detail;
+      setSidebarW(width);
+    };
+
+    window.addEventListener("sidebarToggle", onToggle);
+    return () => window.removeEventListener("sidebarToggle", onToggle);
+  }, [isMobile]);
+
+  return sidebarW;
+}
+
 export default function ModernHomePage() {
   // ✅ SEMUA HOOKS DIPANGGIL PERTAMA KALI, TANPA KONDISI
   const { user, loading } = useAuth();
   const [activities, setActivities] = useState<ActivityItem[]>([]);
   const [isMounted, setIsMounted] = useState(false);
+  const [isMobile, setIsMobile] = useState(false);
+
+  // ✅ Deteksi ukuran layar untuk mobile
+  useEffect(() => {
+    const checkIfMobile = () => setIsMobile(window.innerWidth <= 768);
+    checkIfMobile();
+    window.addEventListener("resize", checkIfMobile);
+    return () => window.removeEventListener("resize", checkIfMobile);
+  }, []);
+
+  // ✅ Hook sidebar width yang responsive
+  const sidebarWidth = useSidebarWidth(isMobile);
 
   // ✅ Mount state untuk hindari hydration mismatch
   useEffect(() => {
     setIsMounted(true);
-    return () => {
-      setIsMounted(false);
-    };
+    return () => setIsMounted(false);
   }, []);
 
-  // 🔁 Muat aktivitas hari ini - DIPINDAH KE ATAS SEBELUM CONDITIONAL LOGIC
+  // 🔁 Muat aktivitas hari ini
   useEffect(() => {
-    if (!isMounted) return; // Jangan jalan sebelum mount
+    if (!isMounted) return;
 
-    let shouldUpdate = true; // Safety flag untuk hindari state update setelah unmount
+    let shouldUpdate = true;
 
     try {
       const historyStr = localStorage.getItem("checksheet_history");
@@ -89,32 +135,26 @@ export default function ModernHomePage() {
         status: (item.status === "NG" ? "NG" : "OK") as "OK" | "NG",
       }));
 
-      if (shouldUpdate) {
-        setActivities(recent);
-      }
+      if (shouldUpdate) setActivities(recent);
     } catch (e) {
       console.error("[Home] Gagal memuat riwayat checklist:", e);
-      if (shouldUpdate) {
-        setActivities([]);
-      }
+      if (shouldUpdate) setActivities([]);
     }
 
     return () => {
-      shouldUpdate = false; // Cleanup: tandai komponen sudah unmount
+      shouldUpdate = false;
     };
-  }, [isMounted]); // Jalankan saat isMounted berubah
+  }, [isMounted]);
 
   // ✅ Jangan render apa pun sebelum mount di client
-  if (!isMounted) {
-    return null;
-  }
+  if (!isMounted) return null;
 
   // ✅ CONDITIONAL LOGIC DILAKUKAN SETELAH SEMUA HOOKS
   if (loading) {
     return (
       <div className="modern-home-page">
         <Sidebar userName="Loading..." />
-        <main className="main-content">
+        <main className="main-content" style={{ marginLeft: 0 }}>
           <div style={{ padding: "40px", textAlign: "center", color: "#64748b" }}>
             Memuat data...
           </div>
@@ -123,19 +163,14 @@ export default function ModernHomePage() {
     );
   }
 
-  if (!user) {
-    return null; // Redirect ke login sebaiknya ditangani di layout/route level
-  }
+  if (!user) return null;
 
   // ✅ LOGIC BISNIS SETELAH VALIDASI AUTH
   const userName = user.fullName || "User";
   const currentRole = user.role;
-  
-  // Dashboard link berdasarkan role - admin ke GA Dashboard
   const dashboardLink = currentRole === "admin" ? "/ga-dashboard" : "/dashboard";
 
   const roleCards: Record<string, CardData[]> = {
-    // ✅ ADMIN ROLE - Akses ke GA Dashboard
     "admin": [
       {
         id: "ga-dashboard",
@@ -146,7 +181,6 @@ export default function ModernHomePage() {
         href: "/ga-dashboard",
       },
     ],
-    // ✅ INSPECTOR GA ROLE - Hanya checklist GA
     "inspector-ga": [
       {
         id: "checklist-ga",
@@ -161,11 +195,21 @@ export default function ModernHomePage() {
 
   const currentRoleCards = roleCards[currentRole] || [];
 
+ // ✅ Inline style untuk margin-left yang dinamis
+const mainContentStyle: React.CSSProperties = {
+  marginLeft: isMobile ? 0 : sidebarWidth,
+  transition: "margin-left 0.3s cubic-bezier(0.4, 0, 0.2, 1)",
+  paddingTop: isMobile ? "60px" : "20px",
+  paddingLeft: "36px",    // ✅ Tambah padding kiri
+  paddingRight: "25px",   // ✅ Tambah padding kanan
+};
+
   return (
     <div className="modern-home-page">
       <Sidebar userName={userName} />
 
-      <main className="main-content">
+      {/* ✅ main-content dengan margin-left dinamis */}
+      <main className="main-content" style={mainContentStyle}>
         {/* Welcome Banner */}
         <div className="welcome-banner">
           <div className="welcome-content">
@@ -182,7 +226,7 @@ export default function ModernHomePage() {
                 d="M80 75L95 90L120 60"
                 stroke="#ffffff"
                 strokeWidth="4"
-                strokeLinecap="round"   
+                strokeLinecap="round"
                 strokeLinejoin="round"
               />
             </svg>
@@ -217,12 +261,9 @@ export default function ModernHomePage() {
             })}
           </div>
         </section>
-
-        
       </main>
 
       <style jsx>{`
-        /* ... (style tetap sama, tidak diubah) ... */
         .modern-home-page {
           display: flex;
           min-height: 100vh;
@@ -241,13 +282,15 @@ export default function ModernHomePage() {
         }
 
         .main-content {
-          flex: 1;
-          padding: 24px;
-          min-height: calc(100vh - 64px);
-          max-width: 1200px;
-          margin: 0 auto;
-          padding-top: 20px;
-        }
+  flex: 1;
+  padding: 24px 36px;  /* ✅ Padding horizontal lebih besar */
+  min-height: calc(100vh - 64px);
+  max-width: 1400px;   /* ✅ Max width lebih besar */
+  width: 100%;         /* ✅ Pastikan full width */
+  margin: 0 auto;      /* ✅ Center secara horizontal */
+  box-sizing: border-box;
+  will-change: margin-left;
+}
 
         .welcome-banner {
           background: linear-gradient(135deg, #2f00b0 0%, #0987ee 100%);
@@ -458,14 +501,14 @@ export default function ModernHomePage() {
           color: #dc2626;
         }
 
+        /* ✅ RESPONSIVE - HAPUS margin-left hardcoded karena sudah di-handle inline style */
         @media (max-width: 1200px) {
           .cards-grid {
             grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
           }
-          
           .main-content {
             padding: 20px;
-            margin-left: 70px;
+            /* ✅ margin-left dihapus, dikontrol via inline style */
           }
         }
 
@@ -476,7 +519,7 @@ export default function ModernHomePage() {
 
           .main-content {
             padding: 12px;
-            margin: 0;
+            margin: 0; /* ✅ Override inline style di mobile */
             max-width: 100%;
           }
 
@@ -563,6 +606,14 @@ export default function ModernHomePage() {
 
           .activity-time {
             font-size: 10px;
+          }
+
+          .activity-status {
+            padding: 4px 10px;
+            border-radius: 6px;
+            font-size: 11px;
+            font-weight: 600;
+            white-space: nowrap;
           }
         }
 
@@ -676,6 +727,13 @@ export default function ModernHomePage() {
           .activity-status {
             padding: 3px 8px;
             font-size: 10px;
+          }
+        }
+
+        /* ✅ Pastikan margin-left inline style di-override di mobile */
+        @media (max-width: 768px) {
+          .main-content {
+            margin-left: 0 !important;
           }
         }
       `}</style>

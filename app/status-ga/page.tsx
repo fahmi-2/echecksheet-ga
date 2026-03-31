@@ -96,14 +96,14 @@ export default function StatusGA() {
         <div className="header">
           <h1 className="page-title">📋 Checklist General Affairs</h1>
           <div className="user-info">
-            <span>Selamat datang, {user.fullName}</span>
+            <span className="welcome-text">Selamat datang, {user.fullName}</span>
             <button
               onClick={() => router.push("/scan")}
               className="btn-scan-qr"
               title="Buka scanner QR"
             >
               <QrCode size={20} />
-              Scan QR
+              <span className="btn-text">Scan QR</span>
             </button>
           </div>
         </div>
@@ -137,12 +137,12 @@ export default function StatusGA() {
 
       <style jsx>{`
         /* ───────────────────────────────────────────────────────────
-           BASE STYLES - Mobile First (min-width approach)
+           BASE STYLES - Mobile First
            ─────────────────────────────────────────────────────────── */
         .page-content {
           width: 100%;
           min-width: 0;
-          margin-left: 0; /* Default: No margin for mobile/tablet */
+          margin-left: 0;
           padding: 16px 12px;
           background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
           min-height: 100vh;
@@ -157,9 +157,9 @@ export default function StatusGA() {
           display: flex;
           flex-direction: column;
           align-items: stretch;
-          gap: 12px;
+          gap: 16px;
           margin-bottom: 24px;
-          padding: 14px 12px;
+          padding: 16px 14px;
           background: linear-gradient(135deg, #0d47a1 0%, #1565c0 100%);
           border-radius: 12px;
           width: 100%;
@@ -169,44 +169,47 @@ export default function StatusGA() {
 
         .page-title {
           margin: 0;
-          font-size: 1.2rem;
+          font-size: 1.25rem;
           font-weight: 700;
           color: white;
           word-break: break-word;
-          min-width: 0;
+          line-height: 1.3;
+          text-align: center;
         }
 
         .user-info {
           display: flex;
-          align-items: center;
-          justify-content: space-between;
-          gap: 10px;
-          font-size: 0.85rem;
+          flex-direction: column;
+          align-items: stretch;
+          gap: 12px;
+          width: 100%;
+        }
+
+        .welcome-text {
+          font-size: 0.9rem;
           color: white;
           font-weight: 500;
-          width: 100%;
-          min-width: 0;
-          flex-wrap: wrap;
+          text-align: center;
+          opacity: 0.95;
         }
 
         .btn-scan-qr {
           display: flex;
           align-items: center;
           justify-content: center;
-          gap: 6px;
-          padding: 8px 12px;
+          gap: 8px;
+          padding: 10px 16px;
           background: rgba(255, 255, 255, 0.25);
           color: white;
           border: 2px solid rgba(255, 255, 255, 0.4);
           border-radius: 8px;
           cursor: pointer;
           font-weight: 600;
-          font-size: 0.8rem;
+          font-size: 0.85rem;
           transition: all 0.3s ease;
-          min-height: 40px;
-          min-width: 90px;
+          min-height: 44px;
+          width: 100%;
           white-space: nowrap;
-          flex-shrink: 0;
         }
 
         .btn-scan-qr:hover {
@@ -256,6 +259,7 @@ export default function StatusGA() {
           align-items: center;
           gap: 10px;
           word-break: break-word;
+          line-height: 1.3;
         }
 
         .category-title::before {
@@ -375,7 +379,7 @@ export default function StatusGA() {
         }
 
         /* ───────────────────────────────────────────────────────────
-           TABLET: min-width 480px
+           TABLET: min-width 480px - Header masih vertikal tapi lebih rapi
            ─────────────────────────────────────────────────────────── */
         @media (min-width: 480px) {
           .page-content {
@@ -383,32 +387,34 @@ export default function StatusGA() {
           }
 
           .header {
-            flex-direction: row;
-            align-items: center;
-            justify-content: space-between;
-            padding: 16px 18px;
-            margin-bottom: 28px;
+            padding: 18px 16px;
             gap: 14px;
           }
 
           .page-title {
-            font-size: 1.3rem;
+            font-size: 1.35rem;
+          }
+
+          .user-info {
+            flex-direction: row;
+            align-items: center;
+            justify-content: space-between;
+            flex-wrap: wrap;
+            gap: 10px;
+          }
+
+          .welcome-text {
+            text-align: left;
+            font-size: 0.95rem;
             flex: 1;
             min-width: 0;
           }
 
-          .user-info {
-            justify-content: flex-end;
-            flex-wrap: nowrap;
-            font-size: 0.9rem;
-            gap: 12px;
-          }
-
           .btn-scan-qr {
-            font-size: 0.85rem;
+            width: auto;
+            min-width: 110px;
             padding: 9px 14px;
-            min-height: 42px;
-            min-width: 100px;
+            font-size: 0.85rem;
           }
 
           .category-section {
@@ -449,16 +455,52 @@ export default function StatusGA() {
         }
 
         /* ───────────────────────────────────────────────────────────
+           MEDIUM TABLET: min-width 640px - Header mulai horizontal
+           ─────────────────────────────────────────────────────────── */
+        @media (min-width: 640px) {
+          .header {
+            flex-direction: row;
+            align-items: center;
+            justify-content: space-between;
+            flex-wrap: wrap;
+            gap: 16px;
+            padding: 20px 20px;
+          }
+
+          .page-title {
+            flex: 1;
+            min-width: 0;
+            text-align: left;
+            font-size: 1.4rem;
+          }
+
+          .user-info {
+            flex-wrap: nowrap;
+            justify-content: flex-end;
+            gap: 14px;
+          }
+
+          .welcome-text {
+            font-size: 0.95rem;
+          }
+
+          .btn-scan-qr {
+            padding: 10px 16px;
+            min-width: 120px;
+          }
+        }
+
+        /* ───────────────────────────────────────────────────────────
            SMALL DESKTOP: min-width 768px (Sidebar Expanded)
            ─────────────────────────────────────────────────────────── */
         @media (min-width: 768px) {
           .page-content {
-            margin-left: 120px; /* Add margin only when sidebar is expanded */
+            margin-left: 120px;
             padding: 24px 20px;
           }
 
           .header {
-            padding: 20px 24px;
+            padding: 22px 24px;
             margin-bottom: 36px;
             border-radius: 14px;
           }
@@ -468,15 +510,18 @@ export default function StatusGA() {
           }
 
           .user-info {
+            gap: 16px;
+          }
+
+          .welcome-text {
             font-size: 1rem;
-            gap: 14px;
           }
 
           .btn-scan-qr {
             font-size: 0.95rem;
             padding: 10px 18px;
             min-height: 44px;
-            min-width: 110px;
+            min-width: 130px;
           }
 
           .ga-checklist-container {
@@ -554,7 +599,7 @@ export default function StatusGA() {
           }
 
           .header {
-            padding: 24px 32px;
+            padding: 26px 32px;
             margin-bottom: 48px;
             border-radius: 16px;
           }
@@ -564,13 +609,17 @@ export default function StatusGA() {
           }
 
           .user-info {
+            gap: 18px;
+          }
+
+          .welcome-text {
             font-size: 1.05rem;
           }
 
           .btn-scan-qr {
             font-size: 1rem;
-            padding: 10px 20px;
-            min-width: 120px;
+            padding: 11px 22px;
+            min-width: 140px;
           }
 
           .category-section {
@@ -624,7 +673,7 @@ export default function StatusGA() {
         }
 
         /* ───────────────────────────────────────────────────────────
-           UTILITY: Ensure all elements respect container bounds
+           UTILITY
            ─────────────────────────────────────────────────────────── */
         *,
         *::before,
@@ -638,7 +687,6 @@ export default function StatusGA() {
           display: block;
         }
 
-        /* Prevent horizontal scroll on all viewports */
         html, body {
           overflow-x: hidden;
           width: 100%;

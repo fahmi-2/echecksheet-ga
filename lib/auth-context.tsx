@@ -54,6 +54,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
   const [isInitialized, setIsInitialized] = useState(false);
   const [hasExplicitLogout, setHasExplicitLogout] = useState(false);
+  const [mounted, setMounted] = useState(false);
+
+  // Fix hydration mismatch - only render after mount
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   // 🔄 Load dari localStorage saat pertama kali dengan proper initialization
   useEffect(() => {
@@ -331,8 +337,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     router.push("/login-page");
   }, [router]);
 
-  // ✅ Tampilkan loading screen saat initialization
-  if (!isInitialized) {
+  // ✅ Tampilkan loading screen saat initialization (only after mounted to prevent hydration mismatch)
+  if (!mounted || !isInitialized) {
+    // Render consistent empty state during SSR and initial hydration
     return (
       <div style={{ 
         display: "flex", 
@@ -344,10 +351,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         <div style={{ textAlign: "center" }}>
           <div style={{ fontSize: "48px", marginBottom: "16px" }}>🔐</div>
           <p style={{ fontSize: "16px", color: "#666", margin: "0" }}>
-            Initializing authentication...
-          </p>
-          <p style={{ fontSize: "14px", color: "#999", marginTop: "8px" }}>
-            Please wait a moment
+            Loading...
           </p>
         </div>
       </div>

@@ -743,7 +743,7 @@ export default function RiwayatInspeksiPerItemPage({ params }: { params: Promise
         .header-title h1 {
           font-size: 1.5rem;
           font-weight: 600;
-          color: #1e293b;
+          color: #ffffff;
           margin: 0;
           line-height: 1.2;
           word-break: break-word;
@@ -751,7 +751,7 @@ export default function RiwayatInspeksiPerItemPage({ params }: { params: Promise
 
         .header-title p {
           font-size: 0.875rem;
-          color: #64748b;
+          color: #ffffff;
           margin: 0.25rem 0 0 0;
           word-break: break-word;
         }

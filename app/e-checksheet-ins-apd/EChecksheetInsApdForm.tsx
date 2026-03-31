@@ -389,7 +389,14 @@ export function EChecksheetInsApdForm() {
   return (
     <div style={{ minHeight: "100vh", background: "#f7f9fc" }}>
       <Sidebar userName={user?.fullName} />
-      <div className="page-content">
+      <div style={{
+        paddingLeft: "95px",
+        paddingRight: "25px",
+        paddingTop: "32px",
+        paddingBottom: "32px",
+        maxWidth: "100%",
+        margin: "0 auto"
+      }}>
         {/* Header */}
         <div style={{ marginBottom: "28px" }}>
           <div style={{

@@ -224,13 +224,13 @@ export default function InspeksiLiftBarangListPage() {
         }
         
         .header h1 {
-          color: #0d47a1;
+          color: #ffffff;
           margin-bottom: 8px;
           font-size: 1.8rem;
           margin: 0;
         }
         .subtitle {
-          color: #666;
+          color: #ffffff;
           margin-bottom: 0;
           font-size: 1rem;
         }

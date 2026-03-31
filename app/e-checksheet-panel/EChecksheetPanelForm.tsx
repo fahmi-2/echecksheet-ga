@@ -375,14 +375,21 @@ export function EChecksheetPanelForm() {
   return (
     <div style={{ minHeight: "100vh", background: "#f8f9fa" }}>
       <Sidebar userName={user?.fullName} />
-      <div className="page-content">
+      <div style={{
+        paddingLeft: "95px",
+        paddingRight: "25px",
+        paddingTop: "32px",
+        paddingBottom: "32px",
+        maxWidth: "100%",
+        margin: "0 auto"
+      }}>
         {/* Header */}
+        <div style={{ marginBottom: "24px" }}>
           <div style={{
             background: "linear-gradient(135deg, #0d47a1 0%, #1e88e5 100%)",
             borderRadius: "12px",
             padding: "20px 24px",
-            boxShadow: "0 4px 12px rgba(13, 71, 161, 0.15)",
-            marginBottom: "20px"
+            boxShadow: "0 4px 12px rgba(13, 71, 161, 0.15)"
           }}>
             <h1 style={{
               margin: "0 0 8px 0",
@@ -403,16 +410,18 @@ export function EChecksheetPanelForm() {
 
           {/* Info Area */}
           <div style={{
-            display: "grid", 
-            gridTemplateColumns: "repeat(auto-fit, minmax(250px, 1fr))", 
-            gap: "12px",
             background: "white",
             border: "1px solid #e8e8e8",
-            borderRadius: "10px", 
+            borderRadius: "10px",
             padding: "16px 20px",
             boxShadow: "0 2px 6px rgba(0,0,0,0.05)",
             marginBottom: "20px"
           }}>
+            <div style={{ 
+              display: "grid", 
+              gridTemplateColumns: "repeat(auto-fit, minmax(250px, 1fr))", 
+              gap: "12px" 
+            }}>
               <div style={{ color: "black" }}>
                 <strong>Nama Panel:</strong> {panelName}
               </div>
@@ -422,6 +431,7 @@ export function EChecksheetPanelForm() {
               <div style={{ color: "black" }}>
                 <strong>PIC Pengecekan:</strong> {user?.fullName}
               </div>
+            </div>
           </div>
 
           {/* Date Selection */}
@@ -1001,6 +1011,7 @@ export function EChecksheetPanelForm() {
               </table>
             </div>
           </div>
+        </div>
       </div>
 
       {/* Modal Gambar */}
