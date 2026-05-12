@@ -91,7 +91,7 @@ export default function RiwayatStopKontak() {
 
   useEffect(() => {
     if (!user) return;
-    if (user.role !== "inspector-ga") {
+    if (user.role !== "inspector-ga-electrical") {
       router.push("/home");
       return;
     }

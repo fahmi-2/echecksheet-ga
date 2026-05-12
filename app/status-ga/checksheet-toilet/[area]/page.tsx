@@ -6,6 +6,10 @@ import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
 import { Sidebar } from "@/components/Sidebar";
 import * as React from "react";
+import { QrCode } from "lucide-react";
+
+// ✅ TAMBAHKAN IMPORT HOOK SCAN VERIFICATION
+import { useScanVerification } from "@/lib/hooks/useScanVerification";
 
 // ─── TYPES ───────────────────────────────────────────────
 interface ChecksheetEntry {
@@ -59,6 +63,9 @@ export default function ChecksheetToiletForm({ params }: { params: Promise<{ are
   const router = useRouter();
   const { user, loading } = useAuth();
 
+  // ✅ TAMBAHKAN HOOK INI - WAJIB DI TOP LEVEL
+  const { isScanned, isLoading: scanLoading } = useScanVerification();
+
   const [isMounted, setIsMounted] = useState(false);
   const [selectedDate, setSelectedDate] = useState<string>("");
   const [answers, setAnswers] = useState<Record<string, string>>({});
@@ -88,7 +95,7 @@ export default function ChecksheetToiletForm({ params }: { params: Promise<{ are
 
   useEffect(() => {
     if (!isMounted || loading) return;
-    if (!user || (user.role !== "inspector-ga" && user.role !== "group-leader-qa")) {
+    if (!user || (user.role !== "inspector-ga-facility" && user.role !== "group-leader-qa")) {
       router.push("/login-page");
     }
   }, [user, loading, router, isMounted]);
@@ -498,7 +505,7 @@ export default function ChecksheetToiletForm({ params }: { params: Promise<{ are
     );
   }
 
-  if (!user || (user.role !== "inspector-ga" && user.role !== "group-leader-qa")) {
+  if (!user || (user.role !== "inspector-ga-facility" && user.role !== "group-leader-qa")) {
     return null;
   }
 
@@ -639,12 +646,45 @@ export default function ChecksheetToiletForm({ params }: { params: Promise<{ are
         }
 
         .cs-date-input:focus { border-color: var(--cs-blue); }
+        .cs-date-input:disabled { background: #f5f5f5; cursor: not-allowed; border-color: #ccc; }
 
         .cs-date-hint {
           margin: 10px 0 0;
           font-size: 12px;
           color: #888;
           font-style: italic;
+        }
+
+        /* ─── BANNERS ────────────────────────────────────── */
+        .cs-banner {
+          border-radius: 10px; padding: 12px 18px; margin-bottom: 18px;
+          display: flex; align-items: center; gap: 10px; font-weight: 500;
+          font-size: 13px;
+        }
+        .cs-banner-warning {
+          background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
+          border: 1px solid #f59e0b; color: #92400e;
+          box-shadow: 0 2px 8px rgba(245,158,11,0.12);
+        }
+        .cs-banner-btn {
+          margin-left: auto; background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+          color: white; border: none; border-radius: 7px; padding: 8px 16px;
+          cursor: pointer; font-size: 12px; font-weight: 600; transition: all 0.2s;
+          box-shadow: 0 2px 6px rgba(245,158,11,0.3);
+          display: inline-flex; align-items: center; gap: 6px; min-height: 36px;
+        }
+        .cs-banner-btn:hover { transform: translateY(-1px); box-shadow: 0 4px 10px rgba(245,158,11,0.4); }
+        .cs-banner-btn:disabled { opacity: 0.6; cursor: not-allowed; transform: none; }
+        .cs-scan-warning {
+          background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
+          border-left: 4px solid #f59e0b; justify-content: space-between;
+        }
+        .cs-scan-warning .cs-banner-btn {
+          background: linear-gradient(135deg, #7c3aed 0%, #5b21b6 100%);
+          padding: 8px 16px;
+        }
+        .cs-scan-warning .cs-banner-btn:hover {
+          transform: translateY(-1px); box-shadow: 0 4px 10px rgba(124, 58, 237, 0.4);
         }
 
         /* ─── BUTTONS ─── */
@@ -685,6 +725,29 @@ export default function ChecksheetToiletForm({ params }: { params: Promise<{ are
 
         .cs-btn--save:hover:not(:disabled) { opacity: 0.9; transform: translateY(-1px); }
         .cs-btn--save:disabled { background: #bdbdbd; cursor: not-allowed; opacity: 0.6; transform: none; }
+
+        .cs-btn--next-male {
+          background: linear-gradient(135deg, #1565c0, #1e88e5);
+          color: #fff;
+          flex: 1;
+          min-width: 160px;
+          padding: 12px 20px;
+          font-size: 14px;
+        }
+
+        .cs-btn--next-male:hover:not(:disabled) { opacity: 0.9; transform: translateY(-1px); }
+        .cs-btn--next-male:disabled { background: #bdbdbd; cursor: not-allowed; opacity: 0.6; transform: none; }
+
+        .cs-btn--prev-female {
+          background: #f5f5f5;
+          color: #555;
+          border: 1px solid #ddd;
+          flex: 0 0 auto;
+          padding: 12px 20px;
+          font-size: 14px;
+        }
+
+        .cs-btn--prev-female:hover { background: #eeeeee; }
 
         .cs-btn-row {
           display: flex;
@@ -813,6 +876,7 @@ export default function ChecksheetToiletForm({ params }: { params: Promise<{ are
           background: #f5f5f5;
           cursor: not-allowed;
           color: #888;
+          border-color: #ccc;
         }
 
         .cs-select:focus,
@@ -842,6 +906,11 @@ export default function ChecksheetToiletForm({ params }: { params: Promise<{ are
           font-size: 11px;
           width: 100%;
           cursor: pointer;
+        }
+
+        .cs-file-input:disabled {
+          cursor: not-allowed;
+          opacity: 0.6;
         }
 
         .cs-foto-preview {
@@ -889,7 +958,6 @@ export default function ChecksheetToiletForm({ params }: { params: Promise<{ are
         }
 
         /* ─── MOBILE CARDS VIEW ─── */
-        /* On very small screens, switch from table to card layout */
         .cs-mobile-cards {
           display: none;
         }
@@ -1071,32 +1139,7 @@ export default function ChecksheetToiletForm({ params }: { params: Promise<{ are
           flex-wrap: wrap;
         }
 
-        .cs-btn--next-male {
-          background: linear-gradient(135deg, #1565c0, #1e88e5);
-          color: #fff;
-          flex: 1;
-          min-width: 160px;
-          padding: 12px 20px;
-          font-size: 14px;
-        }
-
-        .cs-btn--next-male:hover:not(:disabled) { opacity: 0.9; transform: translateY(-1px); }
-        .cs-btn--next-male:disabled { background: #bdbdbd; cursor: not-allowed; opacity: 0.6; transform: none; }
-
-        .cs-btn--prev-female {
-          background: #f5f5f5;
-          color: #555;
-          border: 1px solid #ddd;
-          flex: 0 0 auto;
-          padding: 12px 20px;
-          font-size: 14px;
-        }
-
-        .cs-btn--prev-female:hover { background: #eeeeee; }
-
         /* ─── RESPONSIVE BREAKPOINTS ─── */
-
-        /* Tablet */
         @media (max-width: 1024px) {
           .cs-main {
             margin-left: 80px;
@@ -1104,7 +1147,6 @@ export default function ChecksheetToiletForm({ params }: { params: Promise<{ are
           }
         }
 
-        /* Mobile landscape / small tablet */
         @media (max-width: 768px) {
           .cs-main {
             margin-left: 0;
@@ -1155,13 +1197,11 @@ export default function ChecksheetToiletForm({ params }: { params: Promise<{ are
             font-size: 14px;
           }
 
-          /* Show scroll hint on mobile when using table */
           .cs-scroll-hint {
             display: block;
           }
         }
 
-        /* Mobile portrait - switch to card layout */
         @media (max-width: 600px) {
           .cs-table-wrapper {
             display: none;
@@ -1180,7 +1220,6 @@ export default function ChecksheetToiletForm({ params }: { params: Promise<{ are
           }
         }
 
-        /* Very small screens */
         @media (max-width: 380px) {
           .cs-main {
             padding: 10px 8px 60px;
@@ -1195,13 +1234,12 @@ export default function ChecksheetToiletForm({ params }: { params: Promise<{ are
           }
         }
 
-        /* ─── TOUCH IMPROVEMENTS ─── */
         @media (hover: none) and (pointer: coarse) {
           .cs-select,
           .cs-textarea,
           .cs-input-text,
           .cs-date-input {
-            font-size: 16px; /* prevent iOS zoom */
+            font-size: 16px;
           }
 
           .cs-btn {
@@ -1249,6 +1287,20 @@ export default function ChecksheetToiletForm({ params }: { params: Promise<{ are
             <p>Form Pemeriksaan Kebersihan &amp; Kelayakan Toilet</p>
           </div>
 
+          {/* ✅ SCAN WARNING BANNER - TAMBAHAN BARU */}
+          {!isScanned && (
+            <div className="cs-banner cs-banner-warning cs-scan-warning">
+              <span>🔒 Akses melalui scan QR code terlebih dahulu untuk mengisi checksheet ini.</span>
+              <button 
+                onClick={() => router.push("/scan")} 
+                className="cs-banner-btn"
+                disabled={isSubmitting}
+              >
+                <QrCode size={14} /> Scan Sekarang
+              </button>
+            </div>
+          )}
+
           {/* ── Info Area ── */}
           <div className="cs-card">
             <div className="cs-info-grid">
@@ -1269,11 +1321,14 @@ export default function ChecksheetToiletForm({ params }: { params: Promise<{ are
                 value={selectedDate}
                 onChange={(e) => setSelectedDate(e.target.value)}
                 max={new Date().toISOString().split("T")[0]}
+                disabled={!isScanned}
+                title={!isScanned ? "Harap scan QR code terlebih dahulu" : ""}
               />
               <button
                 className="cs-btn cs-btn--load"
                 onClick={handleLoadExisting}
-                disabled={!selectedDate}
+                disabled={!selectedDate || !isScanned}
+                title={!isScanned ? "Harap scan QR code terlebih dahulu" : ""}
               >
                 📂 Muat Data
               </button>
@@ -1289,6 +1344,8 @@ export default function ChecksheetToiletForm({ params }: { params: Promise<{ are
               <button
                 className={`cs-step ${activeStep === "laki" ? "cs-step--active-male" : "cs-step--done"}`}
                 onClick={() => setActiveStep("laki")}
+                disabled={!isScanned}
+                title={!isScanned ? "Harap scan QR code terlebih dahulu" : ""}
               >
                 <span className="cs-step-badge">{activeStep === "perempuan" ? "✓" : "1"}</span>
                 🚹 Toilet Laki-laki
@@ -1297,8 +1354,8 @@ export default function ChecksheetToiletForm({ params }: { params: Promise<{ are
               <button
                 className={`cs-step ${activeStep === "perempuan" ? "cs-step--active-female" : isLakiComplete ? "cs-step--done" : "cs-step--locked"}`}
                 onClick={() => isLakiComplete ? setActiveStep("perempuan") : undefined}
-                disabled={!isLakiComplete && activeStep !== "perempuan"}
-                title={!isLakiComplete ? "Selesaikan isian Laki-laki terlebih dahulu" : ""}
+                disabled={!isLakiComplete && activeStep !== "perempuan" || !isScanned}
+                title={!isScanned ? "Harap scan QR code terlebih dahulu" : !isLakiComplete ? "Selesaikan isian Laki-laki terlebih dahulu" : ""}
               >
                 <span className="cs-step-badge">2</span>
                 🚺 Toilet Perempuan
@@ -1316,6 +1373,7 @@ export default function ChecksheetToiletForm({ params }: { params: Promise<{ are
                 activeStep={activeStep}
                 answers={answers}
                 selectedDate={selectedDate}
+                isScanned={isScanned}
                 onInputChange={handleInputChange}
                 onImageUpload={handleImageUpload}
               />
@@ -1332,6 +1390,7 @@ export default function ChecksheetToiletForm({ params }: { params: Promise<{ are
                 activeStep={activeStep}
                 answers={answers}
                 selectedDate={selectedDate}
+                isScanned={isScanned}
                 onInputChange={handleInputChange}
                 onImageUpload={handleImageUpload}
               />
@@ -1349,7 +1408,8 @@ export default function ChecksheetToiletForm({ params }: { params: Promise<{ are
                   <button
                     className="cs-btn cs-btn--next-male"
                     onClick={handleNextStep}
-                    disabled={!selectedDate}
+                    disabled={!selectedDate || !isScanned}
+                    title={!isScanned ? "Harap scan QR code terlebih dahulu" : ""}
                   >
                     Lanjut ke Toilet Perempuan 🚺 →
                   </button>
@@ -1362,7 +1422,8 @@ export default function ChecksheetToiletForm({ params }: { params: Promise<{ are
                   <button
                     className="cs-btn cs-btn--save"
                     onClick={handleSave}
-                    disabled={!selectedDate || isSubmitting}
+                    disabled={!selectedDate || isSubmitting || !isScanned}
+                    title={!isScanned ? "Harap scan QR code terlebih dahulu" : ""}
                   >
                     {isSubmitting ? <><span className="cs-spinner" />Menyimpan...</> : "✓ Simpan Data"}
                   </button>
@@ -1380,7 +1441,8 @@ export default function ChecksheetToiletForm({ params }: { params: Promise<{ are
               <button
                 className="cs-btn cs-btn--save"
                 onClick={handleSave}
-                disabled={!selectedDate || isSubmitting}
+                disabled={!selectedDate || isSubmitting || !isScanned}
+                title={!isScanned ? "Harap scan QR code terlebih dahulu" : ""}
               >
                 {isSubmitting ? <><span className="cs-spinner" />Menyimpan...</> : "✓ Simpan Data"}
               </button>
@@ -1413,6 +1475,7 @@ const ChecksheetTable = ({
   activeStep,
   answers,
   selectedDate,
+  isScanned,
   onInputChange,
   onImageUpload,
 }: {
@@ -1421,6 +1484,7 @@ const ChecksheetTable = ({
   activeStep: "laki" | "perempuan";
   answers: Record<string, string>;
   selectedDate: string;
+  isScanned: boolean;
   onInputChange: (field: string, value: string) => void;
   onImageUpload: (field: string, e: React.ChangeEvent<HTMLInputElement>) => void;
 }) => (
@@ -1462,6 +1526,7 @@ const ChecksheetTable = ({
           activeStep={activeStep}
           answers={answers}
           selectedDate={selectedDate}
+          isScanned={isScanned}
           onInputChange={onInputChange}
           onImageUpload={onImageUpload}
         />
@@ -1477,6 +1542,7 @@ const TableRow = ({
   activeStep,
   answers,
   selectedDate,
+  isScanned,
   onInputChange,
   onImageUpload,
 }: {
@@ -1485,6 +1551,7 @@ const TableRow = ({
   activeStep: "laki" | "perempuan";
   answers: Record<string, string>;
   selectedDate: string;
+  isScanned: boolean;
   onInputChange: (field: string, value: string) => void;
   onImageUpload: (field: string, e: React.ChangeEvent<HTMLInputElement>) => void;
 }) => {
@@ -1495,7 +1562,8 @@ const TableRow = ({
           className={`cs-select cs-select--${variant}`}
           value={answers[`${prefix}_hasil`] || ""}
           onChange={(e) => onInputChange(`${prefix}_hasil`, e.target.value)}
-          disabled={!selectedDate}
+          disabled={!isScanned}
+          title={!isScanned ? "Harap scan QR code terlebih dahulu" : ""}
         >
           <option value="">Pilih</option>
           <option value="OK">✓ OK</option>
@@ -1507,16 +1575,18 @@ const TableRow = ({
           className="cs-textarea"
           value={answers[`${prefix}_keterangan`] || ""}
           onChange={(e) => onInputChange(`${prefix}_keterangan`, e.target.value)}
-          disabled={!selectedDate}
+          disabled={!isScanned}
           placeholder="Keterangan..."
           rows={2}
+          title={!isScanned ? "Harap scan QR code terlebih dahulu" : ""}
         />
         <input
           type="file"
           accept="image/*"
           className="cs-file-input"
           onChange={(e) => onImageUpload(`${prefix}_foto`, e)}
-          disabled={!selectedDate}
+          disabled={!isScanned}
+          title={!isScanned ? "Harap scan QR code terlebih dahulu" : ""}
         />
         {answers[`${prefix}_foto`] && (
           <div className="cs-foto-preview">
@@ -1529,9 +1599,10 @@ const TableRow = ({
           className="cs-textarea"
           value={answers[`${prefix}_tindakan`] || ""}
           onChange={(e) => onInputChange(`${prefix}_tindakan`, e.target.value)}
-          disabled={!selectedDate}
+          disabled={!isScanned}
           placeholder="Tindakan..."
           rows={2}
+          title={!isScanned ? "Harap scan QR code terlebih dahulu" : ""}
         />
       </td>
       <td className="cs-td">
@@ -1566,6 +1637,7 @@ const MobileCard = ({
   activeStep,
   answers,
   selectedDate,
+  isScanned,
   onInputChange,
   onImageUpload,
 }: {
@@ -1574,6 +1646,7 @@ const MobileCard = ({
   activeStep: "laki" | "perempuan";
   answers: Record<string, string>;
   selectedDate: string;
+  isScanned: boolean;
   onInputChange: (field: string, value: string) => void;
   onImageUpload: (field: string, e: React.ChangeEvent<HTMLInputElement>) => void;
 }) => {
@@ -1585,7 +1658,8 @@ const MobileCard = ({
           className={`cs-select cs-select--${variant}`}
           value={answers[`${prefix}_hasil`] || ""}
           onChange={(e) => onInputChange(`${prefix}_hasil`, e.target.value)}
-          disabled={!selectedDate}
+          disabled={!isScanned}
+          title={!isScanned ? "Harap scan QR code terlebih dahulu" : ""}
         >
           <option value="">Pilih</option>
           <option value="OK">✓ OK</option>
@@ -1599,16 +1673,18 @@ const MobileCard = ({
           className="cs-textarea"
           value={answers[`${prefix}_keterangan`] || ""}
           onChange={(e) => onInputChange(`${prefix}_keterangan`, e.target.value)}
-          disabled={!selectedDate}
+          disabled={!isScanned}
           placeholder="Keterangan temuan..."
           rows={2}
+          title={!isScanned ? "Harap scan QR code terlebih dahulu" : ""}
         />
         <input
           type="file"
           accept="image/*"
           className="cs-file-input"
           onChange={(e) => onImageUpload(`${prefix}_foto`, e)}
-          disabled={!selectedDate}
+          disabled={!isScanned}
+          title={!isScanned ? "Harap scan QR code terlebih dahulu" : ""}
         />
         {answers[`${prefix}_foto`] && (
           <div className="cs-foto-preview">
@@ -1623,9 +1699,10 @@ const MobileCard = ({
           className="cs-textarea"
           value={answers[`${prefix}_tindakan`] || ""}
           onChange={(e) => onInputChange(`${prefix}_tindakan`, e.target.value)}
-          disabled={!selectedDate}
+          disabled={!isScanned}
           placeholder="Tindakan yang dilakukan..."
           rows={2}
+          title={!isScanned ? "Harap scan QR code terlebih dahulu" : ""}
         />
       </div>
 

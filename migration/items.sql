@@ -365,6 +365,7 @@
     (type_id, item_key, no, item_group, item_check, method, sort_order, is_active) 
     VALUES
 
+                                                                                                                                
     -- 1. INJECTION GROMET
     ((SELECT id FROM ga_checksheet_types WHERE slug='inspeksi-apd'),'AREA03_P01',1,'PROSES','INJECTION GROMET','Visual',142,TRUE),
     ((SELECT id FROM ga_checksheet_types WHERE slug='inspeksi-apd'),'AREA03_P01_01',1,'AREA03_P01','Sarung tangan nitrile','Visual',143,TRUE),

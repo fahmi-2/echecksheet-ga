@@ -95,7 +95,7 @@ export default function RiwayatApdPage() {
 
   // Validasi akses
   useEffect(() => {
-    if (!user || user.role !== "inspector-ga") {
+    if (!user || user.role !== "inspector-ga-personal") {
       router.push("/home")
     }
   }, [user, router])
@@ -245,6 +245,10 @@ export default function RiwayatApdPage() {
           <div className="header-title">
             <h1>📋 Riwayat Pengambilan APD</h1>
           </div>
+          
+<Link href="/status-ga/e-checksheet-apd/riwayat-apd/download" className="btn-download">
+  📊 Download Laporan
+</Link>
         </div>
 
      
@@ -669,7 +673,24 @@ export default function RiwayatApdPage() {
         .btn-back-text {
           display: inline;
         }
+.btn-download {
+  padding: 10px 20px;
+  background: #217346;
+  color: white;
+  text-decoration: none;
+  border-radius: 6px;
+  font-weight: 600;
+  transition: background 0.3s;
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: 12px;
+}
 
+.btn-download:hover {
+  background: #1e6b40;
+}
         .header-title {
           font-size: 1.8rem;
           font-weight: 700;

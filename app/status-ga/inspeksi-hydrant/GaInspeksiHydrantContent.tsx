@@ -165,9 +165,9 @@ export function GaInspeksiHydrantContent() {
 
   useEffect(() => {
     if (!isMounted || !isInitialized || authLoading) { setAuthVerified(false); return; }
-    if (user && user.role === "inspector-ga") { setAuthVerified(true); return; }
+    if (user && user.role === "inspector-ga-fire") { setAuthVerified(true); return; }
     const t = setTimeout(() => {
-      if (!user || user.role !== "inspector-ga") router.push("/login-page");
+      if (!user || user.role !== "inspector-ga-fire") router.push("/login-page");
       else setAuthVerified(true);
     }, 1500);
     return () => clearTimeout(t);

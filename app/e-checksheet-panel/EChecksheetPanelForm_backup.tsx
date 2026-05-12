@@ -102,7 +102,7 @@ export function EChecksheetPanelForm() {
       return;
     }
 
-    if (user && user.role === "inspector-ga") {
+    if (user && user.role === "inspector-ga-electrical") {
       console.log('✅ Auth verified successfully');
       setAuthVerified(true);
       return;

@@ -1,7 +1,7 @@
 // app/status-ga/selang-hydrant/GaSelangHydrantContent.tsx
 "use client";
 import { useState, useEffect, useRef } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
 import { Sidebar } from "@/components/Sidebar";
 import QrScanner from 'qr-scanner';
@@ -23,9 +23,15 @@ interface Area {
 
 export function GaSelangHydrantContent() {
   const router = useRouter();
-  const searchParams = useSearchParams();
   const { user, loading: authLoading, isInitialized } = useAuth();
-  const openAreaParam = searchParams.get('openArea') || '';
+
+  // ✅ FIX: Use native URL API instead of useSearchParams hook to avoid conflicts
+  const getQueryParam = (name: string): string => {
+    if (typeof window === 'undefined') return '';
+    return new URLSearchParams(window.location.search).get(name) || '';
+  };
+
+  const openAreaParam = getQueryParam('openArea');
   const TYPE_SLUG = 'selang-hydrant';
   
   const [isMounted, setIsMounted] = useState(false);
@@ -94,7 +100,7 @@ export function GaSelangHydrantContent() {
       console.log('⏳ Waiting for user data...');
       return;
     }
-    if (user.role !== "inspector-ga") {
+    if (user.role !== "inspector-ga-fire") {
       console.warn('⚠️ Unauthorized - wrong role:', user.role);
       router.replace("/login-page");
       return;
@@ -470,7 +476,7 @@ export function GaSelangHydrantContent() {
     );
   }
 
-  if (user.role !== "inspector-ga") {
+  if (user.role !== "inspector-ga-fire") {
     return (
       <div style={{
         display: "flex",

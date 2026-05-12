@@ -29,6 +29,7 @@ export default function PelaporanListPageContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const { user } = useAuth()
+
   const [redirected, setRedirected] = useState(false)
 
   const [pelaporan, setPelaporan] = useState<PelaporanData[]>([])

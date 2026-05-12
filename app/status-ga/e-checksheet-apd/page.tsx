@@ -88,7 +88,7 @@ export default function EChecksheetApdPage() {
   // Validasi akses
   useEffect(() => {
     if (redirected) return;
-    if (!user || user.role !== "inspector-ga") {
+    if (!user || user.role !== "inspector-ga-personal") {
       setRedirected(true)
       router.push("/home")
     }

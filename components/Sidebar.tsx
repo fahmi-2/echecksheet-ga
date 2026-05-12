@@ -272,7 +272,23 @@ export function Sidebar({ userName = "User", userRole = "Role" }: SidebarProps) 
                 {isExpanded && <span className="menu-label">QR Generator</span>}
               </Link>
             )}
-
+{/* Admin Login - Hanya untuk role admin */}
+{currentRole === "admin" && (
+  <Link
+    href="/admin/login"
+    className={`menu-item ${pathname === '/admin/login' ? 'active' : ''}`}
+    onClick={() => { if (isMobile) { setIsExpanded(false); broadcastSidebarWidth(false); } }}
+  >
+    <span className="menu-icon">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2">
+        <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+        <circle cx="12" cy="7" r="4" />
+        <path d="M9 14l3 3 3-3" />
+      </svg>
+    </span>
+    {isExpanded && <span className="menu-label">Login Admin</span>}
+  </Link>
+)}
             {/* Laporan */}
             {(currentRole === "inspector-ga" || currentRole === "group-leader-qa") && (
               <Link
@@ -601,7 +617,6 @@ export function Sidebar({ userName = "User", userRole = "Role" }: SidebarProps) 
           0%, 100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(239,68,68,0.4); }
           50% { transform: scale(1.1); box-shadow: 0 0 0 4px rgba(239,68,68,0); }
         }
-
         @media (max-width: 768px) {
           .sidebar-container { box-shadow: 0 0 20px rgba(0,0,0,0.2); z-index: 45; }
           .menu-item:hover { background: rgba(255,255,255,0.22) !important; }

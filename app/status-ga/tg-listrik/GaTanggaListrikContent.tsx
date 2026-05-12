@@ -2,7 +2,7 @@
 
 "use client";
 import { useState, useEffect, useRef } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
 import { Sidebar } from "@/components/Sidebar";
 import { ArrowLeft, Plus, Trash2, Edit2 } from "lucide-react";
@@ -137,7 +137,7 @@ export function GaTanggaListrikContent({ openArea = '' }: Props) {
 
   useEffect(() => {
     if (loading) return;
-    if (!user || user.role !== "inspector-ga") router.push("/login-page");
+    if (!user || user.role !== "inspector-ga-equipment") router.push("/login-page");
   }, [user, loading, router]);
 
   // Auto-open modal
@@ -269,7 +269,7 @@ export function GaTanggaListrikContent({ openArea = '' }: Props) {
     );
   }
 
-  if (!user || user.role !== "inspector-ga") return null;
+  if (!user || user.role !== "inspector-ga-equipment") return null;
 
   return (
     <div style={{ minHeight: "100vh", background: "#f8f9fa" }}>

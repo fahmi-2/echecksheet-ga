@@ -1,7 +1,7 @@
 // app/status-ga/checksheet-toilet/[area]/riwayat/page.tsx
 "use client";
 import { useState, useEffect, useCallback } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
 import { Sidebar } from "@/components/Sidebar";
 import { ArrowLeft, Calendar, Download, Eye, X, CheckCircle, XCircle, ChevronDown } from "lucide-react";
@@ -340,7 +340,6 @@ export default function RiwayatToilet({ params }: { params: Promise<{ area: stri
   // ✅ SEMUA HOOKS DI TOP LEVEL - TIDAK BOLEH DI DALAM LOOP/CONDITION
   const [areaId, setAreaId] = useState<string | null>(null);
   const router = useRouter();
-  const searchParams = useSearchParams();
   const { user } = useAuth();
   const [loading, setLoading] = useState(true);
   const [inspections, setInspections] = useState<InspectionRecord[]>([]);

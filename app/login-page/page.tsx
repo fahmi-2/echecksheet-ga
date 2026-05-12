@@ -100,7 +100,7 @@ export default function LoginPage() {
               </form>
 
               <div className="switch-link">
-                Belum punya akun? <Link href="/signup-page">Daftar di sini</Link>
+                Belum punya akun?, Silahkan hubungi Admin.
               </div>
             </div>
           </div>

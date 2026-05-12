@@ -41,7 +41,7 @@ export default function InspeksiLiftBarangListPage() {
   useEffect(() => {
     if (redirected) return;
     if (!user) return;
-    if (user.role !== "inspector-ga") {
+    if (user.role !== "inspector-ga-equipment") {
       setRedirected(true);
       router.push("/home");
     }
@@ -51,7 +51,7 @@ export default function InspeksiLiftBarangListPage() {
     return <div>Loading...</div>;
   }
 
-  if (user.role !== "inspector-ga") {
+  if (user.role !== "inspector-ga-equipment") {
     return null;
   }
 

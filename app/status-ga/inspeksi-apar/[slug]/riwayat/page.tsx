@@ -121,7 +121,7 @@ export default function RiwayatApar() {
   const [showRightScroll, setShowRightScroll] = useState(true);
 
   useEffect(() => {
-    if (!user || user.role !== "inspector-ga") {
+    if (!user || user.role !== "inspector-ga-fire") {
       router.push("/home");
     }
   }, [user, router]);

@@ -98,7 +98,7 @@ export default function RiwayatInspeksiPerItemPage({ params }: { params: Promise
   const [activeTab, setActiveTab] = useState<'header' | 'items'>('header');
 
   useEffect(() => {
-    if (!user || user.role !== "inspector-ga") {
+    if (!user || user.role !== "inspector-ga-equipment") {
       router.push("/home");
       return;
     }

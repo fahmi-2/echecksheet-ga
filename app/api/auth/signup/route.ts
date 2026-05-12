@@ -3,13 +3,51 @@ import { NextRequest, NextResponse } from 'next/server';
 import pool from '@/lib/db';
 import bcrypt from 'bcryptjs';
 
+// 🔐 VALID ROLES - Sinkron dengan frontend
+export const VALID_ROLES = [
+  'group-leader-qa', 
+  'inspector-qa', 
+  'inspector-ga',           // ← Legacy
+  'inspector-ga-fire',      // 🔥 Proteksi Kebakaran & Evakuasi
+  'inspector-ga-equipment', // ⚙️ Pemeliharaan Peralatan
+  'inspector-ga-electrical',// ⚡ Instalasi Listrik
+  'inspector-ga-personal',  // 🦺 Keselamatan Personal & Prasarana
+  'inspector-ga-facility',  // 🧹 Kebersihan Fasilitas
+  'admin', 
+  'eso'
+] as const;
+
+export type ValidRole = typeof VALID_ROLES[number];
+
+// 🔗 Mapping Role → Departemen yang Diizinkan
+export const ROLE_DEPARTMENT_MAP: Record<ValidRole, string[]> = {
+  'group-leader-qa': ['quality-assurance'],
+  'inspector-qa': ['quality-assurance'],
+  'inspector-ga': ['general-affairs'],
+  'inspector-ga-fire': ['general-affairs'],
+  'inspector-ga-equipment': ['general-affairs'],
+  'inspector-ga-electrical': ['general-affairs'],
+  'inspector-ga-personal': ['general-affairs'],
+  'inspector-ga-facility': ['general-affairs'],
+  'admin': ['admin'],
+  'eso': ['k3'],
+};
+
+// 🏷️ Label departemen untuk pesan error
+const DEPT_LABELS: Record<string, string> = {
+  'quality-assurance': 'Quality Assurance',
+  'general-affairs': 'General Affairs',
+  'admin': 'Admin',
+  'k3': 'K3/ESO',
+};
+
 export async function POST(request: NextRequest) {
   try {
     const { username, fullName, nik, department, role, password, confirmPassword } = await request.json();
 
     console.log('📝 Signup attempt:', { username, role, department });
 
-    // Validasi required fields
+    // ✅ Validasi required fields
     if (!username || !fullName || !nik || !department || !role || !password || !confirmPassword) {
       return NextResponse.json(
         { error: 'Semua field wajib diisi!' },
@@ -17,16 +55,15 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Validasi role
-    const validRoles = ['group-leader-qa', 'inspector-qa', 'inspector-ga', 'admin', 'eso'];
-    if (!validRoles.includes(role)) {
+    // ✅ Validasi role dengan constant terpusat
+    if (!VALID_ROLES.includes(role as ValidRole)) {
       return NextResponse.json(
         { error: 'Role tidak valid!' },
         { status: 400 }
       );
     }
 
-    // Validasi password
+    // ✅ Validasi password
     if (password.length < 6) {
       return NextResponse.json(
         { error: 'Password minimal 6 karakter!' },
@@ -41,26 +78,11 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Validasi role ↔ departemen
-    const validDepartments: Record<string, string[]> = {
-      'group-leader-qa': ['quality-assurance'],
-      'inspector-qa': ['quality-assurance'],
-      'inspector-ga': ['general-affairs'],
-      'admin': ['admin'],
-      'eso': ['k3'],
-    };
-
-    if (!validDepartments[role] || !validDepartments[role].includes(department)) {
-      const deptLabels = (validDepartments[role] || [])
-        .map(d => {
-          const map: Record<string, string> = {
-            'quality-assurance': 'Quality Assurance',
-            'general-affairs': 'General Affairs',
-            'admin': 'Admin',
-            'k3': 'K3/ESO',
-          };
-          return map[d] || d;
-        })
+    // ✅ Validasi role ↔ departemen dengan mapping terpusat
+    const allowedDepts = ROLE_DEPARTMENT_MAP[role as ValidRole];
+    if (!allowedDepts || !allowedDepts.includes(department)) {
+      const deptLabels = (allowedDepts || [])
+        .map(d => DEPT_LABELS[d] || d)
         .join(', ');
       
       return NextResponse.json(
@@ -83,11 +105,10 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Hash password
+    // ✅ Hash password
     const hashedPassword = await bcrypt.hash(password, 10);
 
-    // Generate ID unik - lebih baik pakai UUID untuk production
-    // Tapi untuk kompatibilitas dengan sistem lama, kita pertahankan format lama
+    // ✅ Generate ID unik
     const userId = `user_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
 
     console.log('💾 Creating new user:', userId);
@@ -112,7 +133,7 @@ export async function POST(request: NextRequest) {
     const newUser = insertResult.rows[0];
     console.log('✅ User created successfully:', newUser);
     
-    // ⚠️ SECURITY: Jangan return password hash atau data sensitif
+    // ⚠️ SECURITY: Jangan return password hash
     return NextResponse.json(
       { 
         success: true, 

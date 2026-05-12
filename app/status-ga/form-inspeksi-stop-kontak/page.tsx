@@ -11,13 +11,13 @@ export default function FormInspeksiStopKontakSelector() {
 
   useEffect(() => {
     if (!user) return;
-    if (user.role !== "inspector-ga") {
+    if (user.role !== "inspector-ga-electrical") {
       router.push("/home");
     }
   }, [user, router]);
 
   if (!user) return <div className="loading">Memuat...</div>;
-  if (user.role !== "inspector-ga") return null;
+  if (user.role !== "inspector-ga-electrical") return null;
 
   return (
     <div className="app-page">

@@ -3,9 +3,10 @@
 
 import { useState, useEffect, useCallback, use } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { useAuth } from "@/lib/auth-context";
 import { Sidebar } from "@/components/Sidebar";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, QrCode } from "lucide-react";
 
 // ─────────────────────────────────────────────────────────────
 // INTERFACES
@@ -79,10 +80,13 @@ export default function ChecksheetFireAlarm({
   const [expandedItem, setExpandedItem] = useState<number | null>(null);
   const [previewImage, setPreviewImage] = useState<string | null>(null);
 
+  const [scanVerified, setScanVerified] = useState(false);
+  const [scanWarning, setScanWarning] = useState<string | null>(null);
+
   // ─── AUTH ──────────────────────────────────────────────────
   useEffect(() => {
     if (redirected) return;
-    if (!user || user.role !== "inspector-ga") {
+    if (!user || user.role !== "inspector-ga-fire") {
       setRedirected(true);
       router.push("/home");
     } else {
@@ -90,6 +94,20 @@ export default function ChecksheetFireAlarm({
       setCheckerNik(user.nik || "");
     }
   }, [user, router, redirected]);
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const params = new URLSearchParams(window.location.search);
+      const isScanned = params.get("_scanned") === "true";
+      if (isScanned) {
+        setScanVerified(true);
+        setScanWarning(null);
+      } else {
+        setScanVerified(false);
+        setScanWarning("Akses melalui scan QR code terlebih dahulu untuk mengisi checksheet ini.");
+      }
+    }
+  }, []);
 
   // ─── LOAD MASTER ───────────────────────────────────────────
   const loadMasterData = useCallback(async () => {
@@ -280,8 +298,14 @@ export default function ChecksheetFireAlarm({
             <ArrowLeft size={18} />
             <span className="btn-back-text">Kembali</span>
           </button>
+
+          {/* <Link href="/scan" className="btn-scan-qr">
+            <QrCode size={18} />
+            <span>Scan QR Area</span>
+          </Link> */}
+
           <h1 className="page-title">
-            🔔 Inspeksi Fire Alarm -{" "}
+            Inspeksi Fire Alarm -{" "}
             {zona?.toUpperCase()}
           </h1>
         </div>
@@ -323,6 +347,19 @@ export default function ChecksheetFireAlarm({
             />
           </div>
         </div>
+
+        {!scanVerified && (
+          <div className="banner banner-warning scan-warning">
+            <span>{scanWarning}</span>
+            <button
+              onClick={() => router.push("/scan")}
+              className="banner-btn"
+              disabled={loading}
+            >
+              <QrCode size={14} /> Scan Sekarang
+            </button>
+          </div>
+        )}
 
         {/* ── Master Status Banners ──────────────────────── */}
         {masterLoading && (
@@ -411,8 +448,110 @@ export default function ChecksheetFireAlarm({
                               value={item.lokasi}
                               onChange={(e) => updateItem(index, "lokasi", e.target.value)}
                               className={`notes-input ${!item.lokasi ? "input-error" : ""}`}
-                              disabled={loading}
+                              disabled={loading || !scanVerified}
                               placeholder="Lokasi..."
+                            />
+                          </td>
+
+                          {/* Alarm Bell */}
+                          <td>
+                            <select
+                              value={item.alarmBell}
+                              onChange={(e) => updateItem(index, "alarmBell", e.target.value)}
+                              className={`status-select ${item.alarmBell === "NG" ? "select-ng" : "select-ok"}`}
+                              disabled={loading || !scanVerified}
+                            >
+                              <option value="OK">OK</option>
+                              <option value="NG">NG</option>
+                            </select>
+                          </td>
+
+                          {/* Indicator Lamp */}
+                          <td>
+                            <select
+                              value={item.indicatorLamp}
+                              onChange={(e) => updateItem(index, "indicatorLamp", e.target.value)}
+                              className={`status-select ${item.indicatorLamp === "NG" ? "select-ng" : "select-ok"}`}
+                              disabled={loading || !scanVerified}
+                            >
+                              <option value="OK">OK</option>
+                              <option value="NG">NG</option>
+                            </select>
+                          </td>
+
+                          {/* Manual Call Point */}
+                          <td>
+                            <select
+                              value={item.manualCallPoint}
+                              onChange={(e) => updateItem(index, "manualCallPoint", e.target.value)}
+                              className={`status-select ${item.manualCallPoint === "NG" ? "select-ng" : "select-ok"}`}
+                              disabled={loading || !scanVerified}
+                            >
+                              <option value="OK">OK</option>
+                              <option value="NG">NG</option>
+                            </select>
+                          </td>
+
+                          {/* ID Zona - ✅ UBAH DARI INPUT MENJADI SELECT */}
+<td>
+  <select
+    value={item.idZona || "OK"}
+    onChange={(e) => updateItem(index, "idZona", e.target.value)}
+    className={`status-select ${item.idZona === "NG" ? "select-ng" : "select-ok"}`}
+    disabled={loading || !scanVerified}
+  >
+    <option value="OK">OK</option>
+    <option value="NG">NG</option>
+    <option value="OBS">OBS</option>
+  </select>
+</td>
+
+                          {/* Kebersihan */}
+                          <td>
+                            <select
+                              value={item.kebersihan}
+                              onChange={(e) => updateItem(index, "kebersihan", e.target.value)}
+                              className={`status-select ${item.kebersihan === "NG" ? "select-ng" : "select-ok"}`}
+                              disabled={loading || !scanVerified}
+                            >
+                              <option value="OK">OK</option>
+                              <option value="NG">NG</option>
+                            </select>
+                          </td>
+
+                          {/* Kondisi N-OK */}
+                          <td>
+                            <input
+                              type="text"
+                              value={item.kondisiNok}
+                              onChange={(e) => updateItem(index, "kondisiNok", e.target.value)}
+                              placeholder={isNG ? "Wajib jika NG" : "Catatan..."}
+                              className={`notes-input ${isNG && !item.kondisiNok ? "input-error" : ""}`}
+                              disabled={loading || !scanVerified}
+                            />
+                          </td>
+
+                          {/* Tindakan Perbaikan */}
+                          <td>
+                            <input
+                              type="text"
+                              value={item.tindakanPerbaikan}
+                              onChange={(e) => updateItem(index, "tindakanPerbaikan", e.target.value)}
+                              placeholder={isNG ? "Wajib jika NG" : "Tindakan..."}
+                              className={`notes-input ${isNG && !item.tindakanPerbaikan ? "input-error" : ""}`}
+                              disabled={loading || !scanVerified}
+                            />
+                          </td>
+
+                          {/* PIC */}
+                          <td>
+                            <input
+                              type="text"
+                              value={item.pic}
+                              onChange={(e) => updateItem(index, "pic", e.target.value)}
+                              className="notes-input"
+                              disabled={loading || !scanVerified}
+                              placeholder="PIC..."
                             />
                           </td>
 
@@ -592,7 +731,7 @@ export default function ChecksheetFireAlarm({
                             value={item.lokasi}
                             onChange={(e) => updateItem(index, "lokasi", e.target.value)}
                             className={`notes-input ${!item.lokasi ? "input-error" : ""}`}
-                            disabled={loading}
+                            disabled={loading || !scanVerified}
                             placeholder="Lokasi..."
                           />
                         </div>
@@ -604,7 +743,7 @@ export default function ChecksheetFireAlarm({
     value={item.idZona || "OK"}
     onChange={(e) => updateItem(index, "idZona", e.target.value)}
     className={`status-select ${item.idZona === "NG" ? "select-ng" : "select-ok"}`}
-    disabled={loading}
+    disabled={loading || !scanVerified}
   >
     <option value="OK">OK</option>
     <option value="NG">NG</option>
@@ -622,7 +761,7 @@ export default function ChecksheetFireAlarm({
                                 value={(item as any)[key]}
                                 onChange={(e) => updateItem(index, key as keyof FireAlarmItem, e.target.value)}
                                 className={`check-select ${(item as any)[key] === "NG" ? "select-ng" : "select-ok"}`}
-                                disabled={loading}
+                                disabled={loading || !scanVerified}
                               >
                                 <option value="OK">OK</option>
                                 <option value="NG">NG</option>
@@ -643,7 +782,7 @@ export default function ChecksheetFireAlarm({
                             onChange={(e) => updateItem(index, "kondisiNok", e.target.value)}
                             placeholder={isNG ? "Wajib diisi jika NG" : "Catatan kondisi..."}
                             className={`notes-input ${isNG && !item.kondisiNok ? "input-error" : ""}`}
-                            disabled={loading}
+                            disabled={loading || !scanVerified}
                           />
                         </div>
 
@@ -659,7 +798,7 @@ export default function ChecksheetFireAlarm({
                             onChange={(e) => updateItem(index, "tindakanPerbaikan", e.target.value)}
                             placeholder={isNG ? "Wajib diisi jika NG" : "Tindakan perbaikan..."}
                             className={`notes-input ${isNG && !item.tindakanPerbaikan ? "input-error" : ""}`}
-                            disabled={loading}
+                            disabled={loading || !scanVerified}
                           />
                         </div>
 
@@ -671,7 +810,7 @@ export default function ChecksheetFireAlarm({
                             value={item.pic}
                             onChange={(e) => updateItem(index, "pic", e.target.value)}
                             className="notes-input"
-                            disabled={loading}
+                            disabled={loading || !scanVerified}
                             placeholder="PIC..."
                           />
                         </div>
@@ -734,7 +873,7 @@ export default function ChecksheetFireAlarm({
 
             {/* ── Form Actions ──────────────────────────── */}
             <div className="form-actions">
-              <button onClick={handleAddItem} className="btn-add-item" disabled={loading}>
+              <button onClick={handleAddItem} className="btn-add-item" disabled={loading || !scanVerified} title={!scanVerified ? "Harap scan QR code terlebih dahulu" : ""}>
                 ➕ Tambah Item
               </button>
               <button
@@ -744,7 +883,7 @@ export default function ChecksheetFireAlarm({
               >
                 Batal
               </button>
-              <button onClick={handleShowPreview} className="btn-submit" disabled={loading}>
+              <button onClick={handleShowPreview} className="btn-submit" disabled={loading || !scanVerified} title={!scanVerified ? "Harap scan QR code terlebih dahulu" : ""}>
                 👁️ Preview & Simpan
               </button>
             </div>
@@ -961,6 +1100,18 @@ export default function ChecksheetFireAlarm({
         }
         .btn-back:hover { background: rgba(255,255,255,0.3); }
         .btn-back-text { display: inline; }
+        .btn-scan-qr {
+          display: flex; align-items: center; gap: 6px; padding: 8px 14px;
+          background: linear-gradient(135deg, #7c3aed 0%, #5b21b6 100%);
+          color: white; border: none; border-radius: 8px; cursor: pointer;
+          font-weight: 600; font-size: 0.85rem; text-decoration: none;
+          transition: all 0.2s ease; min-height: 40px; white-space: nowrap;
+        }
+        .btn-scan-qr:hover {
+          transform: translateY(-1px);
+          box-shadow: 0 4px 12px rgba(124, 58, 237, 0.4);
+        }
+        .btn-scan-qr:active { transform: translateY(0); }
         .page-title { margin: 0; font-size: 1.4rem; font-weight: 700; flex: 1; word-break: break-word; }
 
         /* ── Subtitle / Date ────────────────────────────── */
@@ -1033,6 +1184,17 @@ export default function ChecksheetFireAlarm({
           box-shadow: 0 2px 6px rgba(245,158,11,0.3);
         }
         .banner-btn:hover { transform: translateY(-1px); box-shadow: 0 4px 10px rgba(245,158,11,0.4); }
+        .scan-warning {
+          background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
+          border-left: 4px solid #f59e0b; justify-content: space-between;
+        }
+        .scan-warning .banner-btn {
+          background: linear-gradient(135deg, #7c3aed 0%, #5b21b6 100%);
+          padding: 6px 16px;
+        }
+        .scan-warning .banner-btn:hover {
+          transform: translateY(-1px); box-shadow: 0 4px 10px rgba(124, 58, 237, 0.4);
+        }
         .spinner-inline { animation: spin 1s linear infinite; display: inline-block; font-size: 1.1rem; }
 
         /* ── Loading Overlay ────────────────────────────── */
@@ -1319,8 +1481,9 @@ export default function ChecksheetFireAlarm({
         /* ── Responsive: Mobile ─────────────────────────── */
         @media (max-width: 768px) {
           .page-content { padding: 14px 10px; margin-left: 0; }
-          .header-banner { padding: 12px 14px; flex-direction: column; align-items: flex-start; gap: 10px; }
+          .header-banner { padding: 12px 14px; flex-direction: column; align-items: flex-start; gap: 10px; flex-wrap: wrap; }
           .btn-back { width: 100%; justify-content: center; }
+          .btn-scan-qr { order: 2; width: 100%; justify-content: center; }
           .page-title { font-size: 1.2rem; width: 100%; }
           .card-container { padding: 14px 10px; }
           .desktop-view { display: none; }

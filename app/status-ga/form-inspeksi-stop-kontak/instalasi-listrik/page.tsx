@@ -5,6 +5,10 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
 import { Sidebar } from "@/components/Sidebar";
+import { QrCode } from "lucide-react";
+
+// ✅ TAMBAHKAN IMPORT HOOK SCAN VERIFICATION
+import { useScanVerification } from "@/lib/hooks/useScanVerification";
 
 const checklistInstalasi = [
   {
@@ -38,6 +42,10 @@ type CheckData = {
 export default function FormInstalasiListrik() {
   const router = useRouter();
   const { user } = useAuth();
+  
+  // ✅ TAMBAHKAN HOOK INI - WAJIB DI TOP LEVEL
+  const { isScanned, isLoading: scanLoading } = useScanVerification();
+  
   const [meta, setMeta] = useState({
     tanggal: new Date().toISOString().split("T")[0],
     area: "",
@@ -52,7 +60,7 @@ export default function FormInstalasiListrik() {
   useEffect(() => {
     setIsLoaded(true);
     if (!user) return;
-    if (user.role !== "inspector-ga") {
+    if (user.role !== "inspector-ga-electrical") {
       router.push("/home");
     }
   }, [user, router]);
@@ -72,7 +80,7 @@ export default function FormInstalasiListrik() {
   };
 
   if (!user) return <div className="loading">Memuat...</div>;
-  if (user.role !== "inspector-ga") return null;
+  if (user.role !== "inspector-ga-electrical") return null;
 
   const handleResultChange = (no: number, hasil: "OK" | "NOK") => {
     setCheckData(prev => ({
@@ -179,6 +187,20 @@ export default function FormInstalasiListrik() {
 
         <h1 className="title">⚡ Pengecekan Instalasi Listrik</h1>
 
+        {/* ✅ SCAN WARNING BANNER - TAMBAHAN BARU */}
+        {!isScanned && (
+          <div className="banner banner-warning scan-warning">
+            <span>🔒 Akses melalui scan QR code terlebih dahulu untuk mengisi checksheet ini.</span>
+            <button 
+              onClick={() => router.push("/scan")} 
+              className="banner-btn"
+              disabled={isSubmitting}
+            >
+              <QrCode size={14} /> Scan Sekarang
+            </button>
+          </div>
+        )}
+
         {/* HEADER FORM */}
         <div className="form-header">
           <div className="form-group">
@@ -188,6 +210,8 @@ export default function FormInstalasiListrik() {
               value={meta.tanggal}
               onChange={(e) => setMeta({ ...meta, tanggal: e.target.value })}
               className="form-input"
+              disabled={!isScanned}
+              title={!isScanned ? "Harap scan QR code terlebih dahulu" : ""}
             />
           </div>
           <div className="form-group">
@@ -198,6 +222,8 @@ export default function FormInstalasiListrik() {
               value={meta.area}
               onChange={(e) => setMeta({ ...meta, area: e.target.value })}
               className="form-input"
+              disabled={!isScanned}
+              title={!isScanned ? "Harap scan QR code terlebih dahulu" : ""}
             />
           </div>
           <div className="form-group">
@@ -240,6 +266,8 @@ export default function FormInstalasiListrik() {
                       checked={checkData[row.no]?.hasil === "OK"}
                       onChange={() => handleResultChange(row.no, "OK")}
                       className="radio-input"
+                      disabled={!isScanned}
+                      title={!isScanned ? "Harap scan QR code terlebih dahulu" : ""}
                     />
                   </td>
                   <td className="radio-cell">
@@ -249,6 +277,8 @@ export default function FormInstalasiListrik() {
                       checked={checkData[row.no]?.hasil === "NOK"}
                       onChange={() => handleResultChange(row.no, "NOK")}
                       className="radio-input"
+                      disabled={!isScanned}
+                      title={!isScanned ? "Harap scan QR code terlebih dahulu" : ""}
                     />
                   </td>
                   <td>
@@ -258,6 +288,8 @@ export default function FormInstalasiListrik() {
                       value={checkData[row.no]?.keterangan || ""}
                       onChange={(e) => handleKeteranganChange(row.no, e.target.value)}
                       className="text-input"
+                      disabled={!isScanned}
+                      title={!isScanned ? "Harap scan QR code terlebih dahulu" : ""}
                     />
                   </td>
                   <td>
@@ -266,6 +298,8 @@ export default function FormInstalasiListrik() {
                       accept="image/*"
                       onChange={(e) => handleImageUpload(row.no, e)}
                       className="file-input"
+                      disabled={!isScanned}
+                      title={!isScanned ? "Harap scan QR code terlebih dahulu" : ""}
                     />
                     {checkData[row.no]?.foto_path && (
                       <div className="image-preview">
@@ -306,23 +340,27 @@ export default function FormInstalasiListrik() {
                   <div className="form-group-mobile">
                     <label className="form-label">Hasil Pengecekan</label>
                     <div className="radio-group-mobile">
-                      <label className="radio-label">
+                      <label className={`radio-label ${!isScanned ? 'disabled' : ''}`}
+                        title={!isScanned ? "Harap scan QR code terlebih dahulu" : ""}>
                         <input
                           type="radio"
                           name={`hasil-mobile-${row.no}`}
                           checked={checkData[row.no]?.hasil === "OK"}
                           onChange={() => handleResultChange(row.no, "OK")}
                           className="radio-input-mobile"
+                          disabled={!isScanned}
                         />
                         <span className="radio-text ok">OK</span>
                       </label>
-                      <label className="radio-label">
+                      <label className={`radio-label ${!isScanned ? 'disabled' : ''}`}
+                        title={!isScanned ? "Harap scan QR code terlebih dahulu" : ""}>
                         <input
                           type="radio"
                           name={`hasil-mobile-${row.no}`}
                           checked={checkData[row.no]?.hasil === "NOK"}
                           onChange={() => handleResultChange(row.no, "NOK")}
                           className="radio-input-mobile"
+                          disabled={!isScanned}
                         />
                         <span className="radio-text ng">N-OK</span>
                       </label>
@@ -337,6 +375,8 @@ export default function FormInstalasiListrik() {
                       value={checkData[row.no]?.keterangan || ""}
                       onChange={(e) => handleKeteranganChange(row.no, e.target.value)}
                       className="text-input-mobile"
+                      disabled={!isScanned}
+                      title={!isScanned ? "Harap scan QR code terlebih dahulu" : ""}
                     />
                   </div>
 
@@ -347,6 +387,8 @@ export default function FormInstalasiListrik() {
                       accept="image/*"
                       onChange={(e) => handleImageUpload(row.no, e)}
                       className="file-input-mobile"
+                      disabled={!isScanned}
+                      title={!isScanned ? "Harap scan QR code terlebih dahulu" : ""}
                     />
                     {checkData[row.no]?.foto_path && (
                       <div className="image-preview-mobile">
@@ -368,7 +410,8 @@ export default function FormInstalasiListrik() {
           <button 
             className="submit-btn" 
             onClick={handleSubmit}
-            disabled={isSubmitting}
+            disabled={isSubmitting || !isScanned}
+            title={!isScanned ? "Harap scan QR code terlebih dahulu" : ""}
           >
             {isSubmitting ? '⏳ Menyimpan...' : '💾 Simpan Checksheet'}
           </button>
@@ -414,6 +457,39 @@ export default function FormInstalasiListrik() {
           color: #0d47a1;
           font-size: 1.8rem;
           font-weight: 700;
+        }
+
+        /* ── Banners ────────────────────────────────────── */
+        .banner {
+          border-radius: 10px; padding: 12px 18px; margin-bottom: 18px;
+          display: flex; align-items: center; gap: 10px; font-weight: 500;
+        }
+        .banner-warning {
+          background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
+          border: 1px solid #f59e0b; color: #92400e;
+          box-shadow: 0 2px 8px rgba(245,158,11,0.12);
+        }
+        .banner-btn {
+          margin-left: auto; background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+          color: white; border: none; border-radius: 7px; padding: 8px 16px;
+          cursor: pointer; font-size: 0.85rem; font-weight: 600; transition: all 0.2s;
+          box-shadow: 0 2px 6px rgba(245,158,11,0.3);
+          display: inline-flex;
+          align-items: center;
+          gap: 6px;
+          min-height: 36px;
+        }
+        .banner-btn:hover { transform: translateY(-1px); box-shadow: 0 4px 10px rgba(245,158,11,0.4); }
+        .scan-warning {
+          background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
+          border-left: 4px solid #f59e0b; justify-content: space-between;
+        }
+        .scan-warning .banner-btn {
+          background: linear-gradient(135deg, #7c3aed 0%, #5b21b6 100%);
+          padding: 8px 16px;
+        }
+        .scan-warning .banner-btn:hover {
+          transform: translateY(-1px); box-shadow: 0 4px 10px rgba(124, 58, 237, 0.4);
         }
 
         .form-header {
@@ -524,6 +600,11 @@ export default function FormInstalasiListrik() {
           accent-color: #1e88e5;
         }
 
+        .radio-input:disabled {
+          cursor: not-allowed;
+          opacity: 0.6;
+        }
+
         .text-input {
           width: 100%;
           padding: 11px 12px;
@@ -542,6 +623,11 @@ export default function FormInstalasiListrik() {
           background: #f8fbff;
         }
 
+        .text-input:disabled {
+          background: #f5f5f5;
+          cursor: not-allowed;
+        }
+
         .file-input {
           width: 100%;
           padding: 10px 12px;
@@ -552,6 +638,12 @@ export default function FormInstalasiListrik() {
           background: white;
           margin-top: 4px;
           min-height: 44px;
+        }
+
+        .file-input:disabled {
+          background: #f5f5f5;
+          cursor: not-allowed;
+          border-style: dashed;
         }
 
         .image-preview {
@@ -671,14 +763,25 @@ export default function FormInstalasiListrik() {
           transition: all 0.2s;
         }
 
-        .radio-label:hover {
+        .radio-label:hover:not(.disabled) {
           border-color: #1e88e5;
+        }
+
+        .radio-label.disabled {
+          background: #f5f5f5;
+          cursor: not-allowed;
+          border-color: #e0e0e0;
         }
 
         .radio-input-mobile {
           width: 20px;
           height: 20px;
           accent-color: #1e88e5;
+        }
+
+        .radio-input-mobile:disabled {
+          cursor: not-allowed;
+          opacity: 0.6;
         }
 
         .radio-text {
@@ -712,6 +815,11 @@ export default function FormInstalasiListrik() {
           background: #f8fbff;
         }
 
+        .text-input-mobile:disabled {
+          background: #f5f5f5;
+          cursor: not-allowed;
+        }
+
         .file-input-mobile {
           width: 100%;
           padding: 11px 12px;
@@ -723,8 +831,14 @@ export default function FormInstalasiListrik() {
           min-height: 44px;
         }
 
-        .file-input-mobile:hover {
+        .file-input-mobile:hover:not(:disabled) {
           border-color: #1e88e5;
+        }
+
+        .file-input-mobile:disabled {
+          background: #f5f5f5;
+          cursor: not-allowed;
+          border-style: solid;
         }
 
         .image-preview-mobile {
@@ -760,12 +874,12 @@ export default function FormInstalasiListrik() {
           min-height: 48px;
         }
 
-        .submit-btn:hover {
+        .submit-btn:hover:not(:disabled) {
           box-shadow: 0 6px 20px rgba(30, 136, 229, 0.35);
           transform: translateY(-2px);
         }
 
-        .submit-btn:active {
+        .submit-btn:active:not(:disabled) {
           transform: translateY(0);
         }
 
@@ -773,6 +887,7 @@ export default function FormInstalasiListrik() {
           opacity: 0.6;
           cursor: not-allowed;
           transform: none;
+          box-shadow: none;
         }
 
         /* ✅ TABLET RESPONSIVE (768px - 1024px) */
@@ -1043,4 +1158,4 @@ export default function FormInstalasiListrik() {
       `}</style>
     </div>
   );
-}
+} 

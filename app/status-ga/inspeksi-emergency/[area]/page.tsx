@@ -4,7 +4,10 @@ import { useState, useEffect, use } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
 import { Sidebar } from "@/components/Sidebar";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, QrCode } from "lucide-react";
+
+// ✅ TAMBAHKAN IMPORT HOOK SCAN VERIFICATION
+import { useScanVerification } from "@/lib/hooks/useScanVerification";
 
 const locations = {
   "genba-a": [
@@ -114,6 +117,10 @@ export default function EmergencyLampChecklist({ params }: { params: Promise<{ a
   const router = useRouter();
   const { user } = useAuth();
   const { area } = use(params);
+  
+  // ✅ TAMBAHKAN HOOK INI - WAJIB DI TOP LEVEL
+  const { isScanned, isLoading: scanLoading } = useScanVerification();
+  
   const date = new Date().toISOString().split("T")[0];
 
   const [items, setItems] = useState<any[]>([]);
@@ -125,7 +132,7 @@ export default function EmergencyLampChecklist({ params }: { params: Promise<{ a
 
   // Validasi akses
   useEffect(() => {
-    if (!user || user.role !== "inspector-ga") {
+    if (!user || user.role !== "inspector-ga-fire") {
       router.push("/home");
     }
   }, [user, router]);
@@ -232,7 +239,7 @@ export default function EmergencyLampChecklist({ params }: { params: Promise<{ a
     });
   };
 
-const handleShowPreview = () => {
+  const handleShowPreview = () => {
     for (const item of items) {
       for (const field of statusFieldKeys) {
         if (!item[field]) {
@@ -285,7 +292,7 @@ const handleShowPreview = () => {
         if (!item.lokasi || item.lokasi.trim() === '') throw new Error(`Baris ${index + 1}: Lokasi wajib diisi`);
         if (!item.id || item.id.trim() === '') throw new Error(`Baris ${index + 1}: ID wajib diisi`);
 
-for (const field of statusFieldKeys) {
+        for (const field of statusFieldKeys) {
           const value = item[field];
           if (value === undefined || value === null || value === '') {
             throw new Error(`Baris ${index + 1}: ${field} harus diisi dengan 'OK' atau 'NG'`);
@@ -433,6 +440,20 @@ for (const field of statusFieldKeys) {
           </span>
         </p>
 
+        {/* ✅ SCAN WARNING BANNER - TAMBAHAN BARU */}
+        {!isScanned && (
+          <div className="banner banner-warning scan-warning">
+            <span>🔒 Akses melalui scan QR code terlebih dahulu untuk mengisi checksheet ini.</span>
+            <button 
+              onClick={() => router.push("/scan")} 
+              className="banner-btn"
+              disabled={loading}
+            >
+              <QrCode size={14} /> Scan Sekarang
+            </button>
+          </div>
+        )}
+
         {loading && (
           <div className="loading-overlay">
             <div className="spinner"></div>
@@ -471,7 +492,8 @@ for (const field of statusFieldKeys) {
                             value={item[field.key]}
                             onChange={(e) => handleInputChange(index, field.key, e.target.value)}
                             className="status-select"
-                            disabled={loading}
+                            disabled={loading || !isScanned}
+                            title={!isScanned ? "Harap scan QR code terlebih dahulu" : ""}
                           >
                             <option value="">Pilih</option>
                             <option value="OK">OK</option>
@@ -486,7 +508,8 @@ for (const field of statusFieldKeys) {
                           onChange={(e) => handleInputChange(index, "keterangan", e.target.value)}
                           placeholder="Wajib jika NG"
                           className="notes-input"
-                          disabled={loading}
+                          disabled={loading || !isScanned}
+                          title={!isScanned ? "Harap scan QR code terlebih dahulu" : ""}
                         />
                       </td>
                       <td>
@@ -496,7 +519,8 @@ for (const field of statusFieldKeys) {
                           onChange={(e) => handleInputChange(index, "tindakanPerbaikan", e.target.value)}
                           placeholder="Tindakan..."
                           className="notes-input"
-                          disabled={loading}
+                          disabled={loading || !isScanned}
+                          title={!isScanned ? "Harap scan QR code terlebih dahulu" : ""}
                         />
                       </td>
                       <td>
@@ -520,7 +544,8 @@ for (const field of statusFieldKeys) {
                                 type="button"
                                 onClick={() => handleRemoveImage(index)}
                                 className="remove-btn"
-                                disabled={loading}
+                                disabled={loading || !isScanned}
+                                title={!isScanned ? "Harap scan QR code terlebih dahulu" : ""}
                               >
                                 ✕
                               </button>
@@ -531,14 +556,15 @@ for (const field of statusFieldKeys) {
                               )}
                             </div>
                           ) : (
-                            <label className="file-label">
+                            <label className={`file-label ${!isScanned ? 'disabled' : ''}`}
+                              title={!isScanned ? "Harap scan QR code terlebih dahulu" : ""}>
                               📷 Unggah
                               <input
                                 type="file"
                                 accept="image/*"
                                 onChange={(e) => handleImageUpload(e, index)}
                                 className="file-input"
-                                disabled={loading}
+                                disabled={loading || !isScanned}
                               />
                             </label>
                           )}
@@ -574,7 +600,8 @@ for (const field of statusFieldKeys) {
                             value={item[field.key]}
                             onChange={(e) => handleInputChange(index, field.key, e.target.value)}
                             className="status-select"
-                            disabled={loading}
+                            disabled={loading || !isScanned}
+                            title={!isScanned ? "Harap scan QR code terlebih dahulu" : ""}
                           >
                             <option value="">Pilih</option>
                             <option value="OK">OK</option>
@@ -591,7 +618,8 @@ for (const field of statusFieldKeys) {
                           onChange={(e) => handleInputChange(index, "keterangan", e.target.value)}
                           placeholder="Wajib diisi jika NG"
                           className="notes-input"
-                          disabled={loading}
+                          disabled={loading || !isScanned}
+                          title={!isScanned ? "Harap scan QR code terlebih dahulu" : ""}
                         />
                       </div>
 
@@ -603,7 +631,8 @@ for (const field of statusFieldKeys) {
                           onChange={(e) => handleInputChange(index, "tindakanPerbaikan", e.target.value)}
                           placeholder="Tindakan perbaikan..."
                           className="notes-input"
-                          disabled={loading}
+                          disabled={loading || !isScanned}
+                          title={!isScanned ? "Harap scan QR code terlebih dahulu" : ""}
                         />
                       </div>
 
@@ -631,7 +660,8 @@ for (const field of statusFieldKeys) {
                                 type="button"
                                 onClick={() => handleRemoveImage(index)}
                                 className="remove-btn"
-                                disabled={loading}
+                                disabled={loading || !isScanned}
+                                title={!isScanned ? "Harap scan QR code terlebih dahulu" : ""}
                               >
                                 ✕
                               </button>
@@ -642,14 +672,15 @@ for (const field of statusFieldKeys) {
                               )}
                             </div>
                           ) : (
-                            <label className="file-label file-label-large">
+                            <label className={`file-label file-label-large ${!isScanned ? 'disabled' : ''}`}
+                              title={!isScanned ? "Harap scan QR code terlebih dahulu" : ""}>
                               📷 Unggah Foto
                               <input
                                 type="file"
                                 accept="image/*"
                                 onChange={(e) => handleImageUpload(e, index)}
                                 className="file-input"
-                                disabled={loading}
+                                disabled={loading || !isScanned}
                               />
                             </label>
                           )}
@@ -672,7 +703,8 @@ for (const field of statusFieldKeys) {
               <button
                 onClick={handleShowPreview}
                 className="btn-submit"
-                disabled={loading}
+                disabled={loading || !isScanned}
+                title={!isScanned ? "Harap scan QR code terlebih dahulu" : ""}
               >
                 👁️ Preview & Simpan
               </button>
@@ -796,14 +828,16 @@ for (const field of statusFieldKeys) {
                   <button
                     onClick={handleReportNg}
                     className="report-btn"
-                    disabled={loading}
+                    disabled={loading || !isScanned}
+                    title={!isScanned ? "Harap scan QR code terlebih dahulu" : ""}
                   >
                     📢 Laporkan NG
                   </button>
                   <button
                     onClick={handleSave}
                     className="save-btn"
-                    disabled={loading}
+                    disabled={loading || !isScanned}
+                    title={!isScanned ? "Harap scan QR code terlebih dahulu" : ""}
                   >
                     💾 Simpan Tanpa Lapor
                   </button>
@@ -812,7 +846,8 @@ for (const field of statusFieldKeys) {
                 <button
                   onClick={handleSave}
                   className="save-btn"
-                  disabled={loading}
+                  disabled={loading || !isScanned}
+                  title={!isScanned ? "Harap scan QR code terlebih dahulu" : ""}
                 >
                   💾 Simpan Data
                 </button>
@@ -913,6 +948,57 @@ for (const field of statusFieldKeys) {
           padding: 4px 12px;
           border-radius: 8px;
           letter-spacing: 0.3px;
+        }
+
+        /* Banners */
+        .banner {
+          border-radius: 10px;
+          padding: 12px 18px;
+          margin-bottom: 18px;
+          display: flex;
+          align-items: center;
+          gap: 10px;
+          font-weight: 500;
+        }
+        .banner-warning {
+          background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
+          border: 1px solid #f59e0b;
+          color: #92400e;
+          box-shadow: 0 2px 8px rgba(245,158,11,0.12);
+        }
+        .banner-btn {
+          margin-left: auto;
+          background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+          color: white;
+          border: none;
+          border-radius: 7px;
+          padding: 8px 16px;
+          cursor: pointer;
+          font-size: 0.85rem;
+          font-weight: 600;
+          transition: all 0.2s;
+          box-shadow: 0 2px 6px rgba(245,158,11,0.3);
+          display: inline-flex;
+          align-items: center;
+          gap: 6px;
+          min-height: 36px;
+        }
+        .banner-btn:hover {
+          transform: translateY(-1px);
+          box-shadow: 0 4px 10px rgba(245,158,11,0.4);
+        }
+        .scan-warning {
+          background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
+          border-left: 4px solid #f59e0b;
+          justify-content: space-between;
+        }
+        .scan-warning .banner-btn {
+          background: linear-gradient(135deg, #7c3aed 0%, #5b21b6 100%);
+          padding: 8px 16px;
+        }
+        .scan-warning .banner-btn:hover {
+          transform: translateY(-1px);
+          box-shadow: 0 4px 10px rgba(124, 58, 237, 0.4);
         }
 
         .card-container {
@@ -1182,6 +1268,12 @@ for (const field of statusFieldKeys) {
           display: flex;
           align-items: center;
           justify-content: center;
+        }
+        
+        .file-label.disabled {
+          background: rgba(255,255,255,0.5);
+          cursor: not-allowed;
+          color: #666;
         }
 
         .file-label-large {

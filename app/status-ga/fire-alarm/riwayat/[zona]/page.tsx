@@ -97,7 +97,7 @@ export default function RiwayatFireAlarm({ params }: { params: Promise<{ zona: s
   // 🔐 AUTH & INIT
   // ==========================================
   useEffect(() => {
-    if (!user || user.role !== "inspector-ga") {
+    if (!user || user.role !== "inspector-ga-fire") {
       router.push("/home");
     }
   }, [user, router]);

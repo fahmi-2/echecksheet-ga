@@ -1,7 +1,7 @@
 // app/status-ga/inf-jalan/GaInfJalanContent.tsx
 "use client";
 import { useState, useEffect, useRef } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
 import { Sidebar } from "@/components/Sidebar";
 import { ArrowLeft, Plus, Trash2, Edit2, X } from "lucide-react";
@@ -23,10 +23,15 @@ interface Area {
 
 export function GaInfJalanContent() {
   const router = useRouter();
-  const searchParams = useSearchParams();
   const { user, loading: authLoading, isInitialized } = useAuth();
-  
-  const openAreaParam = searchParams.get('openArea') || '';
+
+  // ✅ FIX: Use native URL API instead of useSearchParams hook to avoid conflicts
+  const getQueryParam = (name: string): string => {
+    if (typeof window === 'undefined') return '';
+    return new URLSearchParams(window.location.search).get(name) || '';
+  };
+
+  const openAreaParam = getQueryParam('openArea');
   const TYPE_SLUG = 'inf-jalan';
   
   const [isMounted, setIsMounted] = useState(false);
@@ -180,12 +185,12 @@ export function GaInfJalanContent() {
       setAuthVerified(false);
       return;
     }
-    if (user && user.role === "inspector-ga") {
+    if (user && user.role === "inspector-ga-personal") {
       setAuthVerified(true);
       return;
     }
     const verificationTimeout = setTimeout(() => {
-      if (!user || user.role !== "inspector-ga") {
+      if (!user || user.role !== "inspector-ga-personal") {
         router.push("/login-page");
       } else {
         setAuthVerified(true);

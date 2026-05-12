@@ -5,6 +5,10 @@ import { useRouter, useSearchParams, useParams } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
 import { Sidebar } from "@/components/Sidebar";
 import { format } from "date-fns";
+import { QrCode } from "lucide-react";
+
+// ✅ TAMBAHKAN IMPORT HOOK SCAN VERIFICATION
+import { useScanVerification } from "@/lib/hooks/useScanVerification";
 
 type SubItem = {
   id: string;
@@ -197,6 +201,10 @@ export default function InspeksiFormDetailPage() {
   const params = useParams();
   const searchParams = useSearchParams();
   const { user } = useAuth();
+  
+  // ✅ TAMBAHKAN HOOK INI - WAJIB DI TOP LEVEL
+  const { isScanned, isLoading: scanLoading } = useScanVerification();
+  
   const [redirected, setRedirected] = useState(false);
   const [loading, setLoading] = useState(false);
   const [expandedItems, setExpandedItems] = useState<Record<string, boolean>>({});
@@ -453,6 +461,20 @@ export default function InspeksiFormDetailPage() {
           {item.title}
         </h1>
         
+        {/* ✅ SCAN WARNING BANNER - TAMBAHAN BARU */}
+        {!isScanned && !isViewMode && (
+          <div className="banner banner-warning scan-warning">
+            <span>🔒 Akses melalui scan QR code terlebih dahulu untuk mengisi checksheet ini.</span>
+            <button 
+              onClick={() => router.push("/scan")} 
+              className="banner-btn"
+              disabled={loading}
+            >
+              <QrCode size={14} /> Scan Sekarang
+            </button>
+          </div>
+        )}
+        
         {item.imageKey && (
           <div className="ref-image">
             <img
@@ -501,22 +523,22 @@ export default function InspeksiFormDetailPage() {
                         </span>
                       ) : (
                         <div className="radio-group">
-                          <label>
+                          <label title={!isScanned ? "Harap scan QR code terlebih dahulu" : ""}>
                             <input
                               type="radio"
                               name={`status-${sub.id}`}
                               checked={entry?.status === "OK"}
                               onChange={() => handleStatusChange(sub.id, "OK")}
-                              disabled={isViewMode || loading}
+                              disabled={isViewMode || loading || !isScanned}
                             /> OK
                           </label>
-                          <label>
+                          <label title={!isScanned ? "Harap scan QR code terlebih dahulu" : ""}>
                             <input
                               type="radio"
                               name={`status-${sub.id}`}
                               checked={entry?.status === "NG"}
                               onChange={() => handleStatusChange(sub.id, "NG")}
-                              disabled={isViewMode || loading}
+                              disabled={isViewMode || loading || !isScanned}
                             /> NG
                           </label>
                         </div>
@@ -550,7 +572,8 @@ export default function InspeksiFormDetailPage() {
                               value={entry.keterangan || ""}
                               onChange={(e) => handleInputChange(sub.id, "keterangan", e.target.value)}
                               className="text-input"
-                              disabled={isViewMode || loading}
+                              disabled={isViewMode || loading || !isScanned}
+                              title={!isScanned ? "Harap scan QR code terlebih dahulu" : ""}
                             />
                           )}
                         </td>
@@ -561,7 +584,8 @@ export default function InspeksiFormDetailPage() {
                               value={entry.solusi || ""}
                               onChange={(e) => handleInputChange(sub.id, "solusi", e.target.value)}
                               className="text-input"
-                              disabled={isViewMode || loading}
+                              disabled={isViewMode || loading || !isScanned}
+                              title={!isScanned ? "Harap scan QR code terlebih dahulu" : ""}
                             />
                           )}
                         </td>
@@ -570,7 +594,8 @@ export default function InspeksiFormDetailPage() {
                             type="file" 
                             accept="image/*" 
                             onChange={(e) => handleImageUpload(sub.id, e)}
-                            disabled={isViewMode || loading}
+                            disabled={isViewMode || loading || !isScanned}
+                            title={!isScanned ? "Harap scan QR code terlebih dahulu" : ""}
                             className="file-input"
                           />
                           {entry?.foto_path && (
@@ -639,23 +664,25 @@ export default function InspeksiFormDetailPage() {
                         </span>
                       ) : (
                         <div className="radio-group-mobile">
-                          <label className="radio-label">
+                          <label className={`radio-label ${!isScanned ? 'disabled' : ''}`}
+                            title={!isScanned ? "Harap scan QR code terlebih dahulu" : ""}>
                             <input
                               type="radio"
                               name={`status-mobile-${sub.id}`}
                               checked={entry?.status === "OK"}
                               onChange={() => handleStatusChange(sub.id, "OK")}
-                              disabled={isViewMode || loading}
+                              disabled={isViewMode || loading || !isScanned}
                             />
                             <span className="radio-text ok">OK</span>
                           </label>
-                          <label className="radio-label">
+                          <label className={`radio-label ${!isScanned ? 'disabled' : ''}`}
+                            title={!isScanned ? "Harap scan QR code terlebih dahulu" : ""}>
                             <input
                               type="radio"
                               name={`status-mobile-${sub.id}`}
                               checked={entry?.status === "NG"}
                               onChange={() => handleStatusChange(sub.id, "NG")}
-                              disabled={isViewMode || loading}
+                              disabled={isViewMode || loading || !isScanned}
                             />
                             <span className="radio-text ng">NG</span>
                           </label>
@@ -672,7 +699,8 @@ export default function InspeksiFormDetailPage() {
                             value={entry.keterangan || ""}
                             onChange={(e) => handleInputChange(sub.id, "keterangan", e.target.value)}
                             className="text-input-mobile"
-                            disabled={isViewMode || loading}
+                            disabled={isViewMode || loading || !isScanned}
+                            title={!isScanned ? "Harap scan QR code terlebih dahulu" : ""}
                           />
                         </div>
 
@@ -683,7 +711,8 @@ export default function InspeksiFormDetailPage() {
                             value={entry.solusi || ""}
                             onChange={(e) => handleInputChange(sub.id, "solusi", e.target.value)}
                             className="text-input-mobile"
-                            disabled={isViewMode || loading}
+                            disabled={isViewMode || loading || !isScanned}
+                            title={!isScanned ? "Harap scan QR code terlebih dahulu" : ""}
                           />
                         </div>
 
@@ -693,7 +722,8 @@ export default function InspeksiFormDetailPage() {
                             type="file" 
                             accept="image/*" 
                             onChange={(e) => handleImageUpload(sub.id, e)}
-                            disabled={isViewMode || loading}
+                            disabled={isViewMode || loading || !isScanned}
+                            title={!isScanned ? "Harap scan QR code terlebih dahulu" : ""}
                             className="file-input-mobile"
                           />
                           {entry?.foto_path && (
@@ -754,7 +784,8 @@ export default function InspeksiFormDetailPage() {
             <button 
               onClick={handleSubmit} 
               className="btn-primary"
-              disabled={loading}
+              disabled={loading || !isScanned}
+              title={!isScanned ? "Harap scan QR code terlebih dahulu" : ""}
             >
               {loading ? 'Menyimpan...' : 'Simpan Hasil'}
             </button>
@@ -822,6 +853,37 @@ export default function InspeksiFormDetailPage() {
           font-weight: 500;
         }
 
+        /* ── Banners ────────────────────────────────────── */
+        .banner {
+          border-radius: 10px; padding: 12px 18px; margin-bottom: 18px;
+          display: flex; align-items: center; gap: 10px; font-weight: 500;
+        }
+        .banner-warning {
+          background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
+          border: 1px solid #f59e0b; color: #92400e;
+          box-shadow: 0 2px 8px rgba(245,158,11,0.12);
+        }
+        .banner-btn {
+          margin-left: auto; background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+          color: white; border: none; border-radius: 7px; padding: 8px 16px;
+          cursor: pointer; font-size: 0.85rem; font-weight: 600; transition: all 0.2s;
+          box-shadow: 0 2px 6px rgba(245,158,11,0.3);
+          display: inline-flex; align-items: center; gap: 6px; min-height: 36px;
+        }
+        .banner-btn:hover { transform: translateY(-1px); box-shadow: 0 4px 10px rgba(245,158,11,0.4); }
+        .banner-btn:disabled { opacity: 0.6; cursor: not-allowed; transform: none; }
+        .scan-warning {
+          background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
+          border-left: 4px solid #f59e0b; justify-content: space-between;
+        }
+        .scan-warning .banner-btn {
+          background: linear-gradient(135deg, #7c3aed 0%, #5b21b6 100%);
+          padding: 8px 16px;
+        }
+        .scan-warning .banner-btn:hover {
+          transform: translateY(-1px); box-shadow: 0 4px 10px rgba(124, 58, 237, 0.4);
+        }
+
         /* Desktop View */
         .desktop-view {
           display: block;
@@ -876,11 +938,21 @@ export default function InspeksiFormDetailPage() {
           cursor: pointer;
         }
 
+        .radio-group label.disabled {
+          color: #999;
+          cursor: not-allowed;
+        }
+
         .radio-group input[type="radio"] {
           cursor: pointer;
           width: 20px;
           height: 20px;
           accent-color: #1e88e5;
+        }
+
+        .radio-group input[type="radio"]:disabled {
+          cursor: not-allowed;
+          opacity: 0.6;
         }
 
         .text-input {
@@ -943,12 +1015,12 @@ export default function InspeksiFormDetailPage() {
           min-height: 48px;
         }
 
-        .btn-primary:hover {
+        .btn-primary:hover:not(:disabled) {
           box-shadow: 0 6px 20px rgba(30, 136, 229, 0.35);
           transform: translateY(-2px);
         }
 
-        .btn-primary:active {
+        .btn-primary:active:not(:disabled) {
           transform: translateY(0);
         }
 
@@ -956,6 +1028,7 @@ export default function InspeksiFormDetailPage() {
           opacity: 0.6;
           cursor: not-allowed;
           transform: none;
+          box-shadow: none;
         }
 
         .status-ok {
@@ -1112,14 +1185,25 @@ export default function InspeksiFormDetailPage() {
           transition: all 0.2s;
         }
 
-        .radio-label:hover {
+        .radio-label:hover:not(.disabled) {
           border-color: #1e88e5;
+        }
+
+        .radio-label.disabled {
+          background: #f5f5f5;
+          cursor: not-allowed;
+          border-color: #e0e0e0;
         }
 
         .radio-label input[type="radio"] {
           width: 20px;
           height: 20px;
           accent-color: #1e88e5;
+        }
+
+        .radio-label input[type="radio"]:disabled {
+          cursor: not-allowed;
+          opacity: 0.6;
         }
 
         .radio-text {
@@ -1174,9 +1258,14 @@ export default function InspeksiFormDetailPage() {
           min-height: 44px;
         }
 
+        .file-input-mobile:hover:not(:disabled) {
+          border-color: #1e88e5;
+        }
+
         .file-input-mobile:disabled {
           cursor: not-allowed;
           opacity: 0.5;
+          border-style: solid;
         }
 
         .image-preview-mobile {
@@ -1448,6 +1537,18 @@ export default function InspeksiFormDetailPage() {
             height: 50px;
           }
         }
+
+        /* ── Touch-friendly ─────────────────────────────── */
+        @media (hover: none) and (pointer: coarse) {
+          .text-input, .text-input-mobile, .file-input, .file-input-mobile {
+            font-size: 16px; min-height: 44px;
+          }
+          .btn-primary { min-height: 44px; }
+        }
+        
+        *, *::before, *::after { box-sizing: border-box; }
+        img, svg, video { max-width: 100%; height: auto; display: block; }
+        html, body { overflow-x: hidden; width: 100%; min-width: 0; }
       `}</style>
     </div>
   );

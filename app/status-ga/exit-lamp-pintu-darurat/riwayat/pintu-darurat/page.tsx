@@ -68,7 +68,7 @@ export default function RiwayatPintuDarurat() {
 
   // Validasi akses
   useEffect(() => {
-    if (!user || user.role !== "inspector-ga") {
+    if (!user || user.role !== "inspector-ga-fire") {
       router.push("/home");
     }
   }, [user, router]);

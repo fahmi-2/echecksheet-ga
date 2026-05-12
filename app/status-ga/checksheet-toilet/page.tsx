@@ -16,7 +16,7 @@ export default function ChecksheetToiletListPage() {
 
   useEffect(() => {
     if (redirected) return;
-    if (!user || user.role !== "inspector-ga") {
+    if (!user || user.role !== "inspector-ga-facility") {
       setRedirected(true);
       router.push("/home");
     }

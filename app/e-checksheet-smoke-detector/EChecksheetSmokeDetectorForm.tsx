@@ -1,7 +1,7 @@
 // app/e-checksheet-smoke-detector/EChecksheetSmokeDetectorForm.tsx
 "use client";
 import { useState, useEffect, useRef, useMemo } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
 import { Sidebar } from "@/components/Sidebar";
 
@@ -75,14 +75,19 @@ const groupDatesByYearMonth = (dates: string[]) => {
 
 export function EChecksheetSmokeDetectorForm() {
   const router = useRouter();
-  const searchParams = useSearchParams();
   const { user, loading: authLoading, isInitialized } = useAuth();
-  
+
+  // ✅ FIX: Use native URL API instead of useSearchParams hook to avoid conflicts
+  const getQueryParam = (name: string): string => {
+    if (typeof window === 'undefined') return '';
+    return new URLSearchParams(window.location.search).get(name) || '';
+  };
+
   // ✅ Ambil areaId dari query string
-  const areaId = searchParams.get('areaId');
-  const locationParam = searchParams.get('location');
-  const unitParam = searchParams.get('unit');
-  
+  const areaId = getQueryParam('areaId');
+  const locationParam = getQueryParam('location');
+  const unitParam = getQueryParam('unit');
+
   const [isMounted, setIsMounted] = useState(false);
   const [selectedDate, setSelectedDate] = useState("");
   
@@ -129,7 +134,7 @@ export function EChecksheetSmokeDetectorForm() {
       console.log('⏳ Waiting for user data...');
       return;
     }
-    if (user.role !== "inspector-ga" && user.role !== "group-leader-qa") {
+    if (user.role !== "inspector-ga-fire" && user.role !== "group-leader-qa") {
       console.warn('⚠️ Unauthorized - wrong role:', user.role);
       router.replace("/login-page");
       return;
