@@ -1,10 +1,9 @@
 // app/e-checksheet-hydrant/EChecksheetHydrantForm.tsx
 "use client";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
 import { Sidebar } from "@/components/Sidebar";
-// ✅ Import API helper yang reusable
 import {
   getItemsByType,
   getChecklistByDate,
@@ -20,16 +19,13 @@ export function EChecksheetHydrantForm() {
   const searchParams = useSearchParams();
   const { user, loading } = useAuth();
   
-  // ✅ Get params dari URL (BUKAN props)
   const no = searchParams.get('no') || '';
   const lokasi = searchParams.get('lokasi') || '';
   const zona = searchParams.get('zona') || '';
   const jenisHydrant = searchParams.get('jenisHydrant') || '';
   
-  // ✅ Hardcode type slug untuk page ini
   const TYPE_SLUG = 'inspeksi-hydrant';
   
-  // ✅ SEMUA HOOKS DI ATAS — TANPA KONDISI
   const [isMounted, setIsMounted] = useState(false);
   const [selectedDate, setSelectedDate] = useState("");
   const [items, setItems] = useState<Record<string, string>>({});
@@ -43,58 +39,16 @@ export function EChecksheetHydrantForm() {
   const [availableDates, setAvailableDates] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   
-  // ✅ Modal gambar
+  // Image states
+  const [images, setImages] = useState<{ key: string; url: string }[]>([]);
   const [showImageModal, setShowImageModal] = useState(false);
   const [currentImage, setCurrentImage] = useState("");
-
-  // ✅ Load inspection items dari API berdasarkan type
-  useEffect(() => {
-    const loadItems = async () => {
-      try {
-        const items = await getItemsByType(TYPE_SLUG);
-        console.log('✅ Loaded inspection items:', items);
-        setInspectionItems(items);
-      } catch (error) {
-        console.error("❌ Failed to load checklist items:", error);
-        alert("Gagal memuat daftar item checklist. Silakan refresh halaman.");
-      }
-    };
-    loadItems();
-  }, []);
-
-  // ✅ Load areaId dan available dates
-  useEffect(() => {
-    if (!no || !isMounted) return;
-    
-    const loadAreaData = async () => {
-      try {
-        console.log('🔍 Searching for area with no:', no);
-        const areas = await getAreasByType(TYPE_SLUG);
-        console.log('📋 Available areas:', areas);
-        
-        // ✅ Cari area berdasarkan nomor (no)
-        const area = areas.find((a: any) => a.no.toString() === no);
-        
-        if (area) {
-          console.log('✅ Found area:', area);
-          setAreaId(area.id);
-          
-          // Load available dates untuk area ini
-          const dates = await getAvailableDates(TYPE_SLUG, area.id);
-          console.log('📅 Available dates:', dates);
-          setAvailableDates(dates);
-        } else {
-          console.warn('⚠️ Area not found with no:', no);
-          alert(`Area dengan nomor "${no}" tidak ditemukan di database.`);
-        }
-      } catch (error) {
-        console.error("❌ Failed to load area data:", error);
-        alert("Gagal memuat data area. Silakan coba lagi.");
-      }
-    };
-
-    loadAreaData();
-  }, [no, isMounted]);
+  const [showCameraModal, setShowCameraModal] = useState(false);
+  const [cameraStream, setCameraStream] = useState<MediaStream | null>(null);
+  const [currentItemKey, setCurrentItemKey] = useState("");
+  
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
 
   useEffect(() => {
     setIsMounted(true);
@@ -102,47 +56,137 @@ export function EChecksheetHydrantForm() {
 
   useEffect(() => {
     if (!isMounted || loading) return;
-    if (!user || (user.role !== "inspector-ga")) {
-      console.log('❌ User not authorized, redirecting to login');
+    if (!user || user.role !== "inspector-ga") {
       router.push("/login-page");
     }
   }, [user, loading, router, isMounted]);
 
-  // ✅ Save to API (BUKAN localStorage)
+  useEffect(() => {
+    const loadItems = async () => {
+      try {
+        const items = await getItemsByType(TYPE_SLUG);
+        setInspectionItems(items);
+      } catch (error) {
+        console.error("❌ Failed to load checklist items:", error);
+        alert("Gagal memuat daftar item checklist.");
+      }
+    };
+    loadItems();
+  }, []);
+
+  useEffect(() => {
+    if (!no || !isMounted) return;
+    const loadAreaData = async () => {
+      try {
+        const areas = await getAreasByType(TYPE_SLUG);
+        const area = areas.find((a: any) => a.no.toString() === no);
+        if (area) {
+          setAreaId(area.id);
+          const dates = await getAvailableDates(TYPE_SLUG, area.id);
+          setAvailableDates(dates);
+        } else {
+          alert(`Area dengan nomor "${no}" tidak ditemukan.`);
+        }
+      } catch (error) {
+        console.error("❌ Failed to load area data:", error);
+        alert("Gagal memuat data area.");
+      }
+    };
+    loadAreaData();
+  }, [no, isMounted]);
+
+  // Camera useEffect
+  useEffect(() => {
+    if (!showCameraModal) return;
+    const startCamera = async () => {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: "environment" }
+        });
+        setCameraStream(stream);
+        if (videoRef.current) {
+          videoRef.current.srcObject = stream;
+        }
+      } catch (err) {
+        console.error("❌ Gagal membuka kamera:", err);
+        alert("Tidak bisa mengakses kamera. Pastikan izin kamera diaktifkan.");
+        setShowCameraModal(false);
+      }
+    };
+    startCamera();
+    return () => {
+      if (cameraStream) {
+        cameraStream.getTracks().forEach(track => track.stop());
+      }
+    };
+  }, [showCameraModal]);
+
+  const handleLoadExisting = async () => {
+    if (!selectedDate || !areaId) {
+      alert("Pilih tanggal terlebih dahulu!");
+      return;
+    }
+    try {
+      setIsLoading(true);
+      const data = await getChecklistByDate(TYPE_SLUG, areaId, selectedDate);
+      if (data) {
+        const existingData: Record<string, string> = {};
+        const loadedImages: { key: string; url: string }[] = [];
+
+        inspectionItems.forEach((item) => {
+          const itemData = data[item.item_key];
+          existingData[item.item_key] = itemData?.hasilPemeriksaan || "";
+          if (itemData?.images && Array.isArray(itemData.images)) {
+            itemData.images.forEach((url: string) => {
+              loadedImages.push({ key: item.item_key, url });
+            });
+          }
+        });
+
+        setItems(existingData);
+        setImages(loadedImages);
+        const firstItemKey = inspectionItems[0]?.item_key;
+        setKeteranganKondisi(data[firstItemKey]?.keteranganTemuan || "");
+        setTindakanPerbaikan(data[firstItemKey]?.tindakanPerbaikan || "");
+        setPic(data[firstItemKey]?.pic || "");
+        setDueDate(data[firstItemKey]?.dueDate || "");
+        setVerify(data[firstItemKey]?.verify || "");
+        alert("✅ Data berhasil dimuat!");
+      } else {
+        alert("⚠️ Tidak ada data untuk tanggal ini.");
+        resetForm();
+      }
+    } catch (error) {
+      console.error("❌ Error loading checklist data:", error);
+      alert("Gagal memuat data.");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const resetForm = () => {
+    setItems({});
+    setImages([]);
+    setKeteranganKondisi("");
+    setTindakanPerbaikan("");
+    setPic("");
+    setDueDate("");
+    setVerify("");
+  };
+
   const handleSave = async () => {
-    if (!user) {
-      alert("User belum login");
-      router.push("/login-page");
+    if (!user || !selectedDate || !areaId) {
+      alert("Lengkapi data terlebih dahulu!");
       return;
     }
-    
-    if (!selectedDate) {
-      alert("Pilih tanggal pemeriksaan terlebih dahulu!");
-      return;
-    }
-
-    if (!areaId) {
-      alert("Area tidak valid!");
-      return;
-    }
-
-    // Validasi semua item sudah diisi
-    const allFieldsFilled = inspectionItems.every((item) => 
-      items[item.item_key]
-    );
-
+    const allFieldsFilled = inspectionItems.every((item) => items[item.item_key]);
     if (!allFieldsFilled) {
       alert("Mohon isi Hasil Pemeriksaan untuk semua item!");
       return;
     }
-
     try {
       setIsLoading(true);
-      console.log('💾 Saving checklist data...');
-
-      // Format data untuk API
       const checklistData: ChecklistData = {};
-      
       inspectionItems.forEach((item) => {
         checklistData[item.item_key] = {
           date: selectedDate,
@@ -153,14 +197,10 @@ export function EChecksheetHydrantForm() {
           dueDate: dueDate,
           verify: verify,
           inspector: user.fullName || "",
-          images: [], // Hydrant tidak memiliki upload image per item
+          images: images.filter(img => img.key === item.item_key).map(img => img.url),
           notes: ""
         };
       });
-
-      console.log('📤 Checklist data to save:', checklistData);
-
-      // Save ke API
       await saveChecklist(
         TYPE_SLUG,
         areaId,
@@ -169,79 +209,41 @@ export function EChecksheetHydrantForm() {
         user.id || "unknown",
         user.fullName || "Unknown Inspector"
       );
-
-      alert(`✅ Data berhasil disimpan untuk tanggal ${new Date(selectedDate).toLocaleDateString("id-ID")}`);
-      
-      // Redirect ke status page
+      alert(`✅ Data berhasil disimpan!`);
       router.push(`/status-ga/inspeksi-hydrant`);
     } catch (error) {
-      console.error("❌ Error saving checklist data:", error);
-      alert("Gagal menyimpan data. Silakan coba lagi.");
+      console.error("❌ Error saving:", error);
+      alert("Gagal menyimpan data.");
     } finally {
       setIsLoading(false);
     }
   };
 
-  // ✅ Load existing data dari API
-  const handleLoadExisting = async () => {
-    if (!selectedDate) {
-      alert("Pilih tanggal terlebih dahulu!");
-      return;
-    }
-    
-    if (!areaId) {
-      alert("Area tidak valid!");
-      return;
-    }
-
-    try {
-      setIsLoading(true);
-      console.log('📥 Loading data for date:', selectedDate);
-      
-      const data = await getChecklistByDate(TYPE_SLUG, areaId, selectedDate);
-      
-      if (data) {
-        const existingData: Record<string, string> = {};
-        
-        // Ambil data dari salah satu item (karena hydrant menggunakan field global)
-        const firstItemKey = Object.keys(data)[0];
-        const firstItemData = data[firstItemKey];
-        
-        inspectionItems.forEach((item) => {
-          existingData[item.item_key] = data[item.item_key]?.hasilPemeriksaan || "";
-        });
-
-        setItems(existingData);
-        setKeteranganKondisi(firstItemData?.keteranganTemuan || "");
-        setTindakanPerbaikan(firstItemData?.tindakanPerbaikan || "");
-        setPic(firstItemData?.pic || "");
-        setDueDate(firstItemData?.dueDate || "");
-        setVerify(firstItemData?.verify || "");
-        
-        alert("✅ Data berhasil dimuat!");
-      } else {
-        alert("⚠️ Tidak ada data untuk tanggal ini.");
-        setItems({});
-        setKeteranganKondisi("");
-        setTindakanPerbaikan("");
-        setPic("");
-        setDueDate("");
-        setVerify("");
-      }
-    } catch (error) {
-      console.error("❌ Error loading checklist data:", error);
-      alert("Gagal memuat data. Silakan coba lagi.");
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const handleInputChange = (field: string, value: string): void => {
+  const handleInputChange = (field: string, value: string) => {
     setItems((prev) => ({ ...prev, [field]: value }));
   };
 
-  const openImageModal = (imgPath: string) => {
-    setCurrentImage(imgPath);
+  // Image upload handler
+  const handleImageUpload = (event: React.ChangeEvent<HTMLInputElement>, itemKey: string) => {
+    const files = event.target.files;
+    if (!files) return;
+    Array.from(files).forEach(file => {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setImages(prev => [...prev, { key: itemKey, url: reader.result as string }]);
+      };
+      reader.readAsDataURL(file);
+    });
+  };
+
+  // Remove image
+  const removeImage = (index: number) => {
+    setImages(prev => prev.filter((_, i) => i !== index));
+  };
+
+  // Open image modal
+  const openImageModal = (imgUrl: string) => {
+    setCurrentImage(imgUrl);
     setShowImageModal(true);
   };
 
@@ -250,937 +252,583 @@ export function EChecksheetHydrantForm() {
     setCurrentImage("");
   };
 
-  // ✅ FIX: Hitung tanggal maksimum dengan benar (hari ini)
+  // Open camera for specific item
+  const openCamera = (itemKey: string) => {
+    setCurrentItemKey(itemKey);
+    setShowCameraModal(true);
+  };
+
+  // Capture image from camera
+  const captureImage = () => {
+    if (!videoRef.current || !canvasRef.current) return;
+    const video = videoRef.current;
+    const canvas = canvasRef.current;
+    const context = canvas.getContext('2d');
+    if (!context) return;
+
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    context.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+    const imageUrl = canvas.toDataURL('image/jpeg', 0.8);
+    setImages(prev => [...prev, { key: currentItemKey, url: imageUrl }]);
+    setShowCameraModal(false);
+    if (cameraStream) {
+      cameraStream.getTracks().forEach(track => track.stop());
+    }
+  };
+
   const getMaxDate = () => {
     const today = new Date();
-    today.setHours(23, 59, 59, 999); // Set ke akhir hari
+    today.setHours(23, 59, 59, 999);
     return today.toISOString().split('T')[0];
   };
 
-  if (!isMounted) return null;
-  if (loading) {
+  if (!isMounted || loading) {
     return (
-      <div style={{ 
-        display: "flex", 
-        justifyContent: "center", 
-        alignItems: "center", 
-        minHeight: "100vh", 
-        background: "#f5f5f5" 
-      }}>
+      <div style={{ display: "flex", justifyContent: "center", alignItems: "center", minHeight: "100vh", background: "#f5f5f5" }}>
         <p style={{ fontSize: "16px", color: "#666" }}>Loading...</p>
       </div>
     );
   }
-  if (!user || (user.role !== "inspector-ga")) {
+
+  if (!user || user.role !== "inspector-ga") {
     return null;
   }
 
   return (
-    <div style={{ minHeight: "100vh", background: "#f7f9fc" }}>
+    <div style={{ minHeight: "100vh", background: "#f8f9fa" }}>
       <Sidebar userName={user.fullName} />
-      <div style={{
-        paddingLeft: "96px",
-        paddingRight: "20px",
-        paddingTop: "24px",
-        paddingBottom: "24px",
-        maxWidth: "100%",
-        margin: "0 auto"
-      }}>
+      <div className="page-content">
         {/* Header */}
-        <div style={{ marginBottom: "28px" }}>
+        <div style={{ marginBottom: "24px" }}>
           <div style={{
-            background: "#1976d2",
-            borderRadius: "8px",
-            padding: "20px 24px",
-            boxShadow: "0 2px 8px rgba(0,0,0,0.1)"
+            background: "linear-gradient(135deg, #1976d2 0%, #1565c0 100%)",
+            borderRadius: "12px",
+            padding: "24px",
+            boxShadow: "0 4px 12px rgba(25,118,210,0.2)"
           }}>
-            <h1 style={{ 
-              margin: "0 0 6px 0", 
-              color: "white", 
-              fontSize: "26px", 
-              fontWeight: "600", 
-              letterSpacing: "-0.5px" 
-            }}>
-              Hydrant Inspection Form
+            <h1 style={{ margin: "0 0 8px 0", color: "white", fontSize: "28px", fontWeight: "700" }}>
+              🔥 Hydrant Inspection Form
             </h1>
-            <p style={{ 
-              margin: 0, 
-              color: "#e3f2fd", 
-              fontSize: "14px" 
-            }}>
-              Monthly inspection checklist (20 items)
+            <p style={{ margin: 0, color: "rgba(255,255,255,0.9)", fontSize: "14px" }}>
+              Monthly inspection checklist • {inspectionItems.length} items
             </p>
           </div>
+        </div>
 
-          {/* Info Area */}
-          <div style={{
-            background: "white",
-            border: "1px solid #e0e0e0",
-            borderRadius: "8px",
-            padding: "20px 24px",
-            boxShadow: "0 1px 3px rgba(0,0,0,0.08)",
-            marginBottom: "24px",
-          }}>
-            <div style={{ 
-              display: "grid", 
-              gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", 
-              gap: "16px" 
-            }}>
-              <div style={{ color: "black" }}>
-                <strong>Unit No:</strong> {no}
-              </div>
-              <div style={{ color: "black" }}>
-                <strong>Location:</strong> {lokasi}
-              </div>
-              <div style={{ color: "black" }}>
-                <strong>Zone:</strong> {zona}
-              </div>
-              <div style={{ color: "black" }}>
-                <strong>Type:</strong> {jenisHydrant}
-              </div>
-              <div style={{ color: "black" }}>
-                <strong>Inspector:</strong> {user.fullName}
-              </div>
-            </div>
+        {/* Info Card */}
+        <div style={{
+          background: "white",
+          borderRadius: "12px",
+          padding: "20px",
+          boxShadow: "0 2px 8px rgba(0,0,0,0.08)",
+          marginBottom: "20px",
+          border: "1px solid #e0e0e0"
+        }}>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: "16px" }}>
+            <InfoItem label="Unit No" value={no} />
+            <InfoItem label="Location" value={lokasi} />
+            <InfoItem label="Zone" value={zona} />
+            <InfoItem label="Type" value={jenisHydrant} />
+            <InfoItem label="Inspector" value={user.fullName} />
+            <InfoItem label="Frequency" value="Monthly" />
           </div>
+        </div>
 
-          {/* Date Selection */}
-          <div style={{
-            background: "white",
-            border: "1px solid #e0e0e0",
-            borderRadius: "8px",
-            padding: "20px 24px",
-            boxShadow: "0 1px 3px rgba(0,0,0,0.08)",
-            marginBottom: "24px",
-          }}>
-            <div style={{ marginBottom: "16px" }}>
-              <span style={{ 
-                fontWeight: "500", 
-                color: "#212121", 
-                fontSize: "15px" 
-              }}>
-                Inspection Schedule
-              </span>
-              <span style={{ 
-                fontSize: "13px", 
-                color: "#757575", 
-                marginLeft: "8px" 
-              }}>
-                • Every month
-              </span>
-            </div>
-
-            {/* Input tanggal utama - ✅ FIX DI SINI */}
-            <div style={{ 
-              display: "flex", 
-              alignItems: "center", 
-              gap: "12px", 
-              flexWrap: "wrap", 
-              marginBottom: "12px" 
-            }}>
-              <label style={{ 
-                fontWeight: "500", 
-                color: "#424242", 
-                fontSize: "14px" 
-              }}>
-                Tanggal Inspeksi:
-              </label>
-              <input
-                type="date"
+        {/* Date Selection */}
+        <div style={{
+          background: "white",
+          borderRadius: "12px",
+          padding: "20px",
+          boxShadow: "0 2px 8px rgba(0,0,0,0.08)",
+          marginBottom: "20px",
+          border: "1px solid #e0e0e0"
+        }}>
+          <div style={{ marginBottom: "16px" }}>
+            <span style={{ fontWeight: "600", color: "#212121", fontSize: "16px" }}>📅 Inspection Schedule</span>
+            <span style={{ fontSize: "13px", color: "#757575", marginLeft: "8px" }}>• Every month</span>
+          </div>
+          <div style={{ display: "flex", alignItems: "center", gap: "12px", flexWrap: "wrap", marginBottom: "12px" }}>
+            <label style={{ fontWeight: "600", color: "#424242", fontSize: "14px" }}>Tanggal Inspeksi:</label>
+            <input
+              type="date"
+              value={selectedDate}
+              onChange={(e) => setSelectedDate(e.target.value)}
+              max={getMaxDate()}
+              style={{
+                color: "#212121",
+                padding: "10px 14px",
+                border: "2px solid #1976d2",
+                borderRadius: "8px",
+                fontSize: "14px",
+                outline: "none",
+                minWidth: "180px"
+              }}
+            />
+          </div>
+          {availableDates.length > 0 && (
+            <div style={{ display: "flex", alignItems: "center", gap: "12px", flexWrap: "wrap" }}>
+              <label style={{ fontWeight: "600", color: "#424242", fontSize: "14px" }}>Riwayat Isian:</label>
+              {/* ✅ FIX: value={selectedDate} agar menampilkan tanggal terpilih */}
+              <select
                 value={selectedDate}
                 onChange={(e) => setSelectedDate(e.target.value)}
-                max={getMaxDate()} // ✅ FIX: Gunakan fungsi untuk pastikan hari ini bisa dipilih
                 style={{
                   color: "#212121",
-                  padding: "7px 12px",
-                  border: "1px solid #d0d0d0",
-                  borderRadius: "5px",
+                  padding: "10px 14px",
+                  border: "2px solid #1976d2",
+                  borderRadius: "8px",
                   fontSize: "14px",
                   outline: "none",
-                  minWidth: "160px",
+                  minWidth: "200px"
                 }}
-              />
-              {/* ✅ Debug info untuk development */}
-              <span style={{ 
-                fontSize: "11px", 
-                color: "#666",
-                background: "#f0f0f0",
-                padding: "4px 8px",
-                borderRadius: "4px"
-              }}>
-                Max: {getMaxDate()}
-              </span>
-            </div>
-
-            {/* Dropdown riwayat pengisian */}
-            {availableDates.length > 0 && (
-              <div style={{ 
-                display: "flex", 
-                alignItems: "center", 
-                gap: "12px", 
-                flexWrap: "wrap" 
-              }}>
-                <label style={{ 
-                  fontWeight: "500", 
-                  color: "#424242", 
-                  fontSize: "14px" 
-                }}>
-                  Riwayat Isian:
-                </label>
-                <select
-                  value=""
-                  onChange={(e) => {
-                    const date = e.target.value;
-                    if (date) {
-                      setSelectedDate(date);
-                    }
-                  }}
-                  style={{
-                    color: "#212121",
-                    padding: "7px 12px",
-                    border: "1px solid #d0d0d0",
-                    borderRadius: "5px",
-                    fontSize: "14px",
-                    outline: "none",
-                    minWidth: "180px",
-                  }}
-                >
-                  <option value="">— Pilih tanggal lama —</option>
-                  {availableDates
-                    .sort((a, b) => new Date(b).getTime() - new Date(a).getTime())
-                    .map((date) => (
-                      <option key={date} value={date}>
-                        {new Date(date).toLocaleDateString("id-ID", {
-                          day: "2-digit",
-                          month: "short",
-                          year: "numeric",
-                        })}
-                      </option>
-                    ))}
-                </select>
-                <button
-                  onClick={handleLoadExisting}
-                  disabled={!selectedDate || isLoading}
-                  style={{
-                    padding: "7px 16px",
-                    background: selectedDate ? "#ff9800" : "#e0e0e0",
-                    color: selectedDate ? "white" : "#9e9e9e",
-                    border: "none",
-                    borderRadius: "5px",
-                    cursor: selectedDate ? "pointer" : "not-allowed",
-                    fontWeight: "500",
-                    fontSize: "14px",
-                  }}
-                >
-                  {isLoading ? "Memuat..." : "Load Existing"}
-                </button>
-              </div>
-            )}
-          </div>
-
-              <table style={{
-                width: "100%",
-                borderCollapse: "collapse",
-                fontSize: "12px",
-                minWidth: "2000px",
-                fontFamily: "Arial, sans-serif",
-              }}>
-                <thead>
-                  <tr style={{ 
-                    background: "#e3f2fd", 
-                    borderBottom: "2px solid #1976d2" 
-                  }}>
-                    <th colSpan={2} style={{ 
-                      padding: "10px 8px", 
-                      border: "1px solid #bbdefb", 
-                      fontWeight: "700", 
-                      color: "#1565c0", 
-                      textAlign: "center", 
-                      fontSize: "13px" 
-                    }}>
-                      <span style={{ display: "inline-block", minWidth: "100px" }}>
-                        <button 
-                          onClick={() => openImageModal("/hydrant/pillar-hydrant.png")} 
-                          style={{ 
-                            background: "none", 
-                            border: "none", 
-                            color: "#1565c0", 
-                            fontWeight: "700", 
-                            fontSize: "13px", 
-                            padding: "4px 8px", 
-                            cursor: "pointer", 
-                            textDecoration: "underline" 
-                          }}
-                        >
-                          PILLAR HYDRANT
-                        </button>
-                      </span>
-                    </th>
-                    <th colSpan={4} style={{ 
-                      padding: "10px 8px", 
-                      border: "1px solid #bbdefb", 
-                      fontWeight: "700", 
-                      color: "#1565c0", 
-                      textAlign: "center", 
-                      fontSize: "13px" 
-                    }}>
-                      <span style={{ display: "inline-block", minWidth: "200px" }}>  
-                        <button 
-                          onClick={() => openImageModal("/hydrant/box-hydrant.jpg")} 
-                          style={{ 
-                            background: "none", 
-                            border: "none", 
-                            color: "#1565c0", 
-                            fontWeight: "700", 
-                            fontSize: "13px", 
-                            padding: "4px 8px", 
-                            cursor: "pointer", 
-                            textDecoration: "underline" 
-                          }}
-                        >
-                          BOX HYDRANT, ID HYDRANT
-                        </button>
-                      </span>
-                    </th>
-                    <th colSpan={3} style={{ 
-                      padding: "10px 8px", 
-                      border: "1px solid #bbdefb", 
-                      fontWeight: "700", 
-                      color: "#1565c0", 
-                      textAlign: "center", 
-                      fontSize: "13px" 
-                    }}>
-                      <span style={{ display: "inline-block", minWidth: "150px" }}> 
-                        <button 
-                          onClick={() => openImageModal("/hydrant/safety-valve.jpg")} 
-                          style={{ 
-                            background: "none", 
-                            border: "none", 
-                            color: "#1565c0", 
-                            fontWeight: "700", 
-                            fontSize: "13px", 
-                            padding: "4px 8px", 
-                            cursor: "pointer", 
-                            textDecoration: "underline" 
-                          }}
-                        >
-                          SAFETY VALVE
-                        </button>
-                      </span>
-                    </th>
-                    <th colSpan={3} style={{ 
-                      padding: "10px 8px", 
-                      border: "1px solid #bbdefb", 
-                      fontWeight: "700", 
-                      color: "#1565c0", 
-                      textAlign: "center", 
-                      fontSize: "13px" 
-                    }}>
-                      <span style={{ display: "inline-block", minWidth: "150px" }}>
-                        <button 
-                          onClick={() => openImageModal("/hydrant/nozzle-handle.jpg")} 
-                          style={{ 
-                            background: "none", 
-                            border: "none", 
-                            color: "#1565c0", 
-                            fontWeight: "700", 
-                            fontSize: "13px", 
-                            padding: "4px 8px", 
-                            cursor: "pointer", 
-                            textDecoration: "underline" 
-                          }}
-                        >
-                          NOZZLE & HANDLE
-                        </button>
-                      </span>
-                    </th>
-                    <th colSpan={3} style={{ 
-                      padding: "10px 8px", 
-                      border: "1px solid #bbdefb", 
-                      fontWeight: "700", 
-                      color: "#1565c0", 
-                      textAlign: "center", 
-                      fontSize: "13px" 
-                    }}>
-                      <span style={{ display: "inline-block", minWidth: "150px" }}>
-                        <button 
-                          onClick={() => openImageModal("/hydrant/main-valve.jpg")} 
-                          style={{ 
-                            background: "none", 
-                            border: "none", 
-                            color: "#1565c0", 
-                            fontWeight: "700", 
-                            fontSize: "13px", 
-                            padding: "4px 8px", 
-                            cursor: "pointer", 
-                            textDecoration: "underline" 
-                          }}
-                        >
-                          VALVE UTAMA, VALVE A,B
-                        </button>
-                      </span>
-                    </th>
-                    <th style={{ 
-                      padding: "10px 8px", 
-                      border: "1px solid #bbdefb", 
-                      fontWeight: "700", 
-                      color: "#1565c0", 
-                      textAlign: "center", 
-                      fontSize: "13px" 
-                    }}>
-                      <span style={{ display: "inline-block", minWidth: "50px" }}>
-                        <button 
-                          onClick={() => openImageModal("/hydrant/valve-cover.jpg")} 
-                          style={{ 
-                            background: "none", 
-                            border: "none", 
-                            color: "#1565c0", 
-                            fontWeight: "700", 
-                            fontSize: "13px", 
-                            padding: "4px 8px", 
-                            cursor: "pointer", 
-                            textDecoration: "underline" 
-                          }}
-                        >
-                          PENUTUP VALVE A/B
-                        </button>
-                      </span>
-                    </th>
-                    <th style={{ 
-                      padding: "10px 8px", 
-                      border: "1px solid #bbdefb", 
-                      fontWeight: "700", 
-                      color: "#1565c0", 
-                      textAlign: "center", 
-                      fontSize: "13px" 
-                    }}>
-                      <span style={{ display: "inline-block", minWidth: "50px" }}>
-                        <button 
-                          onClick={() => openImageModal("/hydrant/fire-hose.jpg")} 
-                          style={{ 
-                            background: "none", 
-                            border: "none", 
-                            color: "#1565c0", 
-                            fontWeight: "700", 
-                            fontSize: "13px", 
-                            padding: "4px 8px", 
-                            cursor: "pointer", 
-                            textDecoration: "underline" 
-                          }}
-                        >
-                          SELANG HYDRANT
-                        </button>
-                      </span>
-                    </th>
-                    <th style={{ 
-                      padding: "10px 8px", 
-                      border: "1px solid #bbdefb", 
-                      fontWeight: "700", 
-                      color: "#1565c0", 
-                      textAlign: "center", 
-                      fontSize: "13px" 
-                    }}>
-                      <span style={{ display: "inline-block", minWidth: "50px" }}>
-                        <button 
-                          onClick={() => openImageModal("/hydrant/layout-hydrant.jpg")} 
-                          style={{ 
-                            background: "none", 
-                            border: "none", 
-                            color: "#1565c0", 
-                            fontWeight: "700", 
-                            fontSize: "13px", 
-                            padding: "4px 8px", 
-                            cursor: "pointer", 
-                            textDecoration: "underline" 
-                          }}
-                        >
-                          LAYOUT
-                        </button>
-                      </span>
-                    </th>
-                    <th style={{ 
-                      padding: "10px 8px", 
-                      border: "1px solid #bbdefb", 
-                      fontWeight: "700", 
-                      color: "#1565c0", 
-                      textAlign: "center", 
-                      fontSize: "13px" 
-                    }}>
-                      <span style={{ display: "inline-block", minWidth: "50px" }}>
-                        <button 
-                          onClick={() => openImageModal("/hydrant/pipa-air.jpg")} 
-                          style={{ 
-                            background: "none", 
-                            border: "none", 
-                            color: "#1565c0", 
-                            fontWeight: "700", 
-                            fontSize: "13px", 
-                            padding: "4px 8px", 
-                            cursor: "pointer", 
-                            textDecoration: "underline" 
-                          }}
-                        >
-                          INSTALASI PIPA AIR
-                        </button>
-                      </span>
-                    </th>
-                    <th style={{ 
-                      padding: "10px 8px", 
-                      border: "1px solid #bbdefb", 
-                      fontWeight: "700", 
-                      color: "#1565c0", 
-                      textAlign: "center", 
-                      fontSize: "13px" 
-                    }}>
-                      <span style={{ display: "inline-block", minWidth: "50px" }}>
-                        <button 
-                          onClick={() => openImageModal("/hydrant/cs-os-label.jpg")} 
-                          style={{ 
-                            background: "none", 
-                            border: "none", 
-                            color: "#1565c0", 
-                            fontWeight: "700", 
-                            fontSize: "13px", 
-                            padding: "4px 8px", 
-                            cursor: "pointer", 
-                            textDecoration: "underline" 
-                          }}
-                        >
-                          C/S & O/S
-                        </button>
-                      </span>
-                    </th>
-                    <th rowSpan={3} style={{ 
-                      padding: "10px 8px", 
-                      border: "1px solid #bbdefb", 
-                      fontWeight: "700", 
-                      color: "#1565c0", 
-                      textAlign: "center", 
-                      fontSize: "13px", 
-                      minWidth: "120px" 
-                    }}>
-                      Findings (if NG)
-                    </th>
-                    <th rowSpan={3} style={{ 
-                      padding: "10px 8px", 
-                      border: "1px solid #bbdefb", 
-                      fontWeight: "700", 
-                      color: "#1565c0", 
-                      textAlign: "center", 
-                      fontSize: "13px", 
-                      minWidth: "140px" 
-                    }}>
-                      Corrective Action
-                    </th>
-                    <th rowSpan={3} style={{ 
-                      padding: "10px 8px", 
-                      border: "1px solid #bbdefb", 
-                      fontWeight: "700", 
-                      color: "#1565c0", 
-                      textAlign: "center", 
-                      fontSize: "13px", 
-                      minWidth: "80px" 
-                    }}>
-                      PIC
-                    </th>
-                    <th rowSpan={3} style={{ 
-                      padding: "10px 8px", 
-                      border: "1px solid #bbdefb", 
-                      fontWeight: "700", 
-                      color: "#1565c0", 
-                      textAlign: "center", 
-                      fontSize: "13px", 
-                      minWidth: "90px" 
-                    }}>
-                      Due Date
-                    </th>
-                    <th rowSpan={3} style={{ 
-                      padding: "10px 8px", 
-                      border: "1px solid #bbdefb", 
-                      fontWeight: "700", 
-                      color: "#1565c0", 
-                      textAlign: "center", 
-                      fontSize: "13px", 
-                      minWidth: "70px" 
-                    }}>
-                      Verify
-                    </th>
-                  </tr>
-                  <tr style={{ 
-                    background: "#fafafa", 
-                    borderBottom: "1px solid #e0e0e0" 
-                  }}>
-                    {[...Array(20)].map((_, i) => (
-                      <th key={i} style={{ 
-                        padding: "8px 6px", 
-                        border: "1px solid #e0e0e0", 
-                        fontWeight: "600", 
-                        color: "#424242", 
-                        textAlign: "center", 
-                        fontSize: "12px", 
-                        minWidth: "60px" 
-                      }}>
-                        {i + 1}
-                      </th>
-                    ))}
-                  </tr>
-                  <tr style={{ 
-                    background: "#f5f5f5", 
-                    borderBottom: "1px solid #e0e0e0" 
-                  }}>
-                    {[...Array(20)].map((_, i) => (
-                      <td key={i} style={{ 
-                        padding: "6px", 
-                        border: "1px solid #e0e0e0", 
-                        textAlign: "center", 
-                        verticalAlign: "middle", 
-                        fontSize: "11px", 
-                        fontWeight: "600", 
-                        color: "#555", 
-                        height: "32px" 
-                      }}>
-                        Visually
-                      </td>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr>
-                    {[...Array(20)].map((_, i) => {
-                      const itemKey = `item${i + 1}`;
-                      const item = inspectionItems.find(item => item.item_key === itemKey);
-                      return (
-                        <td key={i} style={{ 
-                          padding: "8px", 
-                          border: "1px solid #e0e0e0", 
-                          textAlign: "center", 
-                          verticalAlign: "top", 
-                          height: "60px" 
-                        }}>
-                          <select
-                            value={items[itemKey] || ""}
-                            onChange={(e) => handleInputChange(itemKey, e.target.value)}
-                            disabled={!selectedDate}
-                            style={{
-                              width: "100%",
-                              padding: "6px",
-                              border: "1px solid #d0d0d0",
-                              borderRadius: "4px",
-                              fontWeight: "500",
-                              fontSize: "12px",
-                              outline: "none",
-                              height: "30px",
-                            }}
-                          >
-                            <option value="">-</option>
-                            <option value="OK">OK</option>
-                            <option value="NG">NG</option>
-                          </select>
-                        </td>
-                      );
-                    })}
-                    <td style={{ 
-                      padding: "8px", 
-                      border: "1px solid #e0e0e0", 
-                      verticalAlign: "top", 
-                      height: "60px" 
-                    }}>
-                      <textarea 
-                        value={keteranganKondisi} 
-                        onChange={(e) => setKeteranganKondisi(e.target.value)} 
-                        disabled={!selectedDate} 
-                        placeholder="Describe issues..." 
-                        rows={2} 
-                        style={{ 
-                          width: "100%", 
-                          padding: "6px", 
-                          fontSize: "12px", 
-                          resize: "vertical", 
-                          border: "1px solid #d0d0d0", 
-                          borderRadius: "4px", 
-                          outline: "none", 
-                          height: "100%" 
-                        }} 
-                      />
-                    </td>
-                    <td style={{ 
-                      padding: "8px", 
-                      border: "1px solid #e0e0e0", 
-                      verticalAlign: "top", 
-                      height: "60px" 
-                    }}>
-                      <textarea 
-                        value={tindakanPerbaikan} 
-                        onChange={(e) => setTindakanPerbaikan(e.target.value)} 
-                        disabled={!selectedDate} 
-                        placeholder="Action taken..." 
-                        rows={2} 
-                        style={{ 
-                          width: "100%", 
-                          padding: "6px", 
-                          fontSize: "12px", 
-                          resize: "vertical", 
-                          border: "1px solid #d0d0d0", 
-                          borderRadius: "4px", 
-                          outline: "none", 
-                          height: "100%" 
-                        }} 
-                      />
-                    </td>
-                    <td style={{ 
-                      padding: "8px", 
-                      border: "1px solid #e0e0e0", 
-                      verticalAlign: "top", 
-                      height: "60px" 
-                    }}>
-                      <input 
-                        type="text" 
-                        value={pic} 
-                        onChange={(e) => setPic(e.target.value)} 
-                        disabled={!selectedDate} 
-                        placeholder="Name" 
-                        style={{ 
-                          width: "100%", 
-                          padding: "6px", 
-                          fontSize: "12px", 
-                          border: "1px solid #d0d0d0", 
-                          borderRadius: "4px", 
-                          outline: "none", 
-                          height: "30px" 
-                        }} 
-                      />
-                    </td>
-                    <td style={{ 
-                      padding: "8px", 
-                      border: "1px solid #e0e0e0", 
-                      verticalAlign: "top", 
-                      height: "60px" 
-                    }}>
-                      <input 
-                        type="date" 
-                        value={dueDate} 
-                        onChange={(e) => setDueDate(e.target.value)} 
-                        disabled={!selectedDate} 
-                        style={{ 
-                          width: "100%", 
-                          padding: "6px", 
-                          border: "1px solid #d0d0d0", 
-                          borderRadius: "4px", 
-                          outline: "none", 
-                          fontSize: "12px", 
-                          height: "30px" 
-                        }} 
-                      />
-                    </td>
-                    <td style={{ 
-                      padding: "8px", 
-                      border: "1px solid #e0e0e0", 
-                      verticalAlign: "top", 
-                      height: "60px" 
-                    }}>
-                      <input 
-                        type="text" 
-                        value={verify} 
-                        onChange={(e) => setVerify(e.target.value)} 
-                        disabled={!selectedDate} 
-                        placeholder="Name" 
-                        style={{ 
-                          width: "100%", 
-                          padding: "6px", 
-                          fontSize: "12px", 
-                          border: "1px solid #d0d0d0", 
-                          borderRadius: "4px", 
-                          outline: "none", 
-                          height: "30px" 
-                        }} 
-                      />
-                    </td>
-                  </tr>
-                </tbody>
-              </table>
-          {/* Action Buttons */}
-          <div style={{ 
-            display: "flex", 
-            gap: "12px", 
-            justifyContent: "center", 
-            padding: "20px 0" 
-          }}>
-            <button
-              onClick={() => router.push("/status-ga/inspeksi-hydrant")}
-              style={{
-                padding: "11px 28px",
-                background: "#757575",
-                color: "white",
-                border: "none",
-                borderRadius: "6px",
-                fontWeight: "500",
-                fontSize: "15px",
-                cursor: "pointer",
-              }}
-            >
-              Back
-            </button>
-            <button
-              onClick={handleSave}
-              disabled={!selectedDate || isLoading || !areaId}
-              style={{
-                padding: "11px 28px",
-                background: (selectedDate && !isLoading && areaId) ? "#1976d2" : "#e0e0e0",
-                color: (selectedDate && !isLoading && areaId) ? "white" : "#9e9e9e",
-                border: "none",
-                borderRadius: "6px",
-                fontWeight: "500",
-                fontSize: "15px",
-                opacity: (selectedDate && !isLoading && areaId) ? 1 : 0.6,
-                cursor: (selectedDate && !isLoading && areaId) ? "pointer" : "not-allowed",
-              }}
-            >
-              {isLoading ? "Menyimpan..." : "Save Inspection"}
-            </button>
-          </div>
-
-          {/* Modal Gambar */}
-          {showImageModal && (
-            <div
-              onClick={closeImageModal}
-              style={{
-                position: "fixed",
-                top: 0,
-                left: 0,
-                right: 0,
-                bottom: 0,
-                background: "rgba(0,0,0,0.8)",
-                display: "flex",
-                justifyContent: "center",
-                alignItems: "center",
-                zIndex: 2000,
-                padding: "20px",
-              }}
-            >
-              <div onClick={(e) => e.stopPropagation()} style={{ textAlign: "center" }}>
-                <img
-                  src={currentImage}
-                  alt="Reference"
-                  style={{
-                    maxHeight: "90vh",
-                    maxWidth: "90vw",
-                    objectFit: "contain",
-                    borderRadius: "8px",
-                    border: "3px solid white",
-                  }}
-                />
-                <div style={{ 
-                  marginTop: "16px", 
-                  color: "white", 
-                  fontSize: "14px" 
-                }}>
-                  Click outside to close
-                </div>
-              </div>
+              >
+                <option value="">— Pilih tanggal lama —</option>
+                {availableDates.sort((a, b) => new Date(b).getTime() - new Date(a).getTime()).map(date => (
+                  <option key={date} value={date}>
+                    {new Date(date).toLocaleDateString("id-ID", { day: "2-digit", month: "short", year: "numeric" })}
+                  </option>
+                ))}
+              </select>
+              <button
+                onClick={handleLoadExisting}
+                disabled={!selectedDate || isLoading}
+                style={{
+                  padding: "10px 20px",
+                  background: selectedDate ? "#ff9800" : "#e0e0e0",
+                  color: selectedDate ? "white" : "#9e9e9e",
+                  border: "none",
+                  borderRadius: "8px",
+                  cursor: selectedDate ? "pointer" : "not-allowed",
+                  fontWeight: "600",
+                  fontSize: "14px"
+                }}
+              >
+                {isLoading ? "Memuat..." : "Load Data"}
+              </button>
             </div>
           )}
         </div>
 
-        <style jsx>{`
-          @media (max-width: 1200px) {
-            div[style*="paddingLeft: 96px"] {
-              padding-left: 80px;
-              padding-right: 16px;
-            }
-          }
+        {/* Reference Images */}
+        <div style={{
+          background: "white",
+          borderRadius: "12px",
+          padding: "16px",
+          boxShadow: "0 2px 8px rgba(0,0,0,0.08)",
+          marginBottom: "20px",
+          border: "1px solid #e0e0e0"
+        }}>
+          <h3 style={{ margin: "0 0 12px 0", color: "#1976d2", fontSize: "15px", fontWeight: "600" }}>
+            📷 Reference Images
+          </h3>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: "8px" }}>
+            <RefButton label="Pillar Hydrant" onClick={() => openImageModal("/hydrant/pillar-hydrant.png")} />
+            <RefButton label="Box Hydrant" onClick={() => openImageModal("/hydrant/box-hydrant.jpg")} />
+            <RefButton label="Safety Valve" onClick={() => openImageModal("/hydrant/safety-valve.jpg")} />
+            <RefButton label="Nozzle & Handle" onClick={() => openImageModal("/hydrant/nozzle-handle.jpg")} />
+            <RefButton label="Main Valve" onClick={() => openImageModal("/hydrant/main-valve.jpg")} />
+            <RefButton label="Valve Cover" onClick={() => openImageModal("/hydrant/valve-cover.jpg")} />
+            <RefButton label="Fire Hose" onClick={() => openImageModal("/hydrant/fire-hose.jpg")} />
+            <RefButton label="Layout" onClick={() => openImageModal("/hydrant/layout-hydrant.jpg")} />
+          </div>
+        </div>
 
-          @media (max-width: 768px) {
-            div[style*="paddingLeft: 96px"] {
-              padding-left: 0;
-              padding-right: 12px;
-              padding-top: 16px;
-              padding-bottom: 16px;
-            }
+        {/* Checksheet Table */}
+        <div style={{
+          background: "white",
+          borderRadius: "12px",
+          boxShadow: "0 2px 8px rgba(0,0,0,0.08)",
+          overflow: "hidden",
+          marginBottom: "20px",
+          border: "1px solid #e0e0e0"
+        }}>
+          <div style={{ overflowX: "auto" }}>
+            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "12px", minWidth: "1400px" }}>
+              <thead>
+                <tr style={{ background: "linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%)", borderBottom: "2px solid #1976d2" }}>
+                  <th style={{ padding: "14px 12px", border: "1px solid #bbdefb", fontWeight: "700", color: "#1565c0", textAlign: "center", width: "60px" }}>No</th>
+                  <th style={{ padding: "14px 12px", border: "1px solid #bbdefb", fontWeight: "700", color: "#1565c0", textAlign: "left", minWidth: "200px" }}>Item Check</th>
+                  <th style={{ padding: "14px 12px", border: "1px solid #bbdefb", fontWeight: "700", color: "#1565c0", textAlign: "center", width: "100px" }}>Hasil</th>
+                  <th style={{ padding: "14px 12px", border: "1px solid #bbdefb", fontWeight: "700", color: "#1565c0", textAlign: "center", width: "80px" }}>Metode</th>
+                  <th style={{ padding: "14px 12px", border: "1px solid #bbdefb", fontWeight: "700", color: "#1565c0", textAlign: "center", minWidth: "150px" }}>Keterangan Temuan</th>
+                  <th style={{ padding: "14px 12px", border: "1px solid #bbdefb", fontWeight: "700", color: "#1565c0", textAlign: "center", minWidth: "150px" }}>Tindakan Perbaikan</th>
+                  <th style={{ padding: "14px 12px", border: "1px solid #bbdefb", fontWeight: "700", color: "#1565c0", textAlign: "center", width: "100px" }}>PIC</th>
+                  <th style={{ padding: "14px 12px", border: "1px solid #bbdefb", fontWeight: "700", color: "#1565c0", textAlign: "center", width: "110px" }}>Due Date</th>
+                  <th style={{ padding: "14px 12px", border: "1px solid #bbdefb", fontWeight: "700", color: "#1565c0", textAlign: "center", width: "100px" }}>Verify</th>
+                  <th style={{ padding: "14px 12px", border: "1px solid #bbdefb", fontWeight: "700", color: "#1565c0", textAlign: "center", minWidth: "180px" }}>Dokumentasi</th>
+                </tr>
+              </thead>
+              <tbody>
+                {inspectionItems.map((item, index) => {
+                  const itemImages = images.filter(img => img.key === item.item_key);
+                  return (
+                    <tr key={item.id} style={{ borderBottom: "1px solid #e0e0e0", background: index % 2 === 0 ? "#ffffff" : "#f9f9f9" }}>
+                      <td style={{ padding: "12px", border: "1px solid #e0e0e0", textAlign: "center", fontWeight: "600", color: "#555" }}>{index + 1}</td>
+                      <td style={{ padding: "12px", border: "1px solid #e0e0e0" }}>
+                        <div style={{ fontWeight: "600", color: "#212121", marginBottom: "4px" }}>{item.item_check}</div>
+                        {item.item_group && <div style={{ fontSize: "12px", color: "#757575" }}>{item.item_group}</div>}
+                      </td>
+                      <td style={{ padding: "12px", border: "1px solid #e0e0e0", textAlign: "center" }}>
+                        <select
+                          value={items[item.item_key] || ""}
+                          onChange={(e) => handleInputChange(item.item_key, e.target.value)}
+                          disabled={!selectedDate}
+                          style={{
+                            width: "100%",
+                            padding: "8px 12px",
+                            border: "1px solid #1976d2",
+                            borderRadius: "6px",
+                            fontWeight: "600",
+                            fontSize: "13px",
+                            outline: "none",
+                            background: selectedDate ? "white" : "#f5f5f5",
+                            color: selectedDate ? "#212121" : "#9e9e9e"
+                          }}
+                        >
+                          <option value="">-</option>
+                          <option value="OK" style={{ color: "green" }}>✓ OK</option>
+                          <option value="NG" style={{ color: "red" }}>✗ NG</option>
+                        </select>
+                      </td>
+                      <td style={{ padding: "12px", border: "1px solid #e0e0e0", textAlign: "center", color: "#757575", fontSize: "12px" }}>
+                        {item.method || 'Visual'}
+                      </td>
+                      <td style={{ padding: "12px", border: "1px solid #e0e0e0" }}>
+                        <textarea
+                          value={keteranganKondisi}
+                          onChange={(e) => setKeteranganKondisi(e.target.value)}
+                          disabled={!selectedDate}
+                          placeholder="Jika NG..."
+                          rows={2}
+                          style={{ width: "100%", padding: "6px", fontSize: "12px", resize: "vertical", border: "1px solid #1976d2", borderRadius: "6px", outline: "none", background: selectedDate ? "white" : "#f5f5f5" }}
+                        />
+                      </td>
+                      <td style={{ padding: "12px", border: "1px solid #e0e0e0" }}>
+                        <textarea
+                          value={tindakanPerbaikan}
+                          onChange={(e) => setTindakanPerbaikan(e.target.value)}
+                          disabled={!selectedDate}
+                          placeholder="Tindakan..."
+                          rows={2}
+                          style={{ width: "100%", padding: "6px", fontSize: "12px", resize: "vertical", border: "1px solid #1976d2", borderRadius: "6px", outline: "none", background: selectedDate ? "white" : "#f5f5f5" }}
+                        />
+                      </td>
+                      <td style={{ padding: "12px", border: "1px solid #e0e0e0" }}>
+                        <input
+                          type="text"
+                          value={pic}
+                          onChange={(e) => setPic(e.target.value)}
+                          disabled={!selectedDate}
+                          placeholder="Nama PIC"
+                          style={{ width: "100%", padding: "6px", fontSize: "12px", border: "1px solid #1976d2", borderRadius: "6px", outline: "none", background: selectedDate ? "white" : "#f5f5f5" }}
+                        />
+                      </td>
+                      <td style={{ padding: "12px", border: "1px solid #e0e0e0" }}>
+                        <input
+                          type="date"
+                          value={dueDate}
+                          onChange={(e) => setDueDate(e.target.value)}
+                          disabled={!selectedDate}
+                          style={{ width: "100%", padding: "6px", fontSize: "12px", border: "1px solid #1976d2", borderRadius: "6px", outline: "none", background: selectedDate ? "white" : "#f5f5f5" }}
+                        />
+                      </td>
+                      <td style={{ padding: "12px", border: "1px solid #e0e0e0" }}>
+                        <input
+                          type="text"
+                          value={verify}
+                          onChange={(e) => setVerify(e.target.value)}
+                          disabled={!selectedDate}
+                          placeholder="Verifier"
+                          style={{ width: "100%", padding: "6px", fontSize: "12px", border: "1px solid #1976d2", borderRadius: "6px", outline: "none", background: selectedDate ? "white" : "#f5f5f5" }}
+                        />
+                      </td>
+                      <td style={{ padding: "12px", border: "1px solid #e0e0e0" }}>
+                        <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+                          <div style={{ display: "flex", gap: "6px" }}>
+                            <button
+                              onClick={() => openCamera(item.item_key)}
+                              disabled={!selectedDate}
+                              style={{
+                                flex: 1,
+                                padding: "6px 10px",
+                                background: selectedDate ? "#1976d2" : "#e0e0e0",
+                                color: "white",
+                                borderRadius: "6px",
+                                fontSize: "12px",
+                                cursor: selectedDate ? "pointer" : "not-allowed",
+                                fontWeight: "500",
+                                border: "none"
+                              }}
+                            >
+                              📷 Kamera
+                            </button>
+                            <label
+                              style={{
+                                flex: 1,
+                                padding: "6px 10px",
+                                background: selectedDate ? "#4caf50" : "#e0e0e0",
+                                color: "white",
+                                borderRadius: "6px",
+                                fontSize: "12px",
+                                textAlign: "center",
+                                cursor: selectedDate ? "pointer" : "not-allowed",
+                                fontWeight: "500",
+                                display: "inline-block"
+                              }}
+                            >
+                              🖼️ Upload
+                              <input
+                                type="file"
+                                accept="image/*"
+                                multiple
+                                disabled={!selectedDate}
+                                onChange={(e) => handleImageUpload(e, item.item_key)}
+                                style={{ display: "none" }}
+                              />
+                            </label>
+                          </div>
+                          {itemImages.length > 0 && (
+                            <div style={{ display: "flex", flexWrap: "wrap", gap: "4px" }}>
+                              {itemImages.map((img, idx) => {
+                                const globalIndex = images.findIndex(i => i.key === item.item_key && i.url === img.url);
+                                return (
+                                  <div key={idx} style={{ position: "relative", width: "50px", height: "50px", borderRadius: "6px", overflow: "hidden", border: "1px solid #ddd" }}>
+                                    <img
+                                      src={img.url}
+                                      alt={`Doc ${idx+1}`}
+                                      onClick={() => openImageModal(img.url)}
+                                      style={{ width: "100%", height: "100%", objectFit: "cover", cursor: "pointer" }}
+                                    />
+                                    <button
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        removeImage(globalIndex);
+                                      }}
+                                      style={{
+                                        position: "absolute",
+                                        top: "-4px",
+                                        right: "-4px",
+                                        width: "16px",
+                                        height: "16px",
+                                        background: "rgba(244,67,54,0.9)",
+                                        color: "white",
+                                        border: "none",
+                                        borderRadius: "50%",
+                                        fontSize: "11px",
+                                        cursor: "pointer",
+                                        display: "flex",
+                                        alignItems: "center",
+                                        justifyContent: "center"
+                                      }}
+                                    >
+                                      ×
+                                    </button>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
 
-            table {
-              font-size: 12px !important;
-            }
+        {/* Action Buttons */}
+        <div style={{ display: "flex", gap: "12px", justifyContent: "center", padding: "20px 0" }}>
+          <button
+            onClick={() => router.push("/status-ga/inspeksi-hydrant")}
+            style={{
+              padding: "12px 32px",
+              background: "#757575",
+              color: "white",
+              border: "none",
+              borderRadius: "8px",
+              fontWeight: "600",
+              fontSize: "15px",
+              cursor: "pointer"
+            }}
+          >
+            ← Kembali
+          </button>
+          <button
+            onClick={handleSave}
+            disabled={!selectedDate || isLoading || !areaId}
+            style={{
+              padding: "12px 32px",
+              background: (selectedDate && !isLoading && areaId) ? "#1976d2" : "#e0e0e0",
+              color: (selectedDate && !isLoading && areaId) ? "white" : "#9e9e9e",
+              border: "none",
+              borderRadius: "8px",
+              fontWeight: "600",
+              fontSize: "15px",
+              cursor: (selectedDate && !isLoading && areaId) ? "pointer" : "not-allowed"
+            }}
+          >
+            {isLoading ? "⏳ Menyimpan..." : "💾 Simpan Data"}
+          </button>
+        </div>
 
-            table th,
-            table td {
-              padding: 8px 6px !important;
-            }
+        {/* Image Modal */}
+        {showImageModal && (
+          <div
+            onClick={closeImageModal}
+            style={{
+              position: "fixed",
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              background: "rgba(0,0,0,0.85)",
+              display: "flex",
+              justifyContent: "center",
+              alignItems: "center",
+              zIndex: 2000,
+              padding: "20px"
+            }}
+          >
+            <div onClick={(e) => e.stopPropagation()} style={{ textAlign: "center" }}>
+              <img
+                src={currentImage}
+                alt="Preview"
+                style={{
+                  maxHeight: "90vh",
+                  maxWidth: "90vw",
+                  objectFit: "contain",
+                  borderRadius: "8px",
+                  border: "4px solid white"
+                }}
+              />
+              <div style={{ marginTop: "16px", color: "white", fontSize: "14px" }}>
+                Click outside to close
+              </div>
+            </div>
+          </div>
+        )}
 
-            input[type="date"],
-            input[type="text"],
-            input[type="number"],
-            select {
-              font-size: 14px !important;
-              padding: 8px !important;
-              min-height: 36px !important;
-            }
-
-            button {
-              min-height: 40px !important;
-              padding: 8px 16px !important;
-              font-size: 13px !important;
-            }
-
-            h1 {
-              font-size: 20px !important;
-            }
-
-            div[style*="display: grid"] {
-              grid-template-columns: 1fr !important;
-              gap: 12px !important;
-            }
-          }
-
-          @media (max-width: 480px) {
-            div[style*="paddingLeft: 96px"] {
-              padding: 8px 4px;
-            }
-
-            table {
-              font-size: 10px !important;
-              min-width: 500px;
-              display: block;
-              overflow-x: auto;
-              -webkit-overflow-scrolling: touch;
-            }
-
-            table th,
-            table td {
-              padding: 6px 4px !important;
-            }
-
-            input[type="date"],
-            input[type="text"],
-            input[type="number"],
-            select {
-              font-size: 14px !important;
-              padding: 6px !important;
-              min-height: 34px !important;
-              width: 100% !important;
-            }
-
-            button {
-              width: 100% !important;
-              min-height: 40px !important;
-              padding: 8px 12px !important;
-              font-size: 12px !important;
-            }
-
-            h1 {
-              font-size: 16px !important;
-            }
-
-            div[style*="display: grid"] {
-              grid-template-columns: 1fr !important;
-              gap: 8px !important;
-            }
-
-            div[style*="display: flex"][style*="gap"] {
-              flex-direction: column !important;
-            }
-          }
-        `}</style>
+        {/* Camera Modal */}
+        {showCameraModal && (
+          <div
+            onClick={() => {
+              setShowCameraModal(false);
+              if (cameraStream) {
+                cameraStream.getTracks().forEach(track => track.stop());
+              }
+            }}
+            style={{
+              position: "fixed",
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              background: "rgba(0,0,0,0.85)",
+              display: "flex",
+              justifyContent: "center",
+              alignItems: "center",
+              zIndex: 2000
+            }}
+          >
+            <div
+              onClick={(e) => e.stopPropagation()}
+              style={{
+                background: "white",
+                borderRadius: "12px",
+                padding: "20px",
+                textAlign: "center",
+                width: "100%",
+                maxWidth: "500px"
+              }}
+            >
+              <h3 style={{ margin: "0 0 16px 0", color: "#212121", fontSize: "18px" }}>
+                📸 Ambil Foto
+              </h3>
+              <video
+                ref={videoRef}
+                autoPlay
+                playsInline
+                style={{
+                  width: "100%",
+                  maxHeight: "60vh",
+                  borderRadius: "8px",
+                  background: "#000"
+                }}
+              />
+              <canvas ref={canvasRef} style={{ display: "none" }} />
+              <div style={{ marginTop: "16px", display: "flex", gap: "12px", justifyContent: "center" }}>
+                <button
+                  onClick={captureImage}
+                  style={{
+                    padding: "12px 24px",
+                    background: "#4caf50",
+                    color: "white",
+                    border: "none",
+                    borderRadius: "8px",
+                    fontWeight: "600",
+                    cursor: "pointer"
+                  }}
+                >
+                  📸 Ambil
+                </button>
+                <button
+                  onClick={() => {
+                    setShowCameraModal(false);
+                    if (cameraStream) {
+                      cameraStream.getTracks().forEach(track => track.stop());
+                    }
+                  }}
+                  style={{
+                    padding: "12px 24px",
+                    background: "#757575",
+                    color: "white",
+                    border: "none",
+                    borderRadius: "8px",
+                    fontWeight: "600",
+                    cursor: "pointer"
+                  }}
+                >
+                  Batal
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
+  );
+}
+
+// Sub-components
+function InfoItem({ label, value }: { label: string; value: string }) {
+  return (
+    <div>
+      <span style={{ color: "#757575", fontSize: "12px", fontWeight: "500" }}>{label}:</span>
+      <div style={{ color: "#212121", fontWeight: "600", fontSize: "14px", marginTop: "4px" }}>{value || '-'}</div>
+    </div>
+  );
+}
+
+function RefButton({ label, onClick }: { label: string; onClick: () => void }) {
+  return (
+    <button
+      onClick={onClick}
+      style={{
+        padding: "8px 16px",
+        background: "#e3f2fd",
+        color: "#1976d2",
+        border: "1px solid #1976d2",
+        borderRadius: "6px",
+        fontSize: "12px",
+        cursor: "pointer",
+        fontWeight: "500"
+      }}
+    >
+      {label}
+    </button>
   );
 }

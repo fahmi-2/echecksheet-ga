@@ -1,7 +1,7 @@
 // app/e-checksheet-smoke-detector/EChecksheetSmokeDetectorForm.tsx
 "use client";
-import { useState, useEffect } from "react";
-import { useRouter, useSearchParams } from "next/navigation"; // ✅ Import useSearchParams
+import { useState, useEffect, useRef, useMemo } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
 import { Sidebar } from "@/components/Sidebar";
 
@@ -31,19 +31,112 @@ interface AreaInfo {
   no: number;
   name: string;
   location: string;
+  detector_type?: string;
 }
 
-// ✅ Hapus prop areaId, ambil dari query string
+// ✅ Helper: Extract tahun dari tanggal
+const getYear = (dateString: string) => new Date(dateString).getFullYear();
+
+// ✅ Helper: Extract bulan dari tanggal (0-11)
+const getMonth = (dateString: string) => new Date(dateString).getMonth();
+
+// ✅ Helper: Format nama bulan dalam Bahasa Indonesia
+const monthNames = [
+  "Januari", "Februari", "Maret", "April", "Mei", "Juni",
+  "Juli", "Agustus", "September", "Oktober", "November", "Desember"
+];
+
+// ✅ Helper: Group dates by year and month
+const groupDatesByYearMonth = (dates: string[]) => {
+  const grouped: Record<number, Record<number, string[]>> = {};
+  
+  dates.forEach(date => {
+    const year = getYear(date);
+    const month = getMonth(date);
+    
+    if (!grouped[year]) {
+      grouped[year] = {};
+    }
+    if (!grouped[year][month]) {
+      grouped[year][month] = [];
+    }
+    grouped[year][month].push(date);
+  });
+  
+  // Sort dates within each month (newest first)
+  Object.values(grouped).forEach(yearData => {
+    Object.values(yearData).forEach(monthDates => {
+      monthDates.sort((a, b) => new Date(b).getTime() - new Date(a).getTime());
+    });
+  });
+  
+  return grouped;
+};
+
 export function EChecksheetSmokeDetectorForm() {
   const router = useRouter();
-  const searchParams = useSearchParams(); // ✅ Ambil query params
-  const { user, loading } = useAuth();
+  const searchParams = useSearchParams();
+  const { user, loading: authLoading, isInitialized } = useAuth();
   
   // ✅ Ambil areaId dari query string
   const areaId = searchParams.get('areaId');
-
+  const locationParam = searchParams.get('location');
+  const unitParam = searchParams.get('unit');
+  
   const [isMounted, setIsMounted] = useState(false);
   const [selectedDate, setSelectedDate] = useState("");
+  
+  // Data from API
+  const [areaInfo, setAreaInfo] = useState<AreaInfo | null>(null);
+  const [checklistItems, setChecklistItems] = useState<ChecklistItem[]>([]);
+  const [checklistData, setChecklistData] = useState<Record<string, ItemData>>({});
+  const [availableDates, setAvailableDates] = useState<string[]>([]);
+  const [images, setImages] = useState<{ key: string; url: string }[]>([]);
+  
+  // Loading states
+  const [loadingArea, setLoadingArea] = useState(true);
+  const [loadingItems, setLoadingItems] = useState(true);
+  const [loadingDates, setLoadingDates] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  
+  // ✅ Filter States untuk Riwayat Isian
+  const [selectedYear, setSelectedYear] = useState<number | "">("");
+  const [selectedMonth, setSelectedMonth] = useState<number | "">("");
+  const [filteredDates, setFilteredDates] = useState<string[]>([]);
+  
+  // ✅ Camera & Image States
+  const [showImageModal, setShowImageModal] = useState(false);
+  const [currentImage, setCurrentImage] = useState("");
+  const [showCameraModal, setShowCameraModal] = useState(false);
+  const [cameraStream, setCameraStream] = useState<MediaStream | null>(null);
+  const [currentItemKey, setCurrentItemKey] = useState("");
+  
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  
+  const TYPE_SLUG = 'smoke-detector';
+
+  useEffect(() => {
+    setIsMounted(true);
+  }, []);
+
+  // Auth check
+  useEffect(() => {
+    if (!isMounted || !isInitialized) return;
+    if (authLoading) return;
+    if (!user) {
+      console.log('⏳ Waiting for user data...');
+      return;
+    }
+    if (user.role !== "inspector-ga" && user.role !== "group-leader-qa") {
+      console.warn('⚠️ Unauthorized - wrong role:', user.role);
+      router.replace("/login-page");
+      return;
+    }
+    console.log('✅ Access granted:', user.fullName, 'Role:', user.role);
+  }, [user, authLoading, isInitialized, router, isMounted]);
+
   // ✅ Validasi areaId
   useEffect(() => {
     if (isMounted && !areaId) {
@@ -52,36 +145,9 @@ export function EChecksheetSmokeDetectorForm() {
     }
   }, [isMounted, areaId, router]);
 
-
-  // Data from API
-  const [areaInfo, setAreaInfo] = useState<AreaInfo | null>(null);
-  const [checklistItems, setChecklistItems] = useState<ChecklistItem[]>([]);
-  const [checklistData, setChecklistData] = useState<Record<string, ItemData>>({});
-  const [availableDates, setAvailableDates] = useState<string[]>([]);
-
-  // Loading states
-  const [loadingArea, setLoadingArea] = useState(true);
-  const [loadingItems, setLoadingItems] = useState(true);
-  const [loadingDates, setLoadingDates] = useState(true);
-  const [saving, setSaving] = useState(false);
-
-  const TYPE_SLUG = 'smoke-detector';
-
-  useEffect(() => {
-    setIsMounted(true);
-  }, []);
-
-  useEffect(() => {
-    if (!isMounted || loading) return;
-    if (!user || (user.role !== "inspector-ga" && user.role !== "group-leader-qa")) {
-      router.push("/login-page");
-    }
-  }, [user, loading, router, isMounted]);
-
   // Fetch area info
   useEffect(() => {
     if (!isMounted || !areaId) return;
-
     const fetchAreaInfo = async () => {
       try {
         setLoadingArea(true);
@@ -91,6 +157,7 @@ export function EChecksheetSmokeDetectorForm() {
         if (result.success) {
           const area = result.data.find((a: any) => a.id === parseInt(areaId));
           if (area) {
+            console.log('✅ Found area:', area);
             setAreaInfo(area);
           } else {
             alert('Area tidak ditemukan');
@@ -111,7 +178,6 @@ export function EChecksheetSmokeDetectorForm() {
   // Fetch checklist items
   useEffect(() => {
     if (!isMounted) return;
-
     const fetchItems = async () => {
       try {
         setLoadingItems(true);
@@ -119,6 +185,7 @@ export function EChecksheetSmokeDetectorForm() {
         const result = await response.json();
         
         if (result.success) {
+          console.log('✅ Loaded inspection items:', result.data.length);
           setChecklistItems(result.data);
           
           // Initialize empty data for each item
@@ -128,7 +195,7 @@ export function EChecksheetSmokeDetectorForm() {
               hasilPemeriksaan: '',
               keteranganTemuan: '',
               tindakanPerbaikan: '',
-              pic: '',
+              pic: user?.fullName || '', // ✅ Auto-fill PIC dengan nama user
               dueDate: '',
               verify: '',
               images: [],
@@ -145,12 +212,11 @@ export function EChecksheetSmokeDetectorForm() {
     };
 
     fetchItems();
-  }, [isMounted]);
+  }, [isMounted, user]);
 
   // Fetch available dates
   useEffect(() => {
     if (!isMounted || !areaId) return;
-
     const fetchDates = async () => {
       try {
         setLoadingDates(true);
@@ -161,7 +227,17 @@ export function EChecksheetSmokeDetectorForm() {
           const sortedDates = result.data.sort((a: string, b: string) => 
             new Date(b).getTime() - new Date(a).getTime()
           );
+          console.log('📅 Available dates:', sortedDates.length);
           setAvailableDates(sortedDates);
+          
+          // ✅ Set default filter to current year & month
+          if (sortedDates.length > 0) {
+            const latestDate = sortedDates[0];
+            const currentYear = getYear(latestDate);
+            const currentMonth = getMonth(latestDate);
+            setSelectedYear(currentYear);
+            setSelectedMonth(currentMonth);
+          }
         }
       } catch (error) {
         console.error('Error fetching dates:', error);
@@ -173,30 +249,74 @@ export function EChecksheetSmokeDetectorForm() {
     fetchDates();
   }, [isMounted, areaId]);
 
+  // ✅ Filter dates when year or month changes
+  useEffect(() => {
+    if (selectedYear === "" || selectedMonth === "") {
+      setFilteredDates([]);
+      return;
+    }
+    
+    const grouped = groupDatesByYearMonth(availableDates);
+    const datesForSelection = grouped[selectedYear]?.[selectedMonth] || [];
+    
+    setFilteredDates(datesForSelection);
+    
+    // ✅ Auto-select latest date when month changes
+    if (datesForSelection.length > 0 && !selectedDate) {
+      setSelectedDate(datesForSelection[0]);
+    }
+  }, [selectedYear, selectedMonth, availableDates, selectedDate]);
+
+  // ✅ Get unique years from available dates
+  const availableYears = useMemo(() => {
+    const years = new Set(availableDates.map(date => getYear(date)));
+    return Array.from(years).sort((a, b) => b - a); // Sort descending
+  }, [availableDates]);
+
   // Load existing data when date is selected
   useEffect(() => {
     if (!selectedDate || !areaId) {
       return;
     }
-
     const loadExistingData = async () => {
       try {
+        setIsLoading(true);
+        console.log('📥 Loading existing data for date:', selectedDate);
         const response = await fetch(
           `/api/ga/checksheet/${TYPE_SLUG}/by-area/${areaId}/${selectedDate}`
         );
         const result = await response.json();
         
         if (result.success && result.data) {
+          console.log('✅ Data loaded successfully');
+          
+          // Load checklist data
           setChecklistData(result.data);
+          
+          // Load images
+          const loadedImages: { key: string; url: string }[] = [];
+          Object.entries(result.data).forEach(([itemKey, entry]: [string, any]) => {
+            if (entry.images && Array.isArray(entry.images)) {
+              entry.images.forEach((url: string) => {
+                loadedImages.push({ key: itemKey, url });
+              });
+            }
+          });
+          setImages(loadedImages);
+          
+          alert("✅ Data berhasil dimuat!");
         } else {
-          // Reset to empty if no data found
+          console.log('⚠️ No data found for this date');
+          alert("⚠️ Tidak ada data untuk tanggal ini.");
+          
+          // Reset to empty with PIC auto-filled
           const emptyData: Record<string, ItemData> = {};
           checklistItems.forEach((item) => {
             emptyData[item.item_key] = {
               hasilPemeriksaan: '',
               keteranganTemuan: '',
               tindakanPerbaikan: '',
-              pic: '',
+              pic: user?.fullName || '', // ✅ Auto-fill PIC
               dueDate: '',
               verify: '',
               images: [],
@@ -204,14 +324,18 @@ export function EChecksheetSmokeDetectorForm() {
             };
           });
           setChecklistData(emptyData);
+          setImages([]);
         }
       } catch (error) {
         console.error('Error loading existing data:', error);
+        alert("Gagal memuat data.");
+      } finally {
+        setIsLoading(false);
       }
     };
 
     loadExistingData();
-  }, [selectedDate, areaId, checklistItems]);
+  }, [selectedDate, areaId, checklistItems, user]);
 
   const updateItemData = (itemKey: string, field: keyof ItemData, value: any) => {
     setChecklistData(prev => ({
@@ -228,7 +352,11 @@ export function EChecksheetSmokeDetectorForm() {
       alert("Silakan pilih tanggal inspeksi");
       return;
     }
-
+    if (!areaId) {
+      alert("Area tidak valid");
+      return;
+    }
+    
     // Validate that at least one item has a result
     const hasData = Object.values(checklistData).some(
       item => item.hasilPemeriksaan !== ''
@@ -241,6 +369,7 @@ export function EChecksheetSmokeDetectorForm() {
 
     try {
       setSaving(true);
+      console.log('💾 Saving checklist data...');
       
       const response = await fetch(
         `/api/ga/checksheet/${TYPE_SLUG}/by-area/${areaId}/${selectedDate}`,
@@ -261,22 +390,163 @@ export function EChecksheetSmokeDetectorForm() {
       const result = await response.json();
 
       if (result.success) {
-        alert(`Data inspeksi berhasil disimpan untuk ${new Date(selectedDate).toLocaleDateString("id-ID")}`);
-        router.push(`/status-ga/smoke-detector?openArea=${encodeURIComponent(areaInfo?.location || '')}`);
+        console.log('✅ Data saved successfully');
+        alert(`✅ Data inspeksi berhasil disimpan untuk ${new Date(selectedDate).toLocaleDateString("id-ID")}`);
+        router.push(`/status-ga/smoke-detector?openArea=${encodeURIComponent(areaInfo?.location || locationParam || '')}`);
       } else {
-        alert(`Gagal menyimpan: ${result.message}`);
+        alert(`❌ Gagal menyimpan: ${result.message}`);
       }
     } catch (error) {
-      console.error('Save failed:', error);
+      console.error('❌ Save failed:', error);
       alert('Gagal menyimpan data. Silakan coba lagi.');
     } finally {
       setSaving(false);
     }
   };
 
-  if (!isMounted) return null;
+  // ✅ Camera Functions
+  useEffect(() => {
+    if (!showCameraModal) return;
+    const startCamera = async () => {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: "environment" }
+        });
+        setCameraStream(stream);
+        if (videoRef.current) {
+          (videoRef.current as any).srcObject = stream;
+        }
+      } catch (err) {
+        console.error("❌ Gagal membuka kamera:", err);
+        alert("Tidak bisa mengakses kamera. Pastikan izin kamera diaktifkan.");
+        setShowCameraModal(false);
+      }
+    };
+    startCamera();
+    return () => {
+      if (cameraStream) {
+        cameraStream.getTracks().forEach(track => track.stop());
+      }
+    };
+  }, [showCameraModal]);
 
-  // ✅ Tambahkan validasi areaId sebelum loading
+  const openCamera = (itemKey: string) => {
+    if (!selectedDate) {
+      alert("Pilih tanggal terlebih dahulu!");
+      return;
+    }
+    setCurrentItemKey(itemKey);
+    setShowCameraModal(true);
+  };
+
+  const captureImage = () => {
+    if (!videoRef.current || !canvasRef.current) return;
+    const video = videoRef.current as any;
+    const canvas = canvasRef.current as any;
+    const context = canvas.getContext('2d');
+    if (!context) return;
+
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    context.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+    const imageUrl = canvas.toDataURL('image/jpeg', 0.8);
+    setImages(prev => [...prev, { key: currentItemKey, url: imageUrl }]);
+    
+    // Update checklist data with new image
+    setChecklistData(prev => ({
+      ...prev,
+      [currentItemKey]: {
+        ...prev[currentItemKey],
+        images: [...(prev[currentItemKey]?.images || []), imageUrl]
+      }
+    }));
+    
+    setShowCameraModal(false);
+    if (cameraStream) {
+      cameraStream.getTracks().forEach(track => track.stop());
+    }
+  };
+
+  // ✅ Image Upload Functions
+  const handleImageUpload = (event: React.ChangeEvent<HTMLInputElement>, itemKey: string) => {
+    if (!selectedDate) {
+      alert("Pilih tanggal terlebih dahulu!");
+      return;
+    }
+    const files = event.target.files;
+    if (!files) return;
+    
+    Array.from(files).forEach(file => {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        const imageUrl = reader.result as string;
+        setImages(prev => [...prev, { key: itemKey, url: imageUrl }]);
+        
+        // Update checklist data with new image
+        setChecklistData(prev => ({
+          ...prev,
+          [itemKey]: {
+            ...prev[itemKey],
+            images: [...(prev[itemKey]?.images || []), imageUrl]
+          }
+        }));
+      };
+      reader.readAsDataURL(file);
+    });
+    
+    // Reset input
+    event.target.value = '';
+  };
+
+  const removeImage = (index: number, itemKey: string) => {
+    const imageToRemove = images[index];
+    setImages(prev => prev.filter((_, i) => i !== index));
+    
+    // Update checklist data
+    setChecklistData(prev => ({
+      ...prev,
+      [itemKey]: {
+        ...prev[itemKey],
+        images: (prev[itemKey]?.images || []).filter(url => url !== imageToRemove.url)
+      }
+    }));
+  };
+
+  const openImageModal = (imgUrl: string) => {
+    setCurrentImage(imgUrl);
+    setShowImageModal(true);
+  };
+
+  const closeImageModal = () => {
+    setShowImageModal(false);
+    setCurrentImage("");
+  };
+
+  // Loading states
+  if (!isMounted || !isInitialized || authLoading) {
+    return (
+      <div style={{ display: "flex", justifyContent: "center", alignItems: "center", minHeight: "100vh", background: "#f5f5f5" }}>
+        <div style={{ textAlign: "center" }}>
+          <div style={{ fontSize: "48px", marginBottom: "16px" }}>⏳</div>
+          <p style={{ fontSize: "16px", color: "#666", margin: "0" }}>Loading...</p>
+          <p style={{ fontSize: "14px", color: "#999", marginTop: "8px" }}>Please wait</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!user) {
+    return (
+      <div style={{ display: "flex", justifyContent: "center", alignItems: "center", minHeight: "100vh", background: "#f5f5f5" }}>
+        <div style={{ textAlign: "center" }}>
+          <div style={{ fontSize: "48px", marginBottom: "16px" }}>🔒</div>
+          <p style={{ fontSize: "16px", color: "#666", margin: "0" }}>Redirecting to login...</p>
+        </div>
+      </div>
+    );
+  }
+
   if (!areaId) {
     return (
       <div style={{ display: "flex", justifyContent: "center", alignItems: "center", minHeight: "100vh", background: "#f5f5f5" }}>
@@ -287,463 +557,675 @@ export function EChecksheetSmokeDetectorForm() {
     );
   }
 
-  if (loading || loadingArea || loadingItems) {
+  if (loadingArea || loadingItems) {
     return (
       <div style={{ display: "flex", justifyContent: "center", alignItems: "center", minHeight: "100vh", background: "#f5f5f5" }}>
-        Loading...
+        <div style={{ textAlign: "center" }}>
+          <div style={{ fontSize: "48px", marginBottom: "16px" }}>⏳</div>
+          <p style={{ fontSize: "16px", color: "#666" }}>Loading...</p>
+        </div>
       </div>
     );
-  }
-
-  if (!user || (user.role !== "inspector-ga" && user.role !== "group-leader-qa")) {
-    return null;
   }
 
   if (!areaInfo) {
     return (
       <div style={{ display: "flex", justifyContent: "center", alignItems: "center", minHeight: "100vh", background: "#f5f5f5" }}>
-        Area tidak ditemukan
+        <div style={{ textAlign: "center" }}>
+          <p style={{ fontSize: "18px", color: "#757575" }}>Area tidak ditemukan</p>
+        </div>
       </div>
     );
   }
 
   const extractZone = (name: string): string => {
-    const match = name.match(/Zone (\d+)/);
-    return match ? match[1] : '-';
+    const match = name.match(/Zone\s*(\d+)/i);
+    return match ? `Zone ${match[1]}` : '-';
   };
 
   return (
-    <div style={{ minHeight: "100vh", background: "#f7f9fc" }}>
+    <div style={{ minHeight: "100vh", background: "#f8f9fa" }}>
       <Sidebar userName={user.fullName} />
-      <div style={{ padding: "24px 20px", maxWidth: "100%", margin: "0 auto" }}>
-        <div style={{ marginBottom: "28px" }}>
-          <div style={{
-            background: "#1976d2",
-            borderRadius: "8px",
-            padding: "24px 28px",
-            boxShadow: "0 2px 8px rgba(0,0,0,0.1)"
-          }}>
-            <h1 style={{ margin: "0 0 6px 0", color: "white", fontSize: "26px", fontWeight: "600", letterSpacing: "-0.5px" }}>
-              Smoke Detector Inspection Form
+      <div style={{ paddingLeft: "95px", paddingRight: "25px", paddingTop: "32px", paddingBottom: "32px", maxWidth: "100%", margin: "0 auto" }}>
+        
+        {/* Header */}
+        <div style={{ marginBottom: "24px" }}>
+          <div style={{ background: "linear-gradient(135deg, #0d47a1 0%, #1e88e5 100%)", borderRadius: "12px", padding: "20px 24px", boxShadow: "0 4px 12px rgba(13, 71, 161, 0.15)" }}>
+            <h1 style={{ margin: "0 0 8px 0", color: "white", fontSize: "clamp(20px, 5vw, 28px)", fontWeight: "700" }}>
+              🔔 Smoke Detector Inspection Form
             </h1>
-            <p style={{ margin: 0, color: "#e3f2fd", fontSize: "14px" }}>
+            <p style={{ margin: 0, color: "rgba(255,255,255,0.9)", fontSize: "14px" }}>
               Bi-monthly inspection checklist
             </p>
           </div>
         </div>
 
         {/* Area Info */}
-        <div style={{
-          background: "white",
-          border: "1px solid #e0e0e0",
-          borderRadius: "8px",
-          padding: "20px 24px",
-          boxShadow: "0 1px 3px rgba(0,0,0,0.08)",
-          marginBottom: "24px"
-        }}>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))", gap: "16px" }}>
-            <div>
-              <span style={{ fontSize: "13px", color: "#757575", display: "block", marginBottom: "4px" }}>Unit Number</span>
-              <span style={{ fontSize: "15px", fontWeight: "500", color: "#212121" }}>{areaInfo.no}</span>
-            </div>
-            <div>
-              <span style={{ fontSize: "13px", color: "#757575", display: "block", marginBottom: "4px" }}>Location</span>
-              <span style={{ fontSize: "15px", fontWeight: "500", color: "#212121" }}>{areaInfo.location}</span>
-            </div>
-            <div>
-              <span style={{ fontSize: "13px", color: "#757575", display: "block", marginBottom: "4px" }}>Zone</span>
-              <span style={{ fontSize: "15px", fontWeight: "500", color: "#212121" }}>{extractZone(areaInfo.name)}</span>
-            </div>
-            <div>
-              <span style={{ fontSize: "13px", color: "#757575", display: "block", marginBottom: "4px" }}>Inspector</span>
-              <span style={{ fontSize: "15px", fontWeight: "500", color: "#212121" }}>{user.fullName}</span>
-            </div>
+        <div style={{ background: "white", border: "1px solid #e8e8e8", borderRadius: "10px", padding: "16px 20px", boxShadow: "0 2px 6px rgba(0,0,0,0.05)", marginBottom: "20px" }}>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: "12px" }}>
+            <div style={{ color: "black" }}><strong>Unit:</strong> {areaInfo.no}</div>
+            <div style={{ color: "black" }}><strong>Lokasi:</strong> {areaInfo.location}</div>
+            <div style={{ color: "black" }}><strong>Zone:</strong> {extractZone(areaInfo.name)}</div>
+            <div style={{ color: "black" }}><strong>Tipe:</strong> {areaInfo.detector_type || 'SMOKE DETECTOR'}</div>
+            <div style={{ color: "black" }}><strong>Inspector:</strong> {user.fullName}</div>
           </div>
         </div>
 
-        {/* Inspection Schedule */}
-        <div style={{
-          background: "white",
-          border: "1px solid #e0e0e0",
-          borderRadius: "8px",
-          padding: "20px 24px",
-          boxShadow: "0 1px 3px rgba(0,0,0,0.08)",
-          marginBottom: "24px"
-        }}>
-          <div style={{ marginBottom: "16px" }}>
-            <span style={{ fontWeight: "500", color: "#212121", fontSize: "15px" }}>Inspection Schedule</span>
-            <span style={{ fontSize: "13px", color: "#757575", marginLeft: "8px" }}>• Every 2 months (Jan, Mar, May, Jul, Sep, Nov)</span>
+        {/* Date Selection with Year/Month Filter */}
+        <div style={{ background: "white", border: "2px solid #1e88e5", borderRadius: "10px", padding: "16px 20px", boxShadow: "0 2px 6px rgba(0,0,0,0.05)", marginBottom: "20px" }}>
+          <div style={{ marginBottom: "12px" }}>
+            <strong style={{ color: "#0d47a1", fontSize: "15px" }}>
+              📅 Jadwal Inspeksi: Setiap 2 Bulan (Jan, Mar, Mei, Jul, Sep, Nov)
+            </strong>
           </div>
 
           {/* Input Tanggal Manual */}
           <div style={{ display: "flex", alignItems: "center", gap: "12px", flexWrap: "wrap", marginBottom: "12px" }}>
-            <label style={{ fontWeight: "500", color: "#424242", fontSize: "14px" }}>Tanggal Inspeksi:</label>
+            <label style={{ fontWeight: "700", color: "#0d47a1", fontSize: "14px" }}>Tanggal Inspeksi:</label>
             <input
               type="date"
               value={selectedDate}
-              onChange={(e) => setSelectedDate(e.target.value)}
+              onChange={(e) => {
+                console.log('📅 Date input changed:', e.target.value);
+                setSelectedDate(e.target.value);
+              }}
               max={new Date().toISOString().split('T')[0]}
               style={{
-                color: "#212121",
-                padding: "7px 12px",
-                border: "1px solid #d0d0d0",
-                borderRadius: "5px",
+                color: "#0d47a1",
+                padding: "8px 12px",
+                border: "2px solid #1e88e5",
+                borderRadius: "6px",
                 fontSize: "14px",
-                outline: "none",
                 minWidth: "160px"
               }}
             />
           </div>
 
-          {/* Dropdown Riwayat Pengisian */}
-          {!loadingDates && availableDates.length > 0 && (
-            <div style={{ display: "flex", alignItems: "center", gap: "12px", flexWrap: "wrap" }}>
-              <label style={{ fontWeight: "500", color: "#424242", fontSize: "14px" }}>Riwayat Isian:</label>
+          {/* ✅ RIWAYAT ISIAN dengan Filter Tahun & Bulan */}
+          {availableDates.length > 0 && (
+            <div style={{ 
+              display: "flex", 
+              alignItems: "center", 
+              gap: "12px", 
+              flexWrap: "wrap",
+              padding: "12px",
+              background: "#f5f9ff",
+              borderRadius: "8px",
+              border: "1px solid #e3f2fd"
+            }}>
+              <label style={{ fontWeight: "700", color: "#0d47a1", fontSize: "14px" }}>
+                📁 Riwayat Isian:
+              </label>
+              
+              {/* Dropdown Tahun */}
               <select
-                value=""
+                value={selectedYear}
                 onChange={(e) => {
-                  const date = e.target.value;
-                  if (date) {
-                    setSelectedDate(date);
-                  }
+                  const year = e.target.value ? parseInt(e.target.value) : "";
+                  setSelectedYear(year);
+                  setSelectedMonth(""); // Reset month when year changes
+                  setSelectedDate(""); // Reset date when year changes
+                  console.log('📅 Year changed:', year);
                 }}
                 style={{
-                  color: "#212121",
-                  padding: "7px 12px",
-                  border: "1px solid #d0d0d0",
-                  borderRadius: "5px",
+                  color: "#0d47a1",
+                  padding: "8px 12px",
+                  border: "2px solid #1e88e5",
+                  borderRadius: "6px",
                   fontSize: "14px",
-                  outline: "none",
-                  minWidth: "180px"
+                  minWidth: "100px",
+                  background: "white",
+                  cursor: "pointer",
+                  fontWeight: "500"
                 }}
               >
-                <option value="">— Pilih tanggal lama —</option>
-                {availableDates.map((date) => (
-                  <option key={date} value={date}>
-                    {new Date(date).toLocaleDateString("id-ID", {
-                      day: "2-digit",
-                      month: "short",
-                      year: "numeric"
-                    })}
-                  </option>
+                <option value="">— Pilih Tahun —</option>
+                {availableYears.map(year => (
+                  <option key={year} value={year}>{year}</option>
                 ))}
               </select>
+              
+              {/* Dropdown Bulan */}
+              <select
+                value={selectedMonth}
+                onChange={(e) => {
+                  const month = e.target.value ? parseInt(e.target.value) : "";
+                  setSelectedMonth(month);
+                  setSelectedDate(""); // Reset date when month changes
+                  console.log('📅 Month changed:', month);
+                }}
+                disabled={selectedYear === ""}
+                style={{
+                  color: selectedYear === "" ? "#999" : "#0d47a1",
+                  padding: "8px 12px",
+                  border: "2px solid #1e88e5",
+                  borderRadius: "6px",
+                  fontSize: "14px",
+                  minWidth: "140px",
+                  background: "white",
+                  cursor: selectedYear === "" ? "not-allowed" : "pointer",
+                  fontWeight: "500"
+                }}
+              >
+                <option value="">— Pilih Bulan —</option>
+                {monthNames.map((month, index) => (
+                  <option key={index} value={index}>{month}</option>
+                ))}
+              </select>
+              
+              {/* Dropdown Tanggal (setelah tahun & bulan dipilih) */}
+              {filteredDates.length > 0 && (
+                <select
+                  value={selectedDate}
+                  onChange={(e) => {
+                    const date = e.target.value;
+                    setSelectedDate(date);
+                    console.log('📅 Date selected from filter:', date);
+                  }}
+                  style={{
+                    color: "#0d47a1",
+                    padding: "8px 12px",
+                    border: "2px solid #1e88e5",
+                    borderRadius: "6px",
+                    fontSize: "14px",
+                    minWidth: "160px",
+                    background: "white",
+                    cursor: "pointer",
+                    fontWeight: "500"
+                  }}
+                >
+                  <option value="">— Pilih Tanggal —</option>
+                  {filteredDates.map(date => (
+                    <option key={date} value={date}>
+                      {new Date(date).toLocaleDateString("id-ID", {
+                        day: "2-digit",
+                        month: "short",
+                        year: "numeric"
+                      })}
+                    </option>
+                  ))}
+                </select>
+              )}
+              
+              <button
+                onClick={async () => {
+                  if (!selectedDate) {
+                    alert("Pilih tanggal terlebih dahulu!");
+                    return;
+                  }
+                  if (!areaId) {
+                    alert("Area tidak valid!");
+                    return;
+                  }
+                  setIsLoading(true);
+                  try {
+                    console.log('📥 Loading existing data for date:', selectedDate);
+                    const response = await fetch(
+                      `/api/ga/checksheet/${TYPE_SLUG}/by-area/${areaId}/${selectedDate}`
+                    );
+                    const result = await response.json();
+                    
+                    if (result.success && result.data) {
+                      console.log('✅ Data loaded successfully');
+                      setChecklistData(result.data);
+                      
+                      // Load images
+                      const loadedImages: { key: string; url: string }[] = [];
+                      Object.entries(result.data).forEach(([itemKey, entry]: [string, any]) => {
+                        if (entry.images && Array.isArray(entry.images)) {
+                          entry.images.forEach((url: string) => {
+                            loadedImages.push({ key: itemKey, url });
+                          });
+                        }
+                      });
+                      setImages(loadedImages);
+                      
+                      alert("✅ Data berhasil dimuat!");
+                    } else {
+                      console.log('⚠️ No data found for this date');
+                      alert("⚠️ Tidak ada data untuk tanggal ini.");
+                    }
+                  } catch (error) {
+                    console.error('❌ Error loading data:', error);
+                    alert("Gagal memuat data.");
+                  } finally {
+                    setIsLoading(false);
+                  }
+                }}
+                disabled={!selectedDate || isLoading}
+                style={{
+                  padding: "8px 16px",
+                  background: (selectedDate && !isLoading) ? "#ff9800" : "#bdbdbd",
+                  color: "white",
+                  border: "none",
+                  borderRadius: "6px",
+                  cursor: (selectedDate && !isLoading) ? "pointer" : "not-allowed",
+                  fontWeight: "600",
+                  fontSize: "14px"
+                }}
+              >
+                {isLoading ? "⏳ Memuat..." : "📥 Muat Data"}
+              </button>
+            </div>
+          )}
+
+          {/* Debug info (development only) */}
+          {process.env.NODE_ENV === 'development' && (
+            <div style={{
+              marginTop: "12px",
+              padding: "8px 12px",
+              background: "#f0f0f0",
+              borderRadius: "6px",
+              fontSize: "11px",
+              color: "#666"
+            }}>
+              <strong>Debug Info:</strong><br/>
+              selectedDate: {selectedDate || '(empty)'}<br/>
+              selectedYear: {selectedYear || '(empty)'}<br/>
+              selectedMonth: {selectedMonth !== "" ? monthNames[selectedMonth] : '(empty)'}<br/>
+              availableDates count: {availableDates.length}<br/>
+              filteredDates count: {filteredDates.length}<br/>
+              areaId: {areaId || '(null)'}
             </div>
           )}
         </div>
 
         {/* Checklist Table */}
-        <div style={{
-          background: "white",
-          borderRadius: "8px",
-          boxShadow: "0 1px 3px rgba(0,0,0,0.08)",
-          overflow: "hidden",
-          border: "1px solid #e0e0e0",
-          marginBottom: "24px"
-        }}>
-          <div style={{ overflowX: "auto" }}>
-            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "14px", minWidth: "1200px" }}>
-              <thead>
-                <tr style={{ background: "#fafafa", borderBottom: "2px solid #e0e0e0" }}>
-                  <th style={{ padding: "14px 12px", border: "1px solid #e0e0e0", fontWeight: "600", color: "#424242", textAlign: "left", width: "15%" }}>Item Check</th>
-                  <th style={{ padding: "14px 12px", border: "1px solid #e0e0e0", fontWeight: "600", color: "#424242", textAlign: "center", width: "10%" }}>Result</th>
-                  <th style={{ padding: "14px 12px", border: "1px solid #e0e0e0", fontWeight: "600", color: "#424242", textAlign: "left", width: "18%" }}>Findings (if NG)</th>
-                  <th style={{ padding: "14px 12px", border: "1px solid #e0e0e0", fontWeight: "600", color: "#424242", textAlign: "left", width: "18%" }}>Corrective Action</th>
-                  <th style={{ padding: "14px 12px", border: "1px solid #e0e0e0", fontWeight: "600", color: "#424242", textAlign: "center", width: "10%" }}>PIC</th>
-                  <th style={{ padding: "14px 12px", border: "1px solid #e0e0e0", fontWeight: "600", color: "#424242", textAlign: "center", width: "11%" }}>Due Date</th>
-                  <th style={{ padding: "14px 12px", border: "1px solid #e0e0e0", fontWeight: "600", color: "#424242", textAlign: "center", width: "10%" }}>Verified By</th>
-                </tr>
-              </thead>
-              <tbody>
-                {checklistItems.map((item) => {
-                  const data = checklistData[item.item_key] || {};
-                  
-                  return (
-                    <tr key={item.id}>
-                      <td style={{ padding: "12px", border: "1px solid #e0e0e0", fontWeight: "500", color: "#424242" }}>
-                        <div style={{ marginBottom: "4px" }}>{item.item_check}</div>
-                        {item.method && (
-                          <div style={{ fontSize: "11px", color: "#757575", fontStyle: "italic" }}>
-                            Method: {item.method}
-                          </div>
-                        )}
-                      </td>
-                      <td style={{ padding: "12px", border: "1px solid #e0e0e0", textAlign: "center" }}>
-                        <select
-                          value={data.hasilPemeriksaan || ''}
-                          onChange={(e) => updateItemData(item.item_key, 'hasilPemeriksaan', e.target.value)}
-                          disabled={!selectedDate}
-                          style={{ 
-                            width: "100%", 
-                            padding: "8px", 
-                            border: "1px solid #d0d0d0", 
-                            borderRadius: "5px",
-                            fontWeight: "500",
-                            fontSize: "14px",
-                            outline: "none",
-                            background: "white"
-                          }}
-                        >
-                          <option value="">-</option>
-                          <option value="OK">OK</option>
-                          <option value="NG">NG</option>
-                        </select>
-                      </td>
-                      <td style={{ padding: "12px", border: "1px solid #e0e0e0" }}>
-                        <textarea
-                          value={data.keteranganTemuan || ''}
-                          onChange={(e) => updateItemData(item.item_key, 'keteranganTemuan', e.target.value)}
-                          disabled={!selectedDate}
-                          placeholder="Describe any issues..."
-                          rows={3}
-                          style={{ 
-                            width: "100%", 
-                            padding: "8px", 
-                            fontSize: "13px", 
-                            resize: "vertical",
-                            border: "1px solid #d0d0d0",
-                            borderRadius: "4px",
-                            outline: "none",
-                            fontFamily: "inherit"
-                          }}
-                        />
-                      </td>
-                      <td style={{ padding: "12px", border: "1px solid #e0e0e0" }}>
-                        <textarea
-                          value={data.tindakanPerbaikan || ''}
-                          onChange={(e) => updateItemData(item.item_key, 'tindakanPerbaikan', e.target.value)}
-                          disabled={!selectedDate}
-                          placeholder="Action taken..."
-                          rows={3}
-                          style={{ 
-                            width: "100%", 
-                            padding: "8px", 
-                            fontSize: "13px", 
-                            resize: "vertical",
-                            border: "1px solid #d0d0d0",
-                            borderRadius: "4px",
-                            outline: "none",
-                            fontFamily: "inherit"
-                          }}
-                        />
-                      </td>
-                      <td style={{ padding: "12px", border: "1px solid #e0e0e0" }}>
-                        <input
-                          type="text"
-                          value={data.pic || ''}
-                          onChange={(e) => updateItemData(item.item_key, 'pic', e.target.value)}
-                          disabled={!selectedDate}
-                          placeholder="Name"
-                          style={{ 
-                            width: "100%", 
-                            padding: "8px", 
-                            fontSize: "13px",
-                            border: "1px solid #d0d0d0",
-                            borderRadius: "4px",
-                            outline: "none"
-                          }}
-                        />
-                      </td>
-                      <td style={{ padding: "12px", border: "1px solid #e0e0e0" }}>
-                        <input
-                          type="date"
-                          value={data.dueDate || ''}
-                          onChange={(e) => updateItemData(item.item_key, 'dueDate', e.target.value)}
-                          disabled={!selectedDate}
-                          style={{ 
-                            width: "100%", 
-                            padding: "8px",
-                            border: "1px solid #d0d0d0",
-                            borderRadius: "4px",
-                            outline: "none",
-                            fontSize: "13px"
-                          }}
-                        />
-                      </td>
-                      <td style={{ padding: "12px", border: "1px solid #e0e0e0" }}>
-                        <input
-                          type="text"
-                          value={data.verify || ''}
-                          onChange={(e) => updateItemData(item.item_key, 'verify', e.target.value)}
-                          disabled={!selectedDate}
-                          placeholder="Name"
-                          style={{ 
-                            width: "100%", 
-                            padding: "8px", 
-                            fontSize: "13px",
-                            border: "1px solid #d0d0d0",
-                            borderRadius: "4px",
-                            outline: "none"
-                          }}
-                        />
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+        {checklistItems.length === 0 ? (
+          <div style={{ textAlign: "center", padding: "40px", background: "white", borderRadius: "12px", border: "2px dashed #ccc" }}>
+            <p style={{ color: "#999", fontSize: "16px", margin: 0 }}>⏳ Loading checklist items...</p>
           </div>
-        </div>
+        ) : (
+          <div style={{ background: "white", borderRadius: "12px", boxShadow: "0 2px 8px rgba(0,0,0,0.06)", overflow: "hidden", border: "2px solid #0d47a1", marginBottom: "20px" }}>
+            <div style={{ overflowX: "auto" }}>
+              <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "12px", minWidth: "1400px" }}>
+                <thead>
+                  <tr style={{ background: "#e3f2fd" }}>
+                    <th style={{ padding: "12px 8px", border: "1px solid #0d47a1", fontWeight: "700", color: "#01579b", textAlign: "center", width: "50px" }}>No</th>
+                    <th style={{ padding: "12px 8px", border: "1px solid #0d47a1", fontWeight: "700", color: "#01579b", textAlign: "left", minWidth: "250px" }}>ITEM</th>
+                    <th style={{ padding: "12px 8px", border: "1px solid #0d47a1", fontWeight: "700", color: "#01579b", textAlign: "center", width: "100px" }}>HASIL</th>
+                    <th style={{ padding: "12px 8px", border: "1px solid #0d47a1", fontWeight: "700", color: "#01579b", textAlign: "left", minWidth: "180px" }}>Findings (if NG)</th>
+                    <th style={{ padding: "12px 8px", border: "1px solid #0d47a1", fontWeight: "700", color: "#01579b", textAlign: "center", minWidth: "200px" }}>Dokumentasi</th>
+                    <th style={{ padding: "12px 8px", border: "1px solid #0d47a1", fontWeight: "700", color: "#01579b", textAlign: "left", minWidth: "180px" }}>Corrective Action</th>
+                    <th style={{ padding: "12px 8px", border: "1px solid #0d47a1", fontWeight: "700", color: "#01579b", textAlign: "center", width: "120px" }}>PIC</th>
+                    <th style={{ padding: "12px 8px", border: "1px solid #0d47a1", fontWeight: "700", color: "#01579b", textAlign: "center", width: "120px" }}>Due Date</th>
+                    <th style={{ padding: "12px 8px", border: "1px solid #0d47a1", fontWeight: "700", color: "#01579b", textAlign: "center", width: "100px" }}>Verified By</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {checklistItems.map((item, index) => {
+                    const data = checklistData[item.item_key] || {};
+                    const itemImages = images.filter(img => img.key === item.item_key);
+                    
+                    return (
+                      <tr key={item.id}>
+                        <td style={{ padding: "10px 8px", border: "1px solid #0d47a1", textAlign: "center", fontWeight: "600" }}>{index + 1}</td>
+                        <td style={{ padding: "10px 8px", border: "1px solid #0d47a1", lineHeight: "1.5" }}>
+                          <div style={{ marginBottom: "4px" }}>{item.item_check}</div>
+                          {item.method && (
+                            <div style={{ fontSize: "11px", color: "#757575", fontStyle: "italic" }}>
+                              Method: {item.method}
+                            </div>
+                          )}
+                        </td>
+                        <td style={{ padding: "8px", border: "1px solid #0d47a1", textAlign: "center" }}>
+                          <select
+                            value={data.hasilPemeriksaan || ''}
+                            onChange={(e) => updateItemData(item.item_key, 'hasilPemeriksaan', e.target.value)}
+                            disabled={!selectedDate}
+                            style={{ 
+                              width: "100%", 
+                              padding: "6px", 
+                              border: "1px solid #1e88e5", 
+                              borderRadius: "4px",
+                              fontWeight: "500",
+                              fontSize: "14px",
+                              outline: "none",
+                              background: "white"
+                            }}
+                          >
+                            <option value="">-</option>
+                            <option value="OK">✓ OK</option>
+                            <option value="NG">✗ NG</option>
+                          </select>
+                        </td>
+                        <td style={{ padding: "8px", border: "1px solid #0d47a1" }}>
+                          <textarea
+                            value={data.keteranganTemuan || ''}
+                            onChange={(e) => updateItemData(item.item_key, 'keteranganTemuan', e.target.value)}
+                            disabled={!selectedDate}
+                            placeholder="Describe any issues..."
+                            rows={2}
+                            style={{ 
+                              width: "100%", 
+                              padding: "6px", 
+                              fontSize: "12px", 
+                              resize: "vertical",
+                              border: "1px solid #d0d0d0",
+                              borderRadius: "4px",
+                              outline: "none",
+                              fontFamily: "inherit"
+                            }}
+                          />
+                        </td>
+                        <td style={{ padding: "8px", border: "1px solid #0d47a1" }}>
+                          <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
+                            <button
+                              onClick={() => openCamera(item.item_key)}
+                              disabled={!selectedDate}
+                              style={{
+                                padding: "4px 8px",
+                                background: selectedDate ? "#1e88e5" : "#bdbdbd",
+                                color: "white",
+                                borderRadius: "4px",
+                                fontSize: "11px",
+                                cursor: selectedDate ? "pointer" : "not-allowed",
+                                textAlign: "center",
+                                border: "none"
+                              }}
+                            >
+                              📷 Kamera
+                            </button>
+                            <label
+                              htmlFor={`file-${item.item_key}`}
+                              style={{
+                                padding: "4px 8px",
+                                background: selectedDate ? "#4caf50" : "#bdbdbd",
+                                color: "white",
+                                borderRadius: "4px",
+                                fontSize: "11px",
+                                cursor: selectedDate ? "pointer" : "not-allowed",
+                                textAlign: "center"
+                              }}
+                            >
+                              🖼️ File
+                            </label>
+                            <input
+                              id={`file-${item.item_key}`}
+                              type="file"
+                              accept="image/*"
+                              multiple
+                              disabled={!selectedDate}
+                              onChange={(e) => handleImageUpload(e, item.item_key)}
+                              style={{ display: "none" }}
+                            />
+                            <div style={{ display: "flex", flexWrap: "wrap", gap: "4px", marginTop: "4px" }}>
+                              {itemImages.map((img, idx) => (
+                                <div key={idx} style={{ position: "relative", width: "60px", height: "60px", borderRadius: "4px", overflow: "hidden" }}>
+                                  <img
+                                    src={img.url}
+                                    alt={`Dokumentasi ${item.item_key} ${idx + 1}`}
+                                    onClick={() => openImageModal(img.url)}
+                                    style={{
+                                      width: "100%",
+                                      height: "100%",
+                                      objectFit: "cover",
+                                      cursor: "pointer"
+                                    }}
+                                  />
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      removeImage(images.findIndex(i => i.key === item.item_key && i.url === img.url), item.item_key);
+                                    }}
+                                    style={{
+                                      position: "absolute",
+                                      top: "2px",
+                                      right: "2px",
+                                      background: "rgba(244,67,54,0.9)",
+                                      color: "white",
+                                      border: "none",
+                                      borderRadius: "50%",
+                                      width: "18px",
+                                      height: "18px",
+                                      fontSize: "12px",
+                                      cursor: "pointer",
+                                      display: "flex",
+                                      alignItems: "center",
+                                      justifyContent: "center"
+                                    }}
+                                  >
+                                    ×
+                                  </button>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        </td>
+                        <td style={{ padding: "8px", border: "1px solid #0d47a1" }}>
+                          <textarea
+                            value={data.tindakanPerbaikan || ''}
+                            onChange={(e) => updateItemData(item.item_key, 'tindakanPerbaikan', e.target.value)}
+                            disabled={!selectedDate}
+                            placeholder="Action taken..."
+                            rows={2}
+                            style={{ 
+                              width: "100%", 
+                              padding: "6px", 
+                              fontSize: "12px", 
+                              resize: "vertical",
+                              border: "1px solid #d0d0d0",
+                              borderRadius: "4px",
+                              outline: "none",
+                              fontFamily: "inherit"
+                            }}
+                          />
+                        </td>
+                        <td style={{ padding: "8px", border: "1px solid #0d47a1" }}>
+                          <input
+                            type="text"
+                            value={data.pic || user?.fullName || ''}
+                            onChange={(e) => updateItemData(item.item_key, 'pic', e.target.value)}
+                            disabled={!selectedDate}
+                            placeholder="Name"
+                            style={{ 
+                              width: "100%", 
+                              padding: "6px", 
+                              fontSize: "12px",
+                              border: "1px solid #d0d0d0",
+                              borderRadius: "4px",
+                              outline: "none"
+                            }}
+                          />
+                        </td>
+                        <td style={{ padding: "8px", border: "1px solid #0d47a1" }}>
+                          <input
+                            type="date"
+                            value={data.dueDate || ''}
+                            onChange={(e) => updateItemData(item.item_key, 'dueDate', e.target.value)}
+                            disabled={!selectedDate}
+                            style={{ 
+                              width: "100%", 
+                              padding: "6px",
+                              border: "1px solid #d0d0d0",
+                              borderRadius: "4px",
+                              outline: "none",
+                              fontSize: "12px"
+                            }}
+                          />
+                        </td>
+                        <td style={{ padding: "8px", border: "1px solid #0d47a1" }}>
+                          <input
+                            type="text"
+                            value={data.verify || ''}
+                            onChange={(e) => updateItemData(item.item_key, 'verify', e.target.value)}
+                            disabled={!selectedDate}
+                            placeholder="Name"
+                            style={{ 
+                              width: "100%", 
+                              padding: "6px", 
+                              fontSize: "12px",
+                              border: "1px solid #d0d0d0",
+                              borderRadius: "4px",
+                              outline: "none"
+                            }}
+                          />
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
 
         {/* Action Buttons */}
         <div style={{ display: "flex", gap: "12px", justifyContent: "center", padding: "20px 0" }}>
           <button
             onClick={() => router.push("/status-ga/smoke-detector")}
             style={{
-              padding: "11px 28px",
+              padding: "12px 28px",
               background: "#757575",
               color: "white",
               border: "none",
-              borderRadius: "6px",
-              fontWeight: "500",
-              fontSize: "15px",
+              borderRadius: "8px",
+              fontWeight: "600",
               cursor: "pointer"
             }}
           >
-            Back
+            ← Kembali
           </button>
           <button
             onClick={handleSave}
             disabled={!selectedDate || saving}
             style={{
-              padding: "11px 28px",
-              background: selectedDate && !saving ? "#1976d2" : "#e0e0e0",
-              color: selectedDate && !saving ? "white" : "#9e9e9e",
+              padding: "12px 28px",
+              background: (selectedDate && !saving) ? "linear-gradient(135deg, #1e88e5, #0d47a1)" : "#bdbdbd",
+              color: "white",
               border: "none",
-              borderRadius: "6px",
-              fontWeight: "500",
-              fontSize: "15px",
-              opacity: selectedDate && !saving ? 1 : 0.6,
-              cursor: selectedDate && !saving ? "pointer" : "not-allowed"
+              borderRadius: "8px",
+              fontWeight: "600",
+              cursor: (selectedDate && !saving) ? "pointer" : "not-allowed",
+              opacity: (selectedDate && !saving) ? 1 : 0.6
             }}
           >
-            {saving ? "Saving..." : "Save Inspection"}
+            {saving ? "⏳ Menyimpan..." : "✓ Simpan Data"}
           </button>
         </div>
 
-        {/* Keterangan Cara Pengecekan */}
-        <div style={{
-          background: "white",
-          border: "1px solid #e0e0e0",
-          borderRadius: "8px",
-          padding: "24px",
-          marginTop: "32px",
-          boxShadow: "0 1px 3px rgba(0,0,0,0.08)"
-        }}>
-          <h3 style={{
-            margin: "0 0 20px 0",
-            color: "#212121",
-            fontSize: "17px",
-            fontWeight: "600",
-            paddingBottom: "12px",
-            borderBottom: "2px solid #1976d2"
-          }}>
-            📋 KETERANGAN CARA PENGECEKAN
-          </h3>
-
-          <div style={{ overflowX: "auto" }}>
-            <table style={{
-              width: "100%",
-              borderCollapse: "collapse",
-              fontSize: "13px",
-              border: "1px solid #e0e0e0",
-              backgroundColor: "white",
-              borderRadius: "6px",
-              overflow: "hidden"
-            }}>
-              <thead>
-                <tr style={{
-                  backgroundColor: "#e3f2fd",
-                  borderBottom: "2px solid #1976d2"
-                }}>
-                  <th style={{
-                    padding: "12px 14px",
-                    fontWeight: "600",
-                    color: "#1976d2",
-                    textAlign: "left",
-                    width: "50%",
-                    borderRight: "1px solid #bbdefb"
-                  }}>ITEM PENGECEKAN</th>
-                  <th style={{
-                    padding: "12px 14px",
-                    fontWeight: "600",
-                    color: "#1976d2",
-                    textAlign: "left",
-                    width: "50%"
-                  }}>CARA PENGECEKAN</th>
-                </tr>
-              </thead>
-              <tbody>
-                {[
-                  {
-                    item: "1. Bunyi Alarm Bell",
-                    ok: "Berbunyi keras",
-                    ng: "Tidak berbunyi atau berbunyi pelan",
-                    cara: [
-                      "1. Tekan tombol fire alarm",
-                      "2. Test heat detector dengan api",
-                      "3. Test smoke detector dengan asap"
-                    ]
-                  },
-                  {
-                    item: "2. Indicator Lamp",
-                    ok: "Lampu nyala",
-                    ng: "Lampu tidak nyala",
-                    cara: ["Lihat lampu nyala atau tidak"]
-                  },
-                  {
-                    item: "3. Kebersihan",
-                    ok: "Bersih",
-                    ng: "Kotor",
-                    cara: ["Periksa kebersihan detector dari debu/kotoran"]
-                  },
-                  {
-                    item: "4. Kondisi Lainnya",
-                    ok: "Masih Baik",
-                    ng: "Tidak baik/rusak",
-                    cara: ["Cek kondisi fisik (casing, mounting, kabel)"]
-                  }
-                ].map((item, index) => (
-                  <tr key={index} style={{
-                    borderBottom: "1px solid #e0e0e0",
-                    backgroundColor: index % 2 === 0 ? "white" : "#fafafa"
-                  }}>
-                    <td style={{
-                      padding: "12px 14px",
-                      verticalAlign: "top",
-                      borderRight: "1px solid #e0e0e0",
-                      fontWeight: "600",
-                      color: "#212121",
-                      width: "50%"
-                    }}>
-                      {item.item}
-                      <br />
-                      <span style={{ fontSize: "11px", color: "#43a047", display: "block", marginTop: "4px" }}>
-                        ✓ {item.ok}
-                      </span>
-                      <span style={{ fontSize: "11px", color: "#e53935", display: "block", marginTop: "4px" }}>
-                        ✘ {item.ng}
-                      </span>
-                    </td>
-                    <td style={{
-                      padding: "12px 14px",
-                      verticalAlign: "top",
-                      lineHeight: "1.6",
-                      color: "#424242",
-                      width: "50%"
-                    }}>
-                      {item.cara.map((step, i) => (
-                        <div key={i} style={{ marginBottom: "4px" }}>
-                          {step}
-                        </div>
-                      ))}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+        {/* Modal Gambar */}
+        {showImageModal && (
+          <div
+            onClick={closeImageModal}
+            style={{
+              position: "fixed",
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              background: "rgba(0,0,0,0.8)",
+              display: "flex",
+              justifyContent: "center",
+              alignItems: "center",
+              zIndex: 2000,
+              padding: "20px"
+            }}
+          >
+            <div onClick={(e) => e.stopPropagation()} style={{ textAlign: "center" }}>
+              <img
+                src={currentImage}
+                alt="Dokumentasi"
+                style={{
+                  maxHeight: "90vh",
+                  maxWidth: "90vw",
+                  objectFit: "contain",
+                  borderRadius: "8px",
+                  border: "3px solid white",
+                }}
+              />
+              <div style={{ marginTop: "16px", color: "white", fontSize: "14px" }}>
+                Click outside to close
+              </div>
+            </div>
           </div>
-        </div>
+        )}
+
+        {/* Modal Kamera */}
+        {showCameraModal && (
+          <div
+            onClick={() => {
+              setShowCameraModal(false);
+              if (cameraStream) {
+                cameraStream.getTracks().forEach(track => track.stop());
+              }
+            }}
+            style={{
+              position: "fixed",
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              background: "rgba(0,0,0,0.8)",
+              display: "flex",
+              justifyContent: "center",
+              alignItems: "center",
+              zIndex: 2000,
+            }}
+          >
+            <div
+              onClick={(e) => e.stopPropagation()}
+              style={{
+                background: "white",
+                borderRadius: "8px",
+                padding: "16px 20px",
+                textAlign: "center",
+                maxWidth: "90vw",
+                width: "100%",
+              }}
+            >
+              <h3 style={{ margin: "0 0 12px 0", color: "#212121" }}>📸 Ambil Foto</h3>
+              <video
+                ref={videoRef}
+                autoPlay
+                playsInline
+                style={{
+                  width: "100%",
+                  maxHeight: "60vh",
+                  borderRadius: "6px",
+                  background: "#000",
+                  transform: "scaleX(-1)"
+                }}
+              />
+              <canvas ref={canvasRef} style={{ display: "none" }} />
+              <div style={{ marginTop: "16px", display: "flex", gap: "12px", justifyContent: "center" }}>
+                <button
+                  onClick={captureImage}
+                  style={{
+                    padding: "10px 20px",
+                    background: "#4caf50",
+                    color: "white",
+                    border: "none",
+                    borderRadius: "6px",
+                    fontWeight: "600",
+                    cursor: "pointer"
+                  }}
+                >
+                  📸 Ambil Foto
+                </button>
+                <button
+                  onClick={() => {
+                    setShowCameraModal(false);
+                    if (cameraStream) {
+                      cameraStream.getTracks().forEach(track => track.stop());
+                    }
+                  }}
+                  style={{
+                    padding: "10px 20px",
+                    background: "#757575",
+                    color: "white",
+                    border: "none",
+                    borderRadius: "6px",
+                    fontWeight: "600",
+                    cursor: "pointer"
+                  }}
+                >
+                  Batal
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
 
         <style jsx>{`
           @media (max-width: 1200px) {

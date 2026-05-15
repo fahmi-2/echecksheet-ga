@@ -1,5 +1,4 @@
 // app/api/ga/checksheet/[typeSlug]/areas/route.ts
-
 import { NextResponse } from 'next/server';
 import pool from '@/lib/db';
 
@@ -12,12 +11,8 @@ export async function GET(
   { params }: { params: Promise<RouteParams> }
 ) {
   try {
-    // ⬇️ WAJIB await params (Next.js 15+)
     const { typeSlug } = await params;
-
-    // Debug log
-    console.log('🔍 Fetching areas for type:', typeSlug);
-
+    
     if (!typeSlug) {
       return NextResponse.json(
         { success: false, message: 'Type slug tidak ditemukan' },
@@ -25,14 +20,12 @@ export async function GET(
       );
     }
 
-    // ✅ PostgreSQL: Gunakan $1 bukan ?
     const typesResult = await pool.query(
       `SELECT id FROM ga_checksheet_types WHERE slug = $1 AND is_active = TRUE`,
       [typeSlug]
     );
 
     if (!typesResult.rows || typesResult.rows.length === 0) {
-      console.error('❌ Type not found:', typeSlug);
       return NextResponse.json(
         { success: false, message: 'Jenis checksheet tidak ditemukan' },
         { status: 404 }
@@ -40,9 +33,7 @@ export async function GET(
     }
 
     const typeId = typesResult.rows[0].id;
-    console.log('✅ Type ID:', typeId);
 
-    // ✅ PostgreSQL: result.rows untuk mengakses data
     const areasResult = await pool.query(
       `
       SELECT id, no, name, location
@@ -53,18 +44,92 @@ export async function GET(
       [typeId]
     );
 
-    console.log('✅ Found', areasResult.rows.length, 'areas');
-
     return NextResponse.json({
       success: true,
       data: areasResult.rows,
     });
   } catch (error) {
     console.error('❌ Error fetching areas:', error);
-
     return NextResponse.json(
       { success: false, message: 'Gagal mengambil data area' },
       { status: 500 }
     );
+  }
+}
+
+// ✅ POST: Tambah area baru
+export async function POST(
+  request: Request,
+  { params }: { params: Promise<RouteParams> }
+) {
+  const client = await pool.connect();
+  
+  try {
+    const { typeSlug } = await params;
+    const body = await request.json();
+    const { no, name, location, type_id, is_active = true } = body;
+
+    // Validasi
+    if (!no || !name || !type_id) {
+      return NextResponse.json(
+        { success: false, message: 'Data tidak lengkap' },
+        { status: 400 }
+      );
+    }
+
+    // Cek type
+    const typesResult = await client.query(
+      `SELECT id FROM ga_checksheet_types WHERE slug = $1`,
+      [typeSlug]
+    );
+
+    if (typesResult.rows.length === 0) {
+      return NextResponse.json(
+        { success: false, message: 'Jenis checksheet tidak ditemukan' },
+        { status: 404 }
+      );
+    }
+
+    const typeId = typesResult.rows[0].id;
+
+    // Cek duplikasi (no harus unique per type)
+    const existingResult = await client.query(
+      `SELECT id FROM ga_checksheet_areas WHERE type_id = $1 AND no = $2`,
+      [typeId, no]
+    );
+
+    if (existingResult.rows.length > 0) {
+      return NextResponse.json(
+        { success: false, message: 'Nomor area sudah digunakan' },
+        { status: 400 }
+      );
+    }
+
+    // Insert area baru
+    const insertResult = await client.query(
+      `
+      INSERT INTO ga_checksheet_areas
+      (type_id, no, name, location, is_active)
+      VALUES ($1, $2, $3, $4, $5)
+      RETURNING id, no, name, location
+      `,
+      [typeId, no, name, location || '', is_active]
+    );
+
+    const newArea = insertResult.rows[0];
+
+    return NextResponse.json({
+      success: true,
+      message: 'Area berhasil ditambahkan',
+      data: newArea
+    });
+  } catch (error) {
+    console.error('❌ Error creating area:', error);
+    return NextResponse.json(
+      { success: false, message: 'Gagal menyimpan data area' },
+      { status: 500 }
+    );
+  } finally {
+    client.release();
   }
 }

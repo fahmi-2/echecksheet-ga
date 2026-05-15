@@ -1,6 +1,6 @@
 // app/e-checksheet-inf-jalan/EChecksheetInfJalanForm.tsx
 "use client";
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
 import { Sidebar } from "@/components/Sidebar";
@@ -15,6 +15,45 @@ import {
   ChecklistItem,
   ChecklistData
 } from "@/lib/api/checksheet";
+
+// ✅ Helper: Extract tahun dari tanggal
+const getYear = (dateString: string) => new Date(dateString).getFullYear();
+
+// ✅ Helper: Extract bulan dari tanggal (0-11)
+const getMonth = (dateString: string) => new Date(dateString).getMonth();
+
+// ✅ Helper: Format nama bulan dalam Bahasa Indonesia
+const monthNames = [
+  "Januari", "Februari", "Maret", "April", "Mei", "Juni",
+  "Juli", "Agustus", "September", "Oktober", "November", "Desember"
+];
+
+// ✅ Helper: Group dates by year and month
+const groupDatesByYearMonth = (dates: string[]) => {
+  const grouped: Record<number, Record<number, string[]>> = {};
+  
+  dates.forEach(date => {
+    const year = getYear(date);
+    const month = getMonth(date);
+    
+    if (!grouped[year]) {
+      grouped[year] = {};
+    }
+    if (!grouped[year][month]) {
+      grouped[year][month] = [];
+    }
+    grouped[year][month].push(date);
+  });
+  
+  // Sort dates within each month (newest first)
+  Object.values(grouped).forEach(yearData => {
+    Object.values(yearData).forEach(monthDates => {
+      monthDates.sort((a, b) => new Date(b).getTime() - new Date(a).getTime());
+    });
+  });
+  
+  return grouped;
+};
 
 export function EChecksheetInfJalanForm() {
   const router = useRouter();
@@ -42,9 +81,15 @@ export function EChecksheetInfJalanForm() {
   const [availableDates, setAvailableDates] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [areaId, setAreaId] = useState<number | null>(null);
-  const videoRef = useRef(null);
-  const canvasRef = useRef(null);
-
+  
+  // ✅ Filter States untuk Riwayat Isian (3 DROPDOWN)
+  const [selectedYear, setSelectedYear] = useState<number | "">("");
+  const [selectedMonth, setSelectedMonth] = useState<number | "">("");
+  const [filteredDates, setFilteredDates] = useState<string[]>([]);
+  
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  
   // ✅ Load inspection items
   useEffect(() => {
     const loadItems = async () => {
@@ -58,11 +103,10 @@ export function EChecksheetInfJalanForm() {
     };
     loadItems();
   }, []);
-
+  
   // ✅ Load areaId dan available dates - HANYA SETELAH AUTH VERIFIED
   useEffect(() => {
     if (!areaName || !isMounted || !authVerified) return;
-    
     const loadAreaData = async () => {
       try {
         // Format nama area sesuai database: "NAMA AREA • KATEGORI • LOKASI"
@@ -75,6 +119,15 @@ export function EChecksheetInfJalanForm() {
           setAreaId(area.id);
           const dates = await getAvailableDates(TYPE_SLUG, area.id);
           setAvailableDates(dates);
+          
+          // ✅ Set default filter to current year & month
+          if (dates.length > 0) {
+            const latestDate = dates[0];
+            const currentYear = getYear(latestDate);
+            const currentMonth = getMonth(latestDate);
+            setSelectedYear(currentYear);
+            setSelectedMonth(currentMonth);
+          }
         } else {
           // Fallback: cari berdasarkan areaName saja
           const fallbackArea = areas.find((a: any) => a.name.startsWith(areaName));
@@ -82,6 +135,14 @@ export function EChecksheetInfJalanForm() {
             setAreaId(fallbackArea.id);
             const dates = await getAvailableDates(TYPE_SLUG, fallbackArea.id);
             setAvailableDates(dates);
+            
+            if (dates.length > 0) {
+              const latestDate = dates[0];
+              const currentYear = getYear(latestDate);
+              const currentMonth = getMonth(latestDate);
+              setSelectedYear(currentYear);
+              setSelectedMonth(currentMonth);
+            }
           } else {
             alert(`Area "${areaName}" tidak ditemukan.`);
           }
@@ -91,14 +152,14 @@ export function EChecksheetInfJalanForm() {
         alert("Gagal memuat data area.");
       }
     };
-
+    
     loadAreaData();
   }, [areaName, kategori, lokasi, isMounted, authVerified]);
-
+  
   useEffect(() => {
     setIsMounted(true);
   }, []);
-
+  
   // ✅ CRITICAL FIX: Authentication verification dengan state tracking dan delay
   useEffect(() => {
     if (!isMounted || !isInitialized || authLoading) {
@@ -106,13 +167,12 @@ export function EChecksheetInfJalanForm() {
       setAuthVerified(false);
       return;
     }
-
     if (user && user.role === "inspector-ga") {
       console.log('✅ Auth verified successfully');
       setAuthVerified(true);
       return;
     }
-
+    
     // Beri waktu 1.5 detik sebelum redirect
     const verificationTimeout = setTimeout(() => {
       if (!user || user.role !== "inspector-ga") {
@@ -122,20 +182,19 @@ export function EChecksheetInfJalanForm() {
         setAuthVerified(true);
       }
     }, 1500);
-
+    
     return () => clearTimeout(verificationTimeout);
   }, [user, authLoading, isInitialized, router, isMounted]);
-
+  
   // ✅ Camera useEffect
   useEffect(() => {
     if (!showCameraModal) return;
-    
     const startCamera = async () => {
       try {
         const stream = await navigator.mediaDevices.getUserMedia({
           video: { facingMode: "environment" }
         });
-
+        
         setCameraStream(stream);
         if (videoRef.current) {
           (videoRef.current as any).srcObject = stream;
@@ -146,17 +205,33 @@ export function EChecksheetInfJalanForm() {
         setShowCameraModal(false);
       }
     };
-
+    
     startCamera();
-
+    
     return () => {
       if (cameraStream) {
         cameraStream.getTracks().forEach(track => track.stop());
       }
     };
   }, [showCameraModal]);
-
-  // ✅ Load existing data
+  
+  // ✅ Filter dates when year or month changes (3 DROPDOWN SYSTEM)
+  useEffect(() => {
+    if (selectedYear === "" || selectedMonth === "") {
+      setFilteredDates([]);
+      return;
+    }
+    
+    const grouped = groupDatesByYearMonth(availableDates);
+    const datesForSelection = grouped[selectedYear]?.[selectedMonth] || [];
+    
+    setFilteredDates(datesForSelection);
+    
+    // ✅ FIXED: TIDAK AUTO-SELECT tanggal
+    // Biarkan selectedDate tetap kosong, user harus pilih manual
+  }, [selectedYear, selectedMonth, availableDates]);
+  
+  // ✅ Load existing data - HANYA saat user klik "Muat Data"
   const handleLoadExisting = async () => {
     if (!selectedDate) {
       alert("Pilih tanggal terlebih dahulu!");
@@ -166,7 +241,6 @@ export function EChecksheetInfJalanForm() {
       alert("Area tidak valid!");
       return;
     }
-
     try {
       setIsLoading(true);
       const data = await getChecklistByDate(TYPE_SLUG, areaId, selectedDate);
@@ -174,22 +248,22 @@ export function EChecksheetInfJalanForm() {
       if (data) {
         const existingData: Record<string, string> = {};
         const loadedImages: { key: string; url: string }[] = [];
-
-        Object.entries(data).forEach(([itemKey, entry]) => {
+        
+        Object.entries(data).forEach(([itemKey, entry]: [string, any]) => {
           existingData[`${itemKey}_hasil`] = entry.hasilPemeriksaan || "";
           existingData[`${itemKey}_keterangan`] = entry.keteranganTemuan || "";
           existingData[`${itemKey}_tindakan`] = entry.tindakanPerbaikan || "";
           existingData[`${itemKey}_pic`] = entry.pic || "";
           existingData[`${itemKey}_dueDate`] = entry.dueDate || "";
           existingData[`${itemKey}_verify`] = entry.verify || "";
-
+          
           if (entry.images && Array.isArray(entry.images)) {
             entry.images.forEach((url: string) => {
               loadedImages.push({ key: itemKey, url });
             });
           }
         });
-
+        
         setAnswers(existingData);
         setImages(loadedImages);
         alert("Data berhasil dimuat!");
@@ -205,7 +279,7 @@ export function EChecksheetInfJalanForm() {
       setIsLoading(false);
     }
   };
-
+  
   // ✅ Save to API
   const handleSave = async () => {
     if (!user) {
@@ -221,19 +295,19 @@ export function EChecksheetInfJalanForm() {
       alert("Area tidak valid!");
       return;
     }
-
+    
     const allFieldsFilled = inspectionItems.every((item) => 
       answers[`${item.item_key}_hasil`]
     );
-
+    
     if (!allFieldsFilled) {
       alert("Mohon isi Hasil Pemeriksaan untuk semua item!");
       return;
     }
-
+    
     try {
       setIsLoading(true);
-
+      
       const checklistData: ChecklistData = {};
       
       inspectionItems.forEach((item) => {
@@ -252,7 +326,7 @@ export function EChecksheetInfJalanForm() {
           notes: ""
         };
       });
-
+      
       await saveChecklist(
         TYPE_SLUG,
         areaId,
@@ -261,7 +335,7 @@ export function EChecksheetInfJalanForm() {
         user.id || "unknown",
         user.fullName || "Unknown Inspector"
       );
-
+      
       alert(`Data berhasil disimpan untuk tanggal ${new Date(selectedDate).toLocaleDateString("id-ID")}`);
       
       router.push(`/status-ga/inf-jalan?openArea=${encodeURIComponent(areaName)}`);
@@ -272,15 +346,14 @@ export function EChecksheetInfJalanForm() {
       setIsLoading(false);
     }
   };
-
+  
   const handleInputChange = (field: string, value: string): void => {
     setAnswers((prev) => ({ ...prev, [field]: value }));
   };
-
+  
   const handleImageUpload = (event: React.ChangeEvent<HTMLInputElement>, itemKey: string) => {
     const files = event.target.files;
     if (!files) return;
-    
     Array.from(files).forEach(file => {
       const reader = new FileReader();
       reader.onloadend = () => {
@@ -289,55 +362,60 @@ export function EChecksheetInfJalanForm() {
       reader.readAsDataURL(file);
     });
   };
-
+  
   const removeImage = (index: number) => {
     setImages(prev => prev.filter((_, i) => i !== index));
   };
-
+  
   const openImageModal = (imgUrl: string) => {
     setCurrentImage(imgUrl);
     setShowImageModal(true);
   };
-
+  
   const closeImageModal = () => {
     setShowImageModal(false);
     setCurrentImage("");
   };
-
+  
   const openCamera = (itemKey: string) => {
     setCurrentItemKey(itemKey);
     setShowCameraModal(true);
   };
-
+  
   const captureImage = () => {
     if (!videoRef.current || !canvasRef.current) return;
-    
     const video = videoRef.current as any;
     const canvas = canvasRef.current as any;
     const context = canvas.getContext('2d');
-
+    
     if (!context) return;
-
+    
     canvas.width = video.videoWidth;
     canvas.height = video.videoHeight;
     context.drawImage(video, 0, 0, canvas.width, canvas.height);
-
+    
     const imageUrl = canvas.toDataURL('image/jpeg', 0.8);
     setImages(prev => [...prev, { key: currentItemKey, url: imageUrl }]);
     setShowCameraModal(false);
-
+    
     if (cameraStream) {
       cameraStream.getTracks().forEach(track => track.stop());
     }
   };
-
+  
   // ✅ FIX: Hitung tanggal maksimum dengan benar
   const getMaxDate = () => {
     const today = new Date();
     today.setHours(23, 59, 59, 999);
     return today.toISOString().split('T')[0];
   };
-
+  
+  // ✅ Get unique years from available dates
+  const availableYears = useMemo(() => {
+    const years = new Set(availableDates.map(date => getYear(date)));
+    return Array.from(years).sort((a, b) => b - a); // Sort descending
+  }, [availableDates]);
+  
   // ✅ CRITICAL FIX: Tampilkan loading screen selama auth belum verified
   if (!isMounted || !isInitialized || !authVerified) {
     return (
@@ -360,7 +438,7 @@ export function EChecksheetInfJalanForm() {
       </div>
     );
   }
-
+  
   // ✅ Hanya render UI jika auth sudah verified
   return (
     <div style={{ minHeight: "100vh", background: "#f8f9fa" }}>
@@ -397,105 +475,169 @@ export function EChecksheetInfJalanForm() {
               Form Pemeriksaan Kelayakan Jalan & Boardess
             </p>
           </div>
-
-          {/* Info Area */}
-          <div style={{
-            background: "white",
-            border: "1px solid #e8e8e8",
-            borderRadius: "10px",
-            padding: "16px 20px",
-            boxShadow: "0 2px 6px rgba(0,0,0,0.05)",
-            marginBottom: "20px"
-          }}>
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(250px, 1fr))", gap: "12px" }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 0", borderBottom: "1px solid #f0f0f0" }}>
-                <span style={{ fontWeight: "600", color: "#0d47a1", fontSize: "clamp(11px, 2.5vw, 13px)" }}>Nama Area</span>
-                <span style={{ color: "#333", fontSize: "clamp(12px, 3vw, 14px)", fontWeight: "500" }}>{areaName}</span>
-              </div>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 0", borderBottom: "1px solid #f0f0f0" }}>
-                <span style={{ fontWeight: "600", color: "#0d47a1", fontSize: "clamp(11px, 2.5vw, 13px)" }}>Kategori</span>
-                <span style={{ color: "#333", fontSize: "clamp(12px, 3vw, 14px)", fontWeight: "500" }}>{kategori}</span>
-              </div>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 0", borderBottom: "1px solid #f0f0f0" }}>
-                <span style={{ fontWeight: "600", color: "#0d47a1", fontSize: "clamp(11px, 2.5vw, 13px)" }}>Lokasi</span>
-                <span style={{ color: "#333", fontSize: "clamp(12px, 3vw, 14px)", fontWeight: "500" }}>{lokasi}</span>
-              </div>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 0", borderBottom: "1px solid #f0f0f0" }}>
-                <span style={{ fontWeight: "600", color: "#0d47a1", fontSize: "clamp(11px, 2.5vw, 13px)" }}>PIC Pengecekan</span>
-                <span style={{ color: "#333", fontSize: "clamp(12px, 3vw, 14px)", fontWeight: "500" }}>{user?.fullName}</span>
-              </div>
+        </div>
+        
+        {/* Info Area */}
+        <div style={{
+          background: "white",
+          border: "1px solid #e8e8e8",
+          borderRadius: "10px",
+          padding: "16px 20px",
+          boxShadow: "0 2px 6px rgba(0,0,0,0.05)",
+          marginBottom: "20px"
+        }}>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(250px, 1fr))", gap: "12px" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 0", borderBottom: "1px solid #f0f0f0" }}>
+              <span style={{ fontWeight: "600", color: "#0d47a1", fontSize: "clamp(11px, 2.5vw, 13px)" }}>Nama Area</span>
+              <span style={{ color: "#333", fontSize: "clamp(12px, 3vw, 14px)", fontWeight: "500" }}>{areaName}</span>
+            </div>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 0", borderBottom: "1px solid #f0f0f0" }}>
+              <span style={{ fontWeight: "600", color: "#0d47a1", fontSize: "clamp(11px, 2.5vw, 13px)" }}>Kategori</span>
+              <span style={{ color: "#333", fontSize: "clamp(12px, 3vw, 14px)", fontWeight: "500" }}>{kategori}</span>
+            </div>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 0", borderBottom: "1px solid #f0f0f0" }}>
+              <span style={{ fontWeight: "600", color: "#0d47a1", fontSize: "clamp(11px, 2.5vw, 13px)" }}>Lokasi</span>
+              <span style={{ color: "#333", fontSize: "clamp(12px, 3vw, 14px)", fontWeight: "500" }}>{lokasi}</span>
+            </div>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 0", borderBottom: "1px solid #f0f0f0" }}>
+              <span style={{ fontWeight: "600", color: "#0d47a1", fontSize: "clamp(11px, 2.5vw, 13px)" }}>PIC Pengecekan</span>
+              <span style={{ color: "#333", fontSize: "clamp(12px, 3vw, 14px)", fontWeight: "500" }}>{user?.fullName}</span>
             </div>
           </div>
-
-          {/* Date Selection */}
-          <div style={{
-            background: "white",
-            border: "2px solid #1e88e5",
-            borderRadius: "10px",
-            padding: "16px 20px",
-            boxShadow: "0 2px 6px rgba(0,0,0,0.05)",
-            marginBottom: "20px"
+        </div>
+        
+        {/* Date Selection */}
+        <div style={{
+          background: "white",
+          border: "2px solid #1e88e5",
+          borderRadius: "10px",
+          padding: "16px 20px",
+          boxShadow: "0 2px 6px rgba(0,0,0,0.05)",
+          marginBottom: "20px"
+        }}>
+          <div style={{ marginBottom: "12px" }}>
+            <strong style={{ 
+              color: "#0d47a1",
+              fontSize: "15px"
+            }}>
+              📅 Jadwal Inspeksi: Setiap Minggu
+            </strong>
+          </div>
+          
+          <div style={{ 
+            display: "flex", 
+            alignItems: "center", 
+            gap: "12px", 
+            flexWrap: "wrap", 
+            marginBottom: "12px" 
           }}>
-            <div style={{ marginBottom: "12px" }}>
-              <strong style={{ 
+            <label style={{ 
+              fontWeight: "700", 
+              color: "#0d47a1",
+              fontSize: "14px"
+            }}>
+              Tanggal Pemeriksaan:
+            </label>
+            <input
+              type="date"
+              value={selectedDate}
+              onChange={(e) => setSelectedDate(e.target.value)}
+              max={getMaxDate()}
+              style={{
                 color: "#0d47a1",
-                fontSize: "15px"
-              }}>
-                📅 Jadwal Inspeksi: Setiap Minggu
-              </strong>
-            </div>
-
+                padding: "8px 12px",
+                border: "2px solid #1e88e5",
+                borderRadius: "6px",
+                fontSize: "14px",
+                minWidth: "160px"
+              }}
+            />
+          </div>
+          
+          {/* ✅ RIWAYAT ISIAN dengan 3 DROPDOWN (Tahun, Bulan, Tanggal) */}
+          {availableDates.length > 0 && (
             <div style={{ 
               display: "flex", 
               alignItems: "center", 
               gap: "12px", 
-              flexWrap: "wrap", 
-              marginBottom: "12px" 
+              flexWrap: "wrap",
+              padding: "12px",
+              background: "#f5f9ff",
+              borderRadius: "8px",
+              border: "1px solid #e3f2fd"
             }}>
               <label style={{ 
                 fontWeight: "700", 
                 color: "#0d47a1",
                 fontSize: "14px"
               }}>
-                Tanggal Pemeriksaan:
+                📁 Riwayat Isian:
               </label>
-              <input
-                type="date"
-                value={selectedDate}
-                onChange={(e) => setSelectedDate(e.target.value)}
-                max={getMaxDate()}
+              
+              {/* Dropdown Tahun */}
+              <select
+                value={selectedYear}
+                onChange={(e) => {
+                  const year = e.target.value ? parseInt(e.target.value) : "";
+                  setSelectedYear(year);
+                  setSelectedMonth(""); // Reset month when year changes
+                  setSelectedDate(""); // Reset date when year changes
+                  console.log('📅 Year changed:', year);
+                }}
                 style={{
                   color: "#0d47a1",
                   padding: "8px 12px",
                   border: "2px solid #1e88e5",
                   borderRadius: "6px",
                   fontSize: "14px",
-                  minWidth: "160px"
+                  minWidth: "100px",
+                  background: "white",
+                  cursor: "pointer",
+                  fontWeight: "500"
                 }}
-              />
-            </div>
-
-            {availableDates.length > 0 && (
-              <div style={{ 
-                display: "flex", 
-                alignItems: "center", 
-                gap: "12px", 
-                flexWrap: "wrap" 
-              }}>
-                <label style={{ 
-                  fontWeight: "700", 
-                  color: "#0d47a1",
-                  fontSize: "14px"
-                }}>
-                  Riwayat Isian:
-                </label>
+              >
+                <option value="">— Pilih Tahun —</option>
+                {availableYears.map(year => (
+                  <option key={year} value={year}>{year}</option>
+                ))}
+              </select>
+              
+              {/* Dropdown Bulan */}
+              <select
+                value={selectedMonth}
+                onChange={(e) => {
+                  const month = e.target.value ? parseInt(e.target.value) : "";
+                  setSelectedMonth(month);
+                  setSelectedDate(""); // Reset date when month changes
+                  console.log('📅 Month changed:', month);
+                }}
+                disabled={selectedYear === ""}
+                style={{
+                  color: selectedYear === "" ? "#999" : "#0d47a1",
+                  padding: "8px 12px",
+                  border: "2px solid #1e88e5",
+                  borderRadius: "6px",
+                  fontSize: "14px",
+                  minWidth: "140px",
+                  background: "white",
+                  cursor: selectedYear === "" ? "not-allowed" : "pointer",
+                  fontWeight: "500"
+                }}
+              >
+                <option value="">— Pilih Bulan —</option>
+                {monthNames.map((month, index) => (
+                  <option key={index} value={index}>{month}</option>
+                ))}
+              </select>
+              
+              {/* Dropdown Tanggal (setelah tahun & bulan dipilih) */}
+              {filteredDates.length > 0 && (
                 <select
-                  value=""
+                  value={selectedDate}
                   onChange={(e) => {
                     const date = e.target.value;
-                    if (date) {
-                      setSelectedDate(date);
-                    }
+                    setSelectedDate(date);
+                    console.log('📅 Date selected from filter:', date);
                   }}
                   style={{
                     color: "#0d47a1",
@@ -503,51 +645,54 @@ export function EChecksheetInfJalanForm() {
                     border: "2px solid #1e88e5",
                     borderRadius: "6px",
                     fontSize: "14px",
-                    minWidth: "180px"
+                    minWidth: "160px",
+                    background: "white",
+                    cursor: "pointer",
+                    fontWeight: "500"
                   }}
                 >
-                  <option value="">— Pilih tanggal lama —</option>
-                  {availableDates
-                    .sort((a, b) => new Date(b).getTime() - new Date(a).getTime())
-                    .map((date) => (
-                      <option key={date} value={date}>
-                        {new Date(date).toLocaleDateString("id-ID", {
-                          day: "2-digit",
-                          month: "short",
-                          year: "numeric"
-                        })}
-                      </option>
-                    ))}
+                  <option value="">— Pilih Tanggal —</option>
+                  {filteredDates.map(date => (
+                    <option key={date} value={date}>
+                      {new Date(date).toLocaleDateString("id-ID", {
+                        day: "2-digit",
+                        month: "short",
+                        year: "numeric"
+                      })}
+                    </option>
+                  ))}
                 </select>
-                <button
-                  onClick={handleLoadExisting}
-                  disabled={!selectedDate || isLoading}
-                  style={{
-                    padding: "8px 16px",
-                    background: (selectedDate && !isLoading) ? "#ff9800" : "#bdbdbd",
-                    color: "white",
-                    border: "none",
-                    borderRadius: "6px",
-                    cursor: (selectedDate && !isLoading) ? "pointer" : "not-allowed",
-                    fontSize: "13px",
-                    fontWeight: "600"
-                  }}
-                >
-                  {isLoading ? "Memuat..." : "Muat Data"}
-                </button>
-              </div>
-            )}
-
-            <p style={{
-              margin: "12px 0 0 0",
-              fontSize: "12px",
-              color: "#666",
-              fontStyle: "italic"
-            }}>
-              💡 Pilih tanggal pemeriksaan, lalu isi form di bawah. Klik "Muat Data" jika ingin mengedit data yang sudah ada.
-            </p>
-          </div>
-
+              )}
+              
+              <button
+                onClick={handleLoadExisting}
+                disabled={!selectedDate || isLoading}
+                style={{
+                  padding: "8px 16px",
+                  background: (selectedDate && !isLoading) ? "#ff9800" : "#bdbdbd",
+                  color: "white",
+                  border: "none",
+                  borderRadius: "6px",
+                  cursor: (selectedDate && !isLoading) ? "pointer" : "not-allowed",
+                  fontSize: "13px",
+                  fontWeight: "600"
+                }}
+              >
+                {isLoading ? "Memuat..." : "Muat Data"}
+              </button>
+            </div>
+          )}
+          
+          <p style={{
+            margin: "12px 0 0 0",
+            fontSize: "12px",
+            color: "#666",
+            fontStyle: "italic"
+          }}>
+            💡 Pilih tanggal pemeriksaan, lalu isi form di bawah. Klik "Muat Data" jika ingin mengedit data yang sudah ada.
+          </p>
+        </div>
+        
         {/* Tabel Checklist */}
         <div style={{
           background: "white",
@@ -589,7 +734,7 @@ export function EChecksheetInfJalanForm() {
                     color: "#01579b",
                     textAlign: "center",
                     width: "100px"
-                  }}>HASIL<br/>PEMERIKSAAN</th>
+                  }}>HASIL <br/>PEMERIKSAAN</th>
                   <th style={{
                     padding: "10px",
                     border: "1px solid #0d47a1",
@@ -630,14 +775,7 @@ export function EChecksheetInfJalanForm() {
                     textAlign: "center",
                     width: "100px"
                   }}>DUE DATE</th>
-                  <th style={{
-                    padding: "10px",
-                    border: "1px solid #0d47a1",
-                    fontWeight: "700",
-                    color: "#01579b",
-                    textAlign: "center",
-                    width: "80px"
-                  }}>VERIFY</th>
+                  {/* ✅ KOLOM VERIFY DIHAPUS */}
                 </tr>
               </thead>
               <tbody>
@@ -716,7 +854,7 @@ export function EChecksheetInfJalanForm() {
                       border: "1px solid #0d47a1",
                       verticalAlign: "top",
                       background: "white",
-                      textAlign:"center",
+                      textAlign: "center",
                     }}>
                       <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
                         <div style={{ display: "flex", gap: "4px" }}>
@@ -872,213 +1010,191 @@ export function EChecksheetInfJalanForm() {
                         }}
                       />
                     </td>
-                    <td style={{
-                      padding: "8px",
-                      border: "1px solid #0d47a1",
-                      verticalAlign: "top",
-                      background: "white"
-                    }}>
-                      <input
-                        type="text"
-                        value={answers[`${item.item_key}_verify`] || ""}
-                        onChange={(e) => handleInputChange(`${item.item_key}_verify`, e.target.value)}
-                        disabled={!selectedDate}
-                        placeholder="Verify"
-                        style={{
-                          width: "100%",
-                          padding: "4px",
-                          fontSize: "11px",
-                          border: "1px solid #ccc",
-                          borderRadius: "4px",
-                          opacity: selectedDate ? 1 : 0.5
-                        }}
-                      />
-                    </td>
+                    {/* ✅ KOLOM VERIFY DIHAPUS */}
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
         </div>
-
-          {/* Action Buttons */}
-          <div style={{ 
-            display: "flex", 
-            gap: "12px", 
-            justifyContent: "center", 
-            padding: "20px 0" 
-          }}>
-            <button
-              onClick={() => router.push("/status-ga/inf-jalan")}
-              style={{
-                padding: "12px 28px",
-                background: "#bdbdbd",
-                color: "white",
-                border: "none",
-                borderRadius: "8px",
-                fontWeight: "600",
-                cursor: "pointer"
-              }}
-            >
-              ← Kembali
-            </button>
-            <button
-              onClick={handleSave}
-              disabled={!selectedDate || isLoading || !areaId}
-              style={{
-                padding: "12px 28px",
-                background: (selectedDate && !isLoading && areaId) 
-                  ? "linear-gradient(135deg, #1e88e5, #0d47a1)" 
-                  : "#bdbdbd",
-                color: "white",
-                border: "none",
-                borderRadius: "8px",
-                fontWeight: "600",
-                cursor: (selectedDate && !isLoading && areaId) ? "pointer" : "not-allowed",
-                opacity: (selectedDate && !isLoading && areaId) ? 1 : 0.6
-              }}
-            >
-              {isLoading ? "⏳ Menyimpan..." : "✓ Simpan Data"}
-            </button>
-          </div>
-
-          {/* Modal Gambar */}
-          {showImageModal && (
-            <div
-              onClick={closeImageModal}
-              style={{
-                position: "fixed",
-                top: 0,
-                left: 0,
-                right: 0,
-                bottom: 0,
-                background: "rgba(0,0,0,0.8)",
-                display: "flex",
-                justifyContent: "center",
-                alignItems: "center",
-                zIndex: 2000,
-                padding: "20px"
-              }}
-            >
-              <div onClick={(e) => e.stopPropagation()} style={{ textAlign: "center" }}>
-                <img
-                  src={currentImage}
-                  alt="Dokumentasi"
-                  style={{
-                    maxHeight: "90vh",
-                    maxWidth: "90vw",
-                    objectFit: "contain",
-                    borderRadius: "8px",
-                    border: "3px solid white",
-                  }}
-                />
-                <div style={{ 
-                  marginTop: "16px", 
-                  color: "white", 
-                  fontSize: "14px" 
-                }}>
-                  Click outside to close
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Modal Kamera */}
-          {showCameraModal && (
-            <div
-              onClick={() => {
-                setShowCameraModal(false);
-                if (cameraStream) {
-                  cameraStream.getTracks().forEach(track => track.stop());
-                }
-              }}
-              style={{
-                position: "fixed",
-                top: 0,
-                left: 0,
-                right: 0,
-                bottom: 0,
-                background: "rgba(0,0,0,0.8)",
-                display: "flex",
-                justifyContent: "center",
-                alignItems: "center",
-                zIndex: 2000,
-              }}
-            >
-              <div
-                onClick={(e) => e.stopPropagation()}
-                style={{
-                  background: "white",
-                  borderRadius: "8px",
-                  padding: "16px 20px",
-                  textAlign: "center",
-                  maxWidth: "90vw",
-                  width: "100%",
-                }}
-              >
-                <h3 style={{ 
-                  margin: "0 0 12px 0", 
-                  color: "#212121" 
-                }}>
-                  📸 Ambil Foto
-                </h3>
-                <video
-                  ref={videoRef}
-                  autoPlay
-                  playsInline
-                  style={{
-                    width: "100%",
-                    maxHeight: "60vh",
-                    borderRadius: "6px",
-                    background: "#000",
-                    transform: "scaleX(-1)"
-                  }}
-                />
-                <canvas ref={canvasRef} style={{ display: "none" }} />
-                <div style={{ 
-                  marginTop: "16px", 
-                  display: "flex", 
-                  gap: "12px", 
-                  justifyContent: "center" 
-                }}>
-                  <button
-                    onClick={captureImage}
-                    style={{
-                      padding: "10px 20px",
-                      background: "#4caf50",
-                      color: "white",
-                      border: "none",
-                      borderRadius: "6px",
-                      fontWeight: "600",
-                      cursor: "pointer"
-                    }}
-                  >
-                    📸 Ambil Foto
-                  </button>
-                  <button
-                    onClick={() => {
-                      setShowCameraModal(false);
-                      if (cameraStream) {
-                        cameraStream.getTracks().forEach(track => track.stop());
-                      }
-                    }}
-                    style={{
-                      padding: "10px 20px",
-                      background: "#757575",
-                      color: "white",
-                      border: "none",
-                      borderRadius: "6px",
-                      fontWeight: "600",
-                      cursor: "pointer"
-                    }}
-                  >
-                    Batal
-                  </button>
-                </div>
-              </div>
-            </div>
-          )}
+        
+        {/* Action Buttons */}
+        <div style={{ 
+          display: "flex", 
+          gap: "12px", 
+          justifyContent: "center", 
+          padding: "20px 0" 
+        }}>
+          <button
+            onClick={() => router.push("/status-ga/inf-jalan")}
+            style={{
+              padding: "12px 28px",
+              background: "#bdbdbd",
+              color: "white",
+              border: "none",
+              borderRadius: "8px",
+              fontWeight: "600",
+              cursor: "pointer"
+            }}
+          >
+            ← Kembali
+          </button>
+          <button
+            onClick={handleSave}
+            disabled={!selectedDate || isLoading || !areaId}
+            style={{
+              padding: "12px 28px",
+              background: (selectedDate && !isLoading && areaId) 
+                ? "linear-gradient(135deg, #1e88e5, #0d47a1)" 
+                : "#bdbdbd",
+              color: "white",
+              border: "none",
+              borderRadius: "8px",
+              fontWeight: "600",
+              cursor: (selectedDate && !isLoading && areaId) ? "pointer" : "not-allowed",
+              opacity: (selectedDate && !isLoading && areaId) ? 1 : 0.6
+            }}
+          >
+            {isLoading ? "⏳ Menyimpan..." : "✓ Simpan Data"}
+          </button>
         </div>
+        
+        {/* Modal Gambar */}
+        {showImageModal && (
+          <div
+            onClick={closeImageModal}
+            style={{
+              position: "fixed",
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              background: "rgba(0,0,0,0.8)",
+              display: "flex",
+              justifyContent: "center",
+              alignItems: "center",
+              zIndex: 2000,
+              padding: "20px"
+            }}
+          >
+            <div onClick={(e) => e.stopPropagation()} style={{ textAlign: "center" }}>
+              <img
+                src={currentImage}
+                alt="Dokumentasi"
+                style={{
+                  maxHeight: "90vh",
+                  maxWidth: "90vw",
+                  objectFit: "contain",
+                  borderRadius: "8px",
+                  border: "3px solid white",
+                }}
+              />
+              <div style={{ 
+                marginTop: "16px", 
+                color: "white", 
+                fontSize: "14px" 
+              }}>
+                Click outside to close
+              </div>
+            </div>
+          </div>
+        )}
+        
+        {/* Modal Kamera */}
+        {showCameraModal && (
+          <div
+            onClick={() => {
+              setShowCameraModal(false);
+              if (cameraStream) {
+                cameraStream.getTracks().forEach(track => track.stop());
+              }
+            }}
+            style={{
+              position: "fixed",
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              background: "rgba(0,0,0,0.8)",
+              display: "flex",
+              justifyContent: "center",
+              alignItems: "center",
+              zIndex: 2000,
+            }}
+          >
+            <div
+              onClick={(e) => e.stopPropagation()}
+              style={{
+                background: "white",
+                borderRadius: "8px",
+                padding: "16px 20px",
+                textAlign: "center",
+                maxWidth: "90vw",
+                width: "100%",
+              }}
+            >
+              <h3 style={{ 
+                margin: "0 0 12px 0", 
+                color: "#212121" 
+              }}>
+                📸 Ambil Foto
+              </h3>
+              <video
+                ref={videoRef}
+                autoPlay
+                playsInline
+                style={{
+                  width: "100%",
+                  maxHeight: "60vh",
+                  borderRadius: "6px",
+                  background: "#000",
+                  transform: "scaleX(-1)"
+                }}
+              />
+              <canvas ref={canvasRef} style={{ display: "none" }} />
+              <div style={{ 
+                marginTop: "16px", 
+                display: "flex", 
+                gap: "12px", 
+                justifyContent: "center" 
+              }}>
+                <button
+                  onClick={captureImage}
+                  style={{
+                    padding: "10px 20px",
+                    background: "#4caf50",
+                    color: "white",
+                    border: "none",
+                    borderRadius: "6px",
+                    fontWeight: "600",
+                    cursor: "pointer"
+                  }}
+                >
+                  📸 Ambil Foto
+                </button>
+                <button
+                  onClick={() => {
+                    setShowCameraModal(false);
+                    if (cameraStream) {
+                      cameraStream.getTracks().forEach(track => track.stop());
+                    }
+                  }}
+                  style={{
+                    padding: "10px 20px",
+                    background: "#757575",
+                    color: "white",
+                    border: "none",
+                    borderRadius: "6px",
+                    fontWeight: "600",
+                    cursor: "pointer"
+                  }}
+                >
+                  Batal
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
