@@ -8,7 +8,6 @@ export async function GET(request: NextRequest) {
     const date = searchParams.get('date');
     const location = searchParams.get('location');
 
-    // ✅ GUNAKAN QUOTE UNTUK ALIAS CAMELCASE
     let query = `
       SELECT
         c.id,
@@ -17,7 +16,7 @@ export async function GET(request: NextRequest) {
         c.checker_nik as "nik",
         c.checker_dept as "department",
         c.submitted_at as "submittedAt",
-        i.id as "item_id",
+        i.id as "itemId",              -- ✅ WAJIB: Return actual database ID
         i.location_name as "lokasi",
         i.kondisi_pintu as "kondisiPintu",
         i.area_sekitar as "areaSekitar",
@@ -54,12 +53,12 @@ export async function GET(request: NextRequest) {
     const result = await pool.query(query, params);
     const rows = result.rows;
 
-    // ✅ Group by tanggal
+    // ✅ Group by checklist
     const grouped: any = {};
     rows.forEach((row: any) => {
       if (!grouped[row.date]) {
         grouped[row.date] = {
-          id: row.id,
+          id: row.id,                    // ✅ Checklist ID
           date: row.date,
           checker: row.checker,
           nik: row.nik,
@@ -69,7 +68,8 @@ export async function GET(request: NextRequest) {
         };
       }
       grouped[row.date].items.push({
-        item_id: row.item_id,
+        itemId: row.itemId,              // ✅ Item ID dari database (16, 17, 18...)
+        no: row.itemId,                  // ✅ Gunakan actual ID untuk no
         lokasi: row.lokasi,
         kondisiPintu: row.kondisiPintu,
         areaSekitar: row.areaSekitar,
@@ -84,7 +84,12 @@ export async function GET(request: NextRequest) {
       });
     });
 
-    const resultArray = Object.values(grouped);
+    const resultArray = Object.values(grouped) as Array<{ items: any[] }>;
+
+    console.log('✅ History data loaded:', {
+      totalRecords: resultArray.length,
+      sample: resultArray[0]?.items?.slice(0, 2)  // 🔍 Debug: lihat itemId
+    });
 
     return NextResponse.json(resultArray);
   } catch (error) {

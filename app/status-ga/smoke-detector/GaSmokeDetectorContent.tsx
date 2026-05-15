@@ -1,7 +1,7 @@
 // app/status-ga/smoke-detector/GaSmokeDetectorContent.tsx
 "use client";
 import { useState, useEffect, useRef } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
 import { Sidebar } from "@/components/Sidebar";
 import QrScanner from 'qr-scanner';
@@ -68,10 +68,15 @@ const detectDetectorType = (name: string): string => {
 
 export function GaSmokeDetectorContent() {
   const router = useRouter();
-  const searchParams = useSearchParams();
   const { user, loading: authLoading, isInitialized } = useAuth();
-  
-  const openAreaParam = searchParams.get('openArea') || '';
+
+  // ✅ FIX: Use native URL API instead of useSearchParams hook to avoid conflicts
+  const getQueryParam = (name: string): string => {
+    if (typeof window === 'undefined') return '';
+    return new URLSearchParams(window.location.search).get(name) || '';
+  };
+
+  const openAreaParam = getQueryParam('openArea');
   const TYPE_SLUG = 'smoke-detector';
   
   // ✅ State Management
@@ -217,12 +222,12 @@ export function GaSmokeDetectorContent() {
       setAuthVerified(false);
       return;
     }
-    if (user && user.role === "inspector-ga") {
+    if (user && user.role === "inspector-ga-fire") {
       setAuthVerified(true);
       return;
     }
     const verificationTimeout = setTimeout(() => {
-      if (!user || user.role !== "inspector-ga") {
+      if (!user || user.role !== "inspector-ga-fire") {
         router.push("/login-page");
       } else {
         setAuthVerified(true);

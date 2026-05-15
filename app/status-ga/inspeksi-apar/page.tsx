@@ -1,76 +1,98 @@
-// app/inspeksi-apar/page.tsx
+// app/status-ga/inspeksi-apar/page.tsx
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
 import { Sidebar } from "@/components/Sidebar";
-import { aparDataBySlug } from "@/lib/apar-data";
 import { AlertTriangle, FileText, BarChart2, ArrowLeft } from "lucide-react";
 
-const AREAS = [
-  { name: "AREA LOCKER & SECURITY", slug: "area-locker-security" },
-  { name: "AREA KANTIN", slug: "area-kantin" },
-  { name: "AREA AUDITORIUM", slug: "area-auditorium" },
-  { name: "AREA MAIN OFFICE", slug: "area-main-office" },
-  { name: "EXIM", slug: "exim" },
-  { name: "AREA GENBA A", slug: "area-genba-a" },
-  { name: "AREA MEZZANINE GENBA A", slug: "area-mezzanine-genba-a" },
-  { name: "JIG PROTO 1 AREA RECEIVING (SEBELAH PINTU MASUK) FABRIKASI JP SISI BARAT", slug: "jig-proto-1-area-receiving" },
-  { name: "STOCK CONTROL AREA", slug: "stock-control-area" },
-  { name: "JIG PROTO 2 CNC ROOM FABRIKASI C/B JP", slug: "jig-proto-2-cnc-room" },
-  { name: "AREA TRAINING A& DINING ROOM , MTC OFFICE", slug: "area-training-dining-mtc" },
-  { name: "GENBA C", slug: "genba-c" },
-  { name: "AREA PUMP ROOM & WAREHOUSE", slug: "area-pump-room-warehouse" },
-  { name: "POWER HOUSE (UNTUK GENBA A)", slug: "power-house-genba-a" },
-  { name: "POWER HOUSE (UNTUK GENBA C)", slug: "power-house-genba-c" },
-  { name: "AREA TPS B3", slug: "area-tps-b3" },
-  { name: "NEW BUILDING WAREHOUSE", slug: "new-building-warehouse" },
-  { name: "GENBA B", slug: "genba-b" },
-  { name: "POWER HOUSE AREA DAN WORKSHOP", slug: "power-house-workshop" },
-  { name: "AREA SEGITIGA GA", slug: "area-segitiga-ga" },
-  { name: "AREA PARKIR MOTOR", slug: "area-parkir-motor" },
-  { name: "FORKLIFT", slug: "forklift" },
-  { name: "SAMPING PAGAR SEBELUM RAK HELM", slug: "samping-pagar-rak-helm" },
-  { name: "BELAKANG KANTIN", slug: "belakang-kantin" },
-  { name: "IR ROOM", slug: "ir-room" },
-  { name: "AREA AUDITORIUM OUTDOOR", slug: "area-auditorium-outdoor" },
-  { name: "AREA KLINIK", slug: "area-klinik" },
-  { name: "MESIN RAYCHEM GENBA A", slug: "mesin-raychem-genba-a" },
-  { name: "MESIN RAYCHEM GENBA B", slug: "mesin-raychem-genba-b" },
-  { name: "MESIN RAYCHEM GENBA C", slug: "mesin-raychem-genba-c" },
-];
+// Mapping area names (sama seperti di [slug]/page.tsx)
+const areaNames: Record<string, string> = {
+  "area-locker-security": "AREA LOCKER & SECURITY",
+  "area-kantin": "AREA KANTIN",
+  "area-auditorium": "AREA AUDITORIUM",
+  "area-main-office": "AREA MAIN OFFICE",
+  "exim": "EXIM",
+  "area-genba-a": "AREA GENBA A",
+  "area-mezzanine-genba-a": "AREA MEZZANINE GENBA A",
+  "jig-proto-1-area-receiving": "JIG PROTO 1 AREA RECEIVING",
+  "stock-control-area": "STOCK CONTROL AREA",
+  "jig-proto-2-cnc-room": "JIG PROTO 2 CNC ROOM",
+  "area-training-dining-mtc": "AREA TRAINING & DINING ROOM",
+  "genba-c": "GENBA C",
+  "area-pump-room-warehouse": "AREA PUMP ROOM & WAREHOUSE",
+  "power-house-genba-a": "POWER HOUSE (GENBA A)",
+  "power-house-genba-c": "POWER HOUSE (GENBA C)",
+  "area-tps-b3": "AREA TPS B3",
+  "new-building-warehouse": "NEW BUILDING WAREHOUSE",
+  "genba-b": "GENBA B",
+  "power-house-workshop": "POWER HOUSE & WORKSHOP",
+  "area-segitiga-ga": "AREA SEGITIGA GA",
+  "area-parkir-motor": "AREA PARKIR MOTOR",
+  "forklift": "FORKLIFT",
+  "samping-pagar-rak-helm": "SAMPING PAGAR RAK HELM",
+  "belakang-kantin": "BELAKANG KANTIN",
+  "ir-room": "IR ROOM",
+  "area-auditorium-outdoor": "AREA AUDITORIUM OUTDOOR",
+  "area-klinik": "AREA KLINIK",
+  "mesin-raychem-genba-a": "MESIN RAYCHEM GENBA A",
+  "mesin-raychem-genba-b": "MESIN RAYCHEM GENBA B",
+  "mesin-raychem-genba-c": "MESIN RAYCHEM GENBA C",
+};
 
 export default function InspeksiAparPage() {
   const router = useRouter();
   const { user } = useAuth();
+
+  const today = new Date().toISOString().split("T")[0];
   const [searchTerm, setSearchTerm] = useState("");
   const [redirected, setRedirected] = useState(false);
 
+  // Validasi akses
   useEffect(() => {
     if (redirected) return;
-    if (!user || user.role !== "inspector-ga") {
+    if (!user || user.role !== "inspector-ga-fire") {
       setRedirected(true);
       router.push("/home");
     }
-  }, [user, router, redirected]);
+  }, [user, redirected, router]);
 
-  const validAreas = useMemo(() => {
-    return AREAS.filter(area => aparDataBySlug[area.slug as keyof typeof aparDataBySlug]?.length > 0);
-  }, []);
+  // ✅ Helper: Cek apakah area sudah diisi hari ini (opsional, untuk visual)
+  const checkIfFilled = (slug: string) => {
+    if (typeof window === "undefined") return false;
+    const key = `ga_apar_${slug}_${today}`;
+    return localStorage.getItem(key) !== null;
+  };
 
-  const filteredAreas = validAreas.filter(area =>
-    area.name.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  // ✅ Helper: Handle klik "Isi Checklist" - LANGSUNG KE FORM (tanpa cek scan di sini)
+  // Validasi scan dilakukan di halaman form [slug]/page.tsx
+  const handleChecklistClick = (slug: string) => {
+    // Langsung navigasi ke form checksheet
+    // Form akan menangani validasi scan via useScanVerification hook
+    router.push(`/status-ga/inspeksi-apar/${slug}?date=${today}`);
+  };
 
   if (!user) return null;
+
+  // Build areas from mapping
+  const areas = Object.entries(areaNames).map(([slug, title]) => ({
+    id: slug,
+    title: title,
+    desc: `Inspeksi APAR - ${title}`,
+  }));
+
+  const filteredAreas = areas.filter(area =>
+    area.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    area.desc.toLowerCase().includes(searchTerm.toLowerCase())
+  );
 
   return (
     <div className="app-page">
       <Sidebar userName={user.fullName} />
 
       <div className="page-content">
-        {/* Header Banner */}
+        {/* Header Banner - SAMA PERSIS FIRE ALARM */}
         <div className="header-banner">
           <button
             onClick={() => router.push("/status-ga")}
@@ -80,21 +102,19 @@ export default function InspeksiAparPage() {
             <ArrowLeft size={18} />
             <span>Kembali</span>
           </button>
-
           <div className="header-title">
             <AlertTriangle size={28} color="#ffffff" />
-            Status Inspeksi APAR
+            Inspeksi APAR
           </div>
-
-          <div className="header-subtitle">Pilih area untuk melihat detail inspeksi</div>
+          <div className="header-subtitle">Daily check alat pemadam api ringan</div>
         </div>
 
-        {/* 🔍 Search Bar */}
+        {/* Search Bar */}
         <div className="search-container">
           <div className="search-box">
             <input
               type="text"
-              placeholder="Cari area..."
+              placeholder="Cari area atau lokasi..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className="search-input"
@@ -102,63 +122,67 @@ export default function InspeksiAparPage() {
           </div>
         </div>
 
-        {/* Grid Area */}
+        {/* Grid Areas - SAMA PERSIS FIRE ALARM */}
         {filteredAreas.length === 0 ? (
           <div className="no-results">
             Tidak ada area ditemukan untuk "{searchTerm}"
           </div>
         ) : (
           <div className="categories-grid">
-            {filteredAreas.map((area) => (
-              <div key={area.slug} className="category-card">
-                <div className="card-header">
-                  <h2>{area.name}</h2>
+            {filteredAreas.map((area) => {
+              const isFilled = checkIfFilled(area.id);
+              return (
+                <div key={area.id} className="category-card">
+                  <div className={`card-header ${isFilled ? "filled" : ""}`}>
+                    <h2>{area.title}</h2>
+                  </div>
+                  <p className="card-desc">{area.desc}</p>
+
+                  <div className="card-actions">
+                    {/* ✅ TOMBOL ISI CHECKLIST - LANGSUNG KE FORM */}
+                    <button
+                      onClick={() => handleChecklistClick(area.id)}
+                      className={`btn-checklist ${isFilled ? "btn-filled" : ""}`}
+                    >
+                      <FileText size={16} />
+                      {isFilled ? "Sudah Diisi" : "Isi Checklist"}
+                    </button>
+
+                    {/* ✅ TOMBOL RIWAYAT - VIEW ONLY (tanpa scan) */}
+                    <button
+                      onClick={() => router.push(`/status-ga/inspeksi-apar/${area.id}/riwayat`)}
+                      className="btn-riwayat"
+                    >
+                      <BarChart2 size={16} />
+                      Riwayat
+                    </button>
+                  </div>
                 </div>
-                <p className="card-desc">Lihat status dan detail APAR</p>
-                <div className="card-actions">
-                  <button
-                    onClick={() => router.push(`/status-ga/inspeksi-apar/${area.slug}`)}
-                    className="btn-checklist"
-                  >
-                    <FileText size={16} />
-                    Lihat Detail
-                  </button>
-                  <button
-                    onClick={() => router.push(`/status-ga/inspeksi-apar/${area.slug}/riwayat`)}
-                    className="btn-riwayat"
-                  >
-                    <BarChart2 size={16} />
-                    Riwayat
-                  </button>
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
 
-        {/* Catatan Penting */}
-        <div className="info-box">
-          <h3>Catatan Penting:</h3>
+        {/* Info Box - Petunjuk Penggunaan */}
+        <div className="info-box" style={{ marginTop: '24px' }}>
+          <h3>💡 Cara Penggunaan:</h3>
           <ul>
-            <li>
-              <strong>Kolom berwarna hitam atau kosong</strong> pada tabel item pengecekan berarti{" "}
-              <em>fitur tersebut tidak tersedia/tidak relevan</em> untuk jenis APAR di lokasi tersebut.
-            </li>
-            <li>
-              <strong>Tanggal Expired (Exp. Date)</strong> yang telah melewati tanggal hari ini akan ditampilkan dalam{" "}
-              <span className="expired-text">warna merah</span>.
-            </li>
+            <li>Klik <strong>"Isi Checklist"</strong> untuk membuka form inspeksi</li>
+            <li>Form akan terbuka namun <strong>tidak dapat diisi</strong> sebelum scan QR code area</li>
+            <li>Klik tombol <strong>"🔍 Scan Sekarang"</strong> di banner kuning untuk mulai scan</li>
+            <li>Setelah scan berhasil, form akan <strong>otomatis aktif</strong> dan siap diisi</li>
+            <li>Untuk melihat data historis, klik tombol <strong>"Riwayat"</strong></li>
           </ul>
         </div>
       </div>
 
+      {/* ── STYLES (SAMA PERSIS FIRE ALARM) ── */}
       <style jsx>{`
         .app-page {
           display: flex;
           min-height: 100vh;
           background-color: #f7f9fc;
         }
-
         .page-content {
           flex: 1;
           padding: 24px;
@@ -178,7 +202,6 @@ export default function InspeksiAparPage() {
           align-items: center;
           gap: 16px;
         }
-
         .btn-back {
           display: flex;
           align-items: center;
@@ -192,14 +215,11 @@ export default function InspeksiAparPage() {
           font-weight: 600;
           transition: all 0.3s ease;
           font-size: 0.9rem;
-          outline: none;
         }
-
         .btn-back:hover {
           background: rgba(255, 255, 255, 0.3);
           transform: translateY(-1px);
         }
-
         .header-title {
           font-size: 1.8rem;
           font-weight: 700;
@@ -209,21 +229,18 @@ export default function InspeksiAparPage() {
           gap: 12px;
           flex: 1;
         }
-
         .header-subtitle {
           font-size: 0.9rem;
           opacity: 0.9;
           margin: 0;
           font-weight: 400;
           text-align: right;
-          flex-shrink: 0;
         }
 
         /* Search Bar */
         .search-container {
           margin-bottom: 24px;
         }
-
         .search-box {
           position: relative;
           display: flex;
@@ -233,7 +250,6 @@ export default function InspeksiAparPage() {
           overflow: hidden;
           background: white;
         }
-
         .search-input {
           flex: 1;
           padding: 14px 20px;
@@ -251,17 +267,14 @@ export default function InspeksiAparPage() {
           background: white;
           border-radius: 12px;
           border: 1px solid #e2e8f0;
-          margin-bottom: 24px;
         }
 
-        /* Grid Zona */
+        /* Grid Areas */
         .categories-grid {
           display: grid;
           grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
           gap: 24px;
-          margin-bottom: 32px;
         }
-
         .category-card {
           background: white;
           border-radius: 16px;
@@ -270,13 +283,11 @@ export default function InspeksiAparPage() {
           transition: all 0.3s ease;
           border: 2px solid #e2e8f0;
         }
-
         .category-card:hover {
           transform: translateY(-6px);
           box-shadow: 0 8px 20px rgba(0, 0, 0, 0.15);
           border-color: #3b82f6;
         }
-
         .card-header {
           padding: 20px;
           background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%);
@@ -285,31 +296,30 @@ export default function InspeksiAparPage() {
           justify-content: center;
           border-bottom: 2px solid #bbdefb;
         }
-
+        .card-header.filled {
+          background: linear-gradient(135deg, #e8f5e9 0%, #c8e6c9 100%);
+          border-color: #c8e6c9;
+        }
         .card-header h2 {
           margin: 0;
           font-size: 1.3rem;
           color: #0d47a1;
           font-weight: 700;
-          text-align: center;
-          line-height: 1.4;
         }
-
         .card-desc {
           padding: 16px 20px;
           color: #475569;
           line-height: 1.5;
           margin: 0;
-          text-align: center;
         }
 
+        /* Card Actions */
         .card-actions {
           padding: 16px 20px;
           display: flex;
           gap: 12px;
           border-top: 1px solid #e2e8f0;
         }
-
         .btn-checklist,
         .btn-riwayat {
           flex: 1;
@@ -321,7 +331,6 @@ export default function InspeksiAparPage() {
           border-radius: 8px;
           font-weight: 600;
           font-size: 0.9rem;
-          text-decoration: none;
           transition: all 0.25s ease;
           text-align: center;
           min-height: 42px;
@@ -329,24 +338,29 @@ export default function InspeksiAparPage() {
           border: none;
           outline: none;
         }
-
         .btn-checklist {
-          background: #1976d2;
+          background: #dc2626;
           color: white;
         }
-
         .btn-checklist:hover {
-          background: #1565c0;
+          background: #b91c1c;
           transform: scale(1.03);
-          box-shadow: 0 4px 8px rgba(25, 118, 210, 0.3);
+          box-shadow: 0 4px 8px rgba(185, 28, 28, 0.3);
         }
-
+        .btn-checklist.btn-filled {
+          background: #16a34a;
+          cursor: not-allowed;
+        }
+        .btn-checklist.btn-filled:hover {
+          background: #16a34a;
+          transform: none;
+          box-shadow: none;
+        }
         .btn-riwayat {
           background: #f1f5f9;
           color: #334155;
           border: 1px solid #cbd5e1;
         }
-
         .btn-riwayat:hover {
           background: #e2e8f0;
           border-color: #94a8c9;
@@ -365,30 +379,19 @@ export default function InspeksiAparPage() {
           color: #5d4037;
           box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
         }
-
         .info-box h3 {
           margin: 0 0 12px 0;
           color: #e65100;
           font-weight: 700;
         }
-
         .info-box ul {
           list-style: disc;
           padding-left: 20px;
           margin: 0;
         }
-
         .info-box li {
           margin-bottom: 8px;
           line-height: 1.6;
-        }
-
-        .expired-text {
-          color: #d32f2f;
-          font-weight: bold;
-          background: #ffebee;
-          padding: 2px 6px;
-          border-radius: 3px;
         }
 
         /* Responsif Mobile */
@@ -396,43 +399,32 @@ export default function InspeksiAparPage() {
           .page-content {
             padding: 16px 12px;
           }
-
           .header-banner {
             flex-direction: column;
             text-align: center;
             gap: 12px;
             padding: 16px;
           }
-
           .btn-back {
             align-self: flex-start;
             padding: 6px 12px;
             gap: 6px;
             font-size: 0.85rem;
           }
-
           .header-title {
             font-size: 1.6rem;
             justify-content: center;
           }
-
           .header-subtitle {
             text-align: center;
             align-self: flex-end;
           }
-
-          .search-container {
-            margin-top: 16px;
-          }
-
           .categories-grid {
             grid-template-columns: 1fr;
           }
-
           .card-actions {
             flex-direction: column;
           }
-
           .btn-checklist,
           .btn-riwayat {
             width: 100%;

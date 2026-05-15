@@ -1,7 +1,7 @@
 // app/status-ga/panel/GaPanelContent.tsx
 "use client";
 import { useState, useEffect } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
 import { Sidebar } from "@/components/Sidebar";
 import { ArrowLeft } from "lucide-react";
@@ -23,11 +23,16 @@ interface Area {
 
 export function GaPanelContent() {
   const router = useRouter();
-  const searchParams = useSearchParams();
   const { user, loading: authLoading, isInitialized } = useAuth();
-  
-  // ✅ Gunakan useSearchParams untuk membaca parameter
-  const openPanelParam = searchParams.get('openPanel') || '';
+
+  // ✅ FIX: Use native URL API instead of useSearchParams hook to avoid conflicts
+  const getQueryParam = (name: string): string => {
+    if (typeof window === 'undefined') return '';
+    return new URLSearchParams(window.location.search).get(name) || '';
+  };
+
+  // ✅ Gunakan helper untuk membaca parameter
+  const openPanelParam = getQueryParam('openPanel');
   const TYPE_SLUG = 'panel';
   
   // ✅ CRITICAL FIX: State untuk tracking auth verification
@@ -135,7 +140,7 @@ export function GaPanelContent() {
       return;
     }
 
-    if (user && user.role === "inspector-ga") {
+    if (user && user.role === "inspector-ga-electrical") {
       console.log('✅ Auth verified successfully');
       setAuthVerified(true);
       return;
@@ -143,7 +148,7 @@ export function GaPanelContent() {
 
     // Beri waktu 1.5 detik sebelum redirect
     const verificationTimeout = setTimeout(() => {
-      if (!user || user.role !== "inspector-ga") {
+      if (!user || user.role !== "inspector-ga-electrical") {
         console.error('❌ Auth verification failed after delay:', { user, authLoading });
         router.push("/login-page");
       } else {

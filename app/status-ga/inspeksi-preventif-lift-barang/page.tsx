@@ -14,7 +14,7 @@ export default function InspeksiPreventifLiftBarangSelector() {
   useEffect(() => {
     if (redirected) return;
     if (!user) return;
-    if (user.role !== "inspector-ga") {
+    if (user.role !== "inspector-ga-equipment") {
       setRedirected(true);
       router.push("/home");
     }
@@ -26,7 +26,7 @@ export default function InspeksiPreventifLiftBarangSelector() {
   }
 
   // Jika user bukan inspector-ga, jangan render apa-apa
-  if (user.role !== "inspector-ga") {
+  if (user.role !== "inspector-ga-equipment") {
     return null;
   }
 

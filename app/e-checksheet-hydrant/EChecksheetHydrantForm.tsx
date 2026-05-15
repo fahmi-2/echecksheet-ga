@@ -16,7 +16,6 @@ import {
 
 export function EChecksheetHydrantForm() {
   const router = useRouter();
-  const searchParams = useSearchParams();
   const { user, loading } = useAuth();
   
   const no = searchParams.get('no') || '';
@@ -39,6 +38,8 @@ export function EChecksheetHydrantForm() {
   const [availableDates, setAvailableDates] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   
+  // Image states
+  const [images, setImages] = useState<{ key: string; url: string }[]>([]);
   // Image states
   const [images, setImages] = useState<{ key: string; url: string }[]>([]);
   const [showImageModal, setShowImageModal] = useState(false);
@@ -69,6 +70,7 @@ export function EChecksheetHydrantForm() {
       } catch (error) {
         console.error("❌ Failed to load checklist items:", error);
         alert("Gagal memuat daftar item checklist.");
+        alert("Gagal memuat daftar item checklist.");
       }
     };
     loadItems();
@@ -86,9 +88,11 @@ export function EChecksheetHydrantForm() {
           setAvailableDates(dates);
         } else {
           alert(`Area dengan nomor "${no}" tidak ditemukan.`);
+          alert(`Area dengan nomor "${no}" tidak ditemukan.`);
         }
       } catch (error) {
         console.error("❌ Failed to load area data:", error);
+        alert("Gagal memuat data area.");
         alert("Gagal memuat data area.");
       }
     };
@@ -180,6 +184,60 @@ export function EChecksheetHydrantForm() {
       return;
     }
     const allFieldsFilled = inspectionItems.every((item) => items[item.item_key]);
+    try {
+      setIsLoading(true);
+      const data = await getChecklistByDate(TYPE_SLUG, areaId, selectedDate);
+      if (data) {
+        const existingData: Record<string, string> = {};
+        const loadedImages: { key: string; url: string }[] = [];
+
+        inspectionItems.forEach((item) => {
+          const itemData = data[item.item_key];
+          existingData[item.item_key] = itemData?.hasilPemeriksaan || "";
+          if (itemData?.images && Array.isArray(itemData.images)) {
+            itemData.images.forEach((url: string) => {
+              loadedImages.push({ key: item.item_key, url });
+            });
+          }
+        });
+
+        setItems(existingData);
+        setImages(loadedImages);
+        const firstItemKey = inspectionItems[0]?.item_key;
+        setKeteranganKondisi(data[firstItemKey]?.keteranganTemuan || "");
+        setTindakanPerbaikan(data[firstItemKey]?.tindakanPerbaikan || "");
+        setPic(data[firstItemKey]?.pic || "");
+        setDueDate(data[firstItemKey]?.dueDate || "");
+        setVerify(data[firstItemKey]?.verify || "");
+        alert("✅ Data berhasil dimuat!");
+      } else {
+        alert("⚠️ Tidak ada data untuk tanggal ini.");
+        resetForm();
+      }
+    } catch (error) {
+      console.error("❌ Error loading checklist data:", error);
+      alert("Gagal memuat data.");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const resetForm = () => {
+    setItems({});
+    setImages([]);
+    setKeteranganKondisi("");
+    setTindakanPerbaikan("");
+    setPic("");
+    setDueDate("");
+    setVerify("");
+  };
+
+  const handleSave = async () => {
+    if (!user || !selectedDate || !areaId) {
+      alert("Lengkapi data terlebih dahulu!");
+      return;
+    }
+    const allFieldsFilled = inspectionItems.every((item) => items[item.item_key]);
     if (!allFieldsFilled) {
       alert("Mohon isi Hasil Pemeriksaan untuk semua item!");
       return;
@@ -198,6 +256,7 @@ export function EChecksheetHydrantForm() {
           verify: verify,
           inspector: user.fullName || "",
           images: images.filter(img => img.key === item.item_key).map(img => img.url),
+          images: images.filter(img => img.key === item.item_key).map(img => img.url),
           notes: ""
         };
       });
@@ -210,8 +269,11 @@ export function EChecksheetHydrantForm() {
         user.fullName || "Unknown Inspector"
       );
       alert(`✅ Data berhasil disimpan!`);
+      alert(`✅ Data berhasil disimpan!`);
       router.push(`/status-ga/inspeksi-hydrant`);
     } catch (error) {
+      console.error("❌ Error saving:", error);
+      alert("Gagal menyimpan data.");
       console.error("❌ Error saving:", error);
       alert("Gagal menyimpan data.");
     } finally {
@@ -241,6 +303,9 @@ export function EChecksheetHydrantForm() {
     setImages(prev => prev.filter((_, i) => i !== index));
   };
 
+  // Open image modal
+  const openImageModal = (imgUrl: string) => {
+    setCurrentImage(imgUrl);
   // Open image modal
   const openImageModal = (imgUrl: string) => {
     setCurrentImage(imgUrl);
@@ -281,11 +346,14 @@ export function EChecksheetHydrantForm() {
   const getMaxDate = () => {
     const today = new Date();
     today.setHours(23, 59, 59, 999);
+    today.setHours(23, 59, 59, 999);
     return today.toISOString().split('T')[0];
   };
 
   if (!isMounted || loading) {
+  if (!isMounted || loading) {
     return (
+      <div style={{ display: "flex", justifyContent: "center", alignItems: "center", minHeight: "100vh", background: "#f5f5f5" }}>
       <div style={{ display: "flex", justifyContent: "center", alignItems: "center", minHeight: "100vh", background: "#f5f5f5" }}>
         <p style={{ fontSize: "16px", color: "#666" }}>Loading...</p>
       </div>
@@ -298,11 +366,18 @@ export function EChecksheetHydrantForm() {
 
   return (
     <div style={{ minHeight: "100vh", background: "#f8f9fa" }}>
+    <div style={{ minHeight: "100vh", background: "#f8f9fa" }}>
       <Sidebar userName={user.fullName} />
+      <div className="page-content">
       <div className="page-content">
         {/* Header */}
         <div style={{ marginBottom: "24px" }}>
+        <div style={{ marginBottom: "24px" }}>
           <div style={{
+            background: "linear-gradient(135deg, #1976d2 0%, #1565c0 100%)",
+            borderRadius: "12px",
+            padding: "24px",
+            boxShadow: "0 4px 12px rgba(25,118,210,0.2)"
             background: "linear-gradient(135deg, #1976d2 0%, #1565c0 100%)",
             borderRadius: "12px",
             padding: "24px",
@@ -310,10 +385,16 @@ export function EChecksheetHydrantForm() {
           }}>
             <h1 style={{ margin: "0 0 8px 0", color: "white", fontSize: "28px", fontWeight: "700" }}>
               🔥 Hydrant Inspection Form
+            <h1 style={{ margin: "0 0 8px 0", color: "white", fontSize: "28px", fontWeight: "700" }}>
+              🔥 Hydrant Inspection Form
             </h1>
             <p style={{ margin: 0, color: "rgba(255,255,255,0.9)", fontSize: "14px" }}>
               Monthly inspection checklist • {inspectionItems.length} items
+            <p style={{ margin: 0, color: "rgba(255,255,255,0.9)", fontSize: "14px" }}>
+              Monthly inspection checklist • {inspectionItems.length} items
             </p>
+          </div>
+        </div>
           </div>
         </div>
 
@@ -826,6 +907,29 @@ function RefButton({ label, onClick }: { label: string; onClick: () => void }) {
         fontSize: "12px",
         cursor: "pointer",
         fontWeight: "500"
+      }}
+    >
+      {label}
+    </button>
+  );
+}
+
+function RefButton({ label, onClick, disabled, title }: { label: string; onClick: () => void; disabled?: boolean; title?: string }) {
+  return (
+    <button
+      onClick={onClick}
+      disabled={disabled}
+      title={title}
+      style={{
+        padding: "8px 16px",
+        background: disabled ? "#e0e0e0" : "#e3f2fd",
+        color: disabled ? "#9e9e9e" : "#1976d2",
+        border: `1px solid ${disabled ? "#ccc" : "#1976d2"}`,
+        borderRadius: "6px",
+        fontSize: "12px",
+        cursor: disabled ? "not-allowed" : "pointer",
+        fontWeight: "500",
+        opacity: disabled ? 0.6 : 1
       }}
     >
       {label}

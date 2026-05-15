@@ -70,7 +70,7 @@ export function EChecksheetTgListrikForm({
 
   useEffect(() => {
     if (!isMounted || loading) return;
-    if (!user || (user.role !== "inspector-ga")) {
+    if (!user || (user.role !== "inspector-ga-electrical")) {
       router.push("/login-page");
     }
   }, [user, loading, router, isMounted]);
@@ -110,7 +110,7 @@ export function EChecksheetTgListrikForm({
     );
   }
 
-  if (!user || (user.role !== "inspector-ga")) {
+  if (!user || (user.role !== "inspector-ga-electrical")) {
     return null;
   }
 

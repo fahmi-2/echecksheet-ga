@@ -1,7 +1,7 @@
 // app/status-ga/inspeksi-apd/GaInspeksiApdContent.tsx
 "use client";
-import { useState, useEffect } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useState, useEffect, use } from "react";
+import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
 import { Sidebar } from "@/components/Sidebar";
 import { ArrowLeft } from "lucide-react";
@@ -23,10 +23,15 @@ interface Area {
 
 export function GaInspeksiApdContent() {
   const router = useRouter();
-  const searchParams = useSearchParams();
   const { user, loading: authLoading, isInitialized } = useAuth();
-  
-  const openArea = searchParams.get('openArea') || '';
+
+  // ✅ FIX: Use native URL API instead of useSearchParams hook to avoid conflicts
+  const getQueryParam = (name: string): string => {
+    if (typeof window === 'undefined') return '';
+    return new URLSearchParams(window.location.search).get(name) || '';
+  };
+
+  const openArea = getQueryParam('openArea');
   const TYPE_SLUG = 'inspeksi-apd';
   
   const [isMounted, setIsMounted] = useState(false);
@@ -134,7 +139,7 @@ export function GaInspeksiApdContent() {
       return;
     }
 
-    if (user && user.role === "inspector-ga") {
+    if (user && user.role === "inspector-ga-personal") {
       setAuthVerified(true);
       return;
     }

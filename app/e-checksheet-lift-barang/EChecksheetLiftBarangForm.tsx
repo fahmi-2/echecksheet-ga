@@ -104,6 +104,7 @@ export function EChecksheetLiftBarangForm() {
         setInspectionItems(items);
       } catch (error) {
         console.error("❌ Failed to load checklist items:", error);
+        console.error("❌ Failed to load checklist items:", error);
         alert("Gagal memuat daftar item checklist.");
       }
     };
@@ -150,6 +151,7 @@ export function EChecksheetLiftBarangForm() {
     };
     loadAreaData();
   }, [lokasi, user, authVerified]);
+  
   
   useEffect(() => {
     if (selectedYear === "" || selectedMonth === "") {

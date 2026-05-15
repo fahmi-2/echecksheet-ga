@@ -8,6 +8,7 @@
     "lint": "next lint .",
     "start": "next start",
     "gen-qr": "node scripts/generate-all-qr.js",
+    "gen-qr-v2": "node scripts/generate-all-qr-v2.js",
     "gen-qr-fire": "node scripts/generate-fire-alarm-qr.js",
     "gen-qr-hydrant": "node scripts/generate-hydrant-qr.js"
   },
@@ -57,12 +58,13 @@
     "embla-carousel-react": "8.5.1",
     "html5-qrcode": "^2.3.8",
     "input-otp": "1.4.1",
+    "jsqr": "^1.4.0",
     "lucide-react": "^0.454.0",
     "mysql2": "^3.16.3",
     "next": "^16.1.6",
     "next-auth": "^4.24.13",
     "next-themes": "^0.4.6",
-    "pg": "^8.18.0",
+    "pg": "^8.20.0",
     "qr-scanner": "^1.4.2",
     "qrcode": "^1.5.4",
     "react": "19.2.0",
@@ -76,6 +78,7 @@
     "tailwind-merge": "^3.3.1",
     "tailwindcss-animate": "^1.0.7",
     "vaul": "^1.1.2",
+    "xlsx": "^0.18.5",
     "zod": "3.25.76"
   },
   "devDependencies": {

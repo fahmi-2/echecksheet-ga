@@ -41,7 +41,7 @@ export default function InspeksiLiftBarangListPage() {
   useEffect(() => {
     if (redirected) return;
     if (!user) return;
-    if (user.role !== "inspector-ga") {
+    if (user.role !== "inspector-ga-equipment") {
       setRedirected(true);
       router.push("/home");
     }
@@ -51,7 +51,7 @@ export default function InspeksiLiftBarangListPage() {
     return <div>Loading...</div>;
   }
 
-  if (user.role !== "inspector-ga") {
+  if (user.role !== "inspector-ga-equipment") {
     return null;
   }
 
@@ -224,13 +224,13 @@ export default function InspeksiLiftBarangListPage() {
         }
         
         .header h1 {
-          color: #0d47a1;
+          color: #ffffff;
           margin-bottom: 8px;
           font-size: 1.8rem;
           margin: 0;
         }
         .subtitle {
-          color: #666;
+          color: #ffffff;
           margin-bottom: 0;
           font-size: 1rem;
         }

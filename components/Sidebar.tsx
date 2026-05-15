@@ -19,6 +19,10 @@ interface SidebarProps {
   userRole?: string;
 }
 
+// ── Konstanta lebar sidebar (harus konsisten dengan page yang menggunakannya) ──
+const SIDEBAR_COLLAPSED_W = 70;
+const SIDEBAR_EXPANDED_W  = 240;
+
 export function Sidebar({ userName = "User", userRole = "Role" }: SidebarProps) {
   const [isExpanded, setIsExpanded] = useState(false);
   const [activeMenu, setActiveMenu] = useState("/home");
@@ -33,39 +37,42 @@ export function Sidebar({ userName = "User", userRole = "Role" }: SidebarProps) 
   const currentRole = user?.role || "";
   const currentUserName = user?.username || "User";
 
-  // Deteksi ukuran layar untuk mobile
+  // ── Deteksi ukuran layar untuk mobile ──
   useEffect(() => {
     const checkIfMobile = () => {
       setIsMobile(window.innerWidth <= 768);
     };
-
     checkIfMobile();
     window.addEventListener('resize', checkIfMobile);
     return () => window.removeEventListener('resize', checkIfMobile);
   }, []);
 
-  // === Ambil data laporan NG dari localStorage ===
+  // ── Broadcast lebar sidebar ke seluruh halaman ──
+  // Menggunakan setTimeout(0) agar dispatch selalu terjadi di luar render cycle
+  // sehingga tidak memicu error "setState in render" di komponen lain (QRGeneratorPage).
+  const broadcastSidebarWidth = (expanded: boolean) => {
+    const width = expanded ? SIDEBAR_EXPANDED_W : SIDEBAR_COLLAPSED_W;
+    // Set CSS variable langsung (tidak memicu re-render, aman)
+    document.documentElement.style.setProperty("--sidebar-w", String(width));
+    // Dispatch CustomEvent ditunda 1 tick agar render cycle saat ini selesai dulu
+    setTimeout(() => {
+      window.dispatchEvent(
+        new CustomEvent("sidebarToggle", {
+          detail: { expanded, width },
+        })
+      );
+    }, 0);
+  };
+
+  // ── Ambil data laporan NG dari localStorage ──
   useEffect(() => {
     const fetchNgReports = () => {
       try {
-        // ✅ Hanya inspector-ga yang bisa melihat laporan NG
-        if (currentRole !== "inspector-ga") {
-          setNgReports([]);
-          return;
-        }
-
+        if (currentRole !== "inspector-ga") { setNgReports([]); return; }
         const historyStr = localStorage.getItem("checksheet_history");
-        if (!historyStr) {
-          setNgReports([]);
-          return;
-        }
-
+        if (!historyStr) { setNgReports([]); return; }
         const history = JSON.parse(historyStr);
-        if (!Array.isArray(history)) {
-          setNgReports([]);
-          return;
-        }
-
+        if (!Array.isArray(history)) { setNgReports([]); return; }
         const ngItems = history
           .filter((item: any) => item?.status === "NG")
           .sort((a: any, b: any) => new Date(b.filledAt).getTime() - new Date(a.filledAt).getTime())
@@ -77,55 +84,54 @@ export function Sidebar({ userName = "User", userRole = "Role" }: SidebarProps) 
             timestamp: new Date(item.filledAt).toLocaleDateString("id-ID"),
             url: `/pelaporan-list?reportId=${item.id || ''}`
           }));
-
         setNgReports(ngItems);
       } catch (error) {
         console.error("Gagal memuat laporan NG:", error);
         setNgReports([]);
       }
     };
-
     fetchNgReports();
-
     const handleStorageChange = () => fetchNgReports();
     window.addEventListener('storage', handleStorageChange);
     return () => window.removeEventListener('storage', handleStorageChange);
   }, [currentRole]);
 
-  // Tutup popup saat klik di luar (HANYA DI DESKTOP)
+  // ── Tutup popup saat klik di luar (HANYA DI DESKTOP) ──
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
-      if (!isMobile && // Hanya di desktop
-        notificationRef.current && 
+      if (!isMobile &&
+        notificationRef.current &&
         !notificationRef.current.contains(event.target as Node) &&
-        notificationButtonRef.current && 
+        notificationButtonRef.current &&
         !notificationButtonRef.current.contains(event.target as Node)
       ) {
         setIsNotificationOpen(false);
       }
     };
-
-    if (isNotificationOpen) {
-      document.addEventListener("mousedown", handleClickOutside);
-    } else {
-      document.removeEventListener("mousedown", handleClickOutside);
-    }
-
-    return () => {
-      document.removeEventListener("mousedown", handleClickOutside);
-    };
+    if (isNotificationOpen) document.addEventListener("mousedown", handleClickOutside);
+    else document.removeEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
   }, [isNotificationOpen, isMobile]);
 
-  // ✅ Hanya satu route untuk Home
+  // ── Broadcast initial width saat mount ──
+  useEffect(() => {
+    broadcastSidebarWidth(isExpanded);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const getHomeRoute = () => "/home";
-  
-  // ✅ Hanya satu route untuk Dashboard (GA saja)
   const getDashboardRoute = () => "/ga-dashboard";
-  
-  // ✅ Hanya satu route untuk Laporan
   const getLaporanRoute = () => "/pelaporan-list";
 
-  const toggleSidebar = () => setIsExpanded(!isExpanded);
+  // ✅ toggleSidebar: update state + broadcast ke halaman lain
+  const toggleSidebar = () => {
+    setIsExpanded(prev => {
+      const next = !prev;
+      broadcastSidebarWidth(next);
+      return next;
+    });
+  };
+
   const handleLogout = () => {
     if (logout) logout();
     router.push("/login-page");
@@ -135,25 +141,18 @@ export function Sidebar({ userName = "User", userRole = "Role" }: SidebarProps) 
     setIsNotificationOpen(false);
     router.push(url);
   };
-  const isNotificationPage = pathname === '/pelaporan-list';
 
-  // State untuk tracking hover
   const [isNotificationHovered, setIsNotificationHovered] = useState(false);
 
-  // Update active menu based on pathname
   useEffect(() => {
-    if (pathname === '/home') {
-      setActiveMenu('/home');
-    } else if (pathname === '/ga-dashboard') {
-      setActiveMenu('/ga-dashboard');
-    } else if (pathname === '/pelaporan-list') {
-      setActiveMenu('/pelaporan-list');
-    }
+    if (pathname === '/home') setActiveMenu('/home');
+    else if (pathname === '/ga-dashboard') setActiveMenu('/ga-dashboard');
+    else if (pathname === '/pelaporan-list') setActiveMenu('/pelaporan-list');
   }, [pathname]);
 
   return (
     <>
-      {/* 📱 Mobile Toggle Button (Hanya di Mobile) */}
+      {/* 📱 Mobile Toggle Button */}
       {isMobile && (
         <button
           className="mobile-toggle-btn"
@@ -171,26 +170,24 @@ export function Sidebar({ userName = "User", userRole = "Role" }: SidebarProps) 
         </button>
       )}
 
-      {/* 📱 Mobile Overlay Layer - Menutupi area bolong saat sidebar open */}
+      {/* 📱 Mobile Overlay */}
       {isMobile && isExpanded && (
-        <div 
+        <div
           className="mobile-sidebar-overlay"
-          onClick={() => setIsExpanded(false)}
+          onClick={() => {
+            setIsExpanded(false);
+            broadcastSidebarWidth(false);
+          }}
         />
       )}
 
       <div className={`sidebar-container ${isExpanded ? 'expanded' : 'collapsed'} ${isMobile ? 'mobile' : ''}`}>
         {/* Header - PUTIH */}
         <div className="sidebar-header">
-          {/* Logo atau Icon berdasarkan status */}
           <div className="logo-section">
             {isExpanded ? (
               <div className="logo-wrapper">
-                <img 
-                  src="/images/yazaki-logo.jpg" 
-                  alt="YAZAKI Logo" 
-                  className="logo-img"
-                />
+                <img src="/images/yazaki-logo.jpg" alt="YAZAKI Logo" className="logo-img" />
               </div>
             ) : (
               <div className="icon-wrapper">
@@ -198,8 +195,7 @@ export function Sidebar({ userName = "User", userRole = "Role" }: SidebarProps) 
               </div>
             )}
           </div>
-          
-          {/* 🔁 Toggle Button di Header (Sebelah Kanan Logo) */}
+
           {!isMobile && (
             <button
               className="sidebar-toggle-btn"
@@ -222,14 +218,12 @@ export function Sidebar({ userName = "User", userRole = "Role" }: SidebarProps) 
 
         {/* Body - BIRU GRADIENT */}
         <div className="sidebar-body">
-          {/* Navigation Menu */}
           <nav className="sidebar-navigation">
-            <Link 
-              href={getHomeRoute()} 
+            {/* Home */}
+            <Link
+              href={getHomeRoute()}
               className={`menu-item ${pathname === '/home' ? 'active' : ''}`}
-              onClick={() => {
-                if (isMobile) setIsExpanded(false);
-              }}
+              onClick={() => { if (isMobile) { setIsExpanded(false); broadcastSidebarWidth(false); } }}
             >
               <span className="menu-icon">
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2">
@@ -240,80 +234,79 @@ export function Sidebar({ userName = "User", userRole = "Role" }: SidebarProps) 
               {isExpanded && <span className="menu-label">Home</span>}
             </Link>
 
-            <Link 
-              href={getDashboardRoute()} 
-              className={`menu-item ${pathname === '/ga-dashboard' ? 'active' : ''}`}
-              onClick={() => {
-                if (isMobile) setIsExpanded(false);
-              }}
-            >
-              <span className="menu-icon">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2">
-                  <rect x="3" y="3" width="7" height="7" rx="1" />
-                  <rect x="14" y="3" width="7" height="7" rx="1" />
-                  <rect x="14" y="14" width="7" height="7" rx="1" />
-                  <rect x="3" y="14" width="7" height="7" rx="1" />
-                </svg>
-              </span>
-              {isExpanded && <span className="menu-label">Dashboard</span>}
-            </Link>
-
-            {/* <Link 
-              href={getLaporanRoute()} 
-              className={`menu-item ${pathname === '/pelaporan-list' ? 'active' : ''}`}
-              onClick={() => {
-                if (isMobile) setIsExpanded(false);
-              }}
-            >
-              <span className="menu-icon">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2">
-                  <line x1="18" y1="20" x2="18" y2="10" />
-                  <line x1="12" y1="20" x2="12" y2="4" />
-                  <line x1="6" y1="20" x2="6" y2="14" />
-                </svg>
-              </span>
-              {isExpanded && <span className="menu-label">Laporan</span>}
-            </Link> */}
-          </nav>
-
-          {/* 🔔 Notifikasi
-          <div className="notification-section">
-            <button
-              ref={notificationButtonRef}
-              onClick={openNotifications}
-              onMouseEnter={() => setIsNotificationHovered(true)}
-              onMouseLeave={() => setIsNotificationHovered(false)}
-              className={`menu-item notification-item ${isNotificationOpen || pathname === '/pelaporan-list' ? 'active' : ''} ${isNotificationHovered ? 'hovered' : ''}`}
-              title="Notifikasi Masalah NG"
-            >
-              <span className="menu-icon">
-                <svg 
-                  width="20" 
-                  height="20" 
-                  viewBox="0 0 24 24" 
-                  fill="none" 
-                  stroke="white" 
-                  strokeWidth="2"
-                >
-                  <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
-                  <path d="M13.73 21a2 2 0 0 1-3.46 0" />
-                </svg>
-                {ngReports.length > 0 && (
-                  <span className="notification-badge">
-                    {ngReports.length > 99 ? '99+' : ngReports.length}
-                  </span>
-                )}
-              </span>
-              {isExpanded && (
-                <span className="menu-label">
-                  Notifikasi
-                  {ngReports.length > 0 && (
-                    <span className="notification-count"> • {ngReports.length}</span>
-                  )}
+            {/* Dashboard */}
+            {(currentRole === "admin" || currentRole === "group-leader-qa") && (
+              <Link
+                href={currentRole === "admin" ? "/ga-dashboard" : getDashboardRoute()}
+                className={`menu-item ${pathname === '/ga-dashboard' ? 'active' : ''}`}
+                onClick={() => { if (isMobile) { setIsExpanded(false); broadcastSidebarWidth(false); } }}
+              >
+                <span className="menu-icon">
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2">
+                    <rect x="3" y="3" width="7" height="7" rx="1" />
+                    <rect x="14" y="3" width="7" height="7" rx="1" />
+                    <rect x="14" y="14" width="7" height="7" rx="1" />
+                    <rect x="3" y="14" width="7" height="7" rx="1" />
+                  </svg>
                 </span>
-              )}
-            </button>
-          </div> */}
+                {isExpanded && <span className="menu-label">Dashboard</span>}
+              </Link>
+            )}
+
+            {/* QR Generator */}
+            {currentRole === "admin" && (
+              <Link
+                href="/admin/qr-generator"
+                className={`menu-item ${pathname === '/admin/qr-generator' ? 'active' : ''}`}
+                onClick={() => { if (isMobile) { setIsExpanded(false); broadcastSidebarWidth(false); } }}
+              >
+                <span className="menu-icon">
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2">
+                    <rect x="3" y="3" width="7" height="7" />
+                    <rect x="14" y="3" width="7" height="7" />
+                    <rect x="14" y="14" width="7" height="7" />
+                    <rect x="3" y="14" width="7" height="7" />
+                    <path d="M3 10h7M14 10h7M3 17h7M14 17h7" />
+                  </svg>
+                </span>
+                {isExpanded && <span className="menu-label">QR Generator</span>}
+              </Link>
+            )}
+{/* Admin Login - Hanya untuk role admin */}
+{currentRole === "admin" && (
+  <Link
+    href="/admin/login"
+    className={`menu-item ${pathname === '/admin/login' ? 'active' : ''}`}
+    onClick={() => { if (isMobile) { setIsExpanded(false); broadcastSidebarWidth(false); } }}
+  >
+    <span className="menu-icon">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2">
+        <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+        <circle cx="12" cy="7" r="4" />
+        <path d="M9 14l3 3 3-3" />
+      </svg>
+    </span>
+    {isExpanded && <span className="menu-label">Login Admin</span>}
+  </Link>
+)}
+            {/* Laporan */}
+            {(currentRole === "inspector-ga" || currentRole === "group-leader-qa") && (
+              <Link
+                href={getLaporanRoute()}
+                className={`menu-item ${pathname === '/pelaporan-list' ? 'active' : ''}`}
+                onClick={() => { if (isMobile) { setIsExpanded(false); broadcastSidebarWidth(false); } }}
+              >
+                <span className="menu-icon">
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2">
+                    <line x1="18" y1="20" x2="18" y2="10" />
+                    <line x1="12" y1="20" x2="12" y2="4" />
+                    <line x1="6" y1="20" x2="6" y2="14" />
+                  </svg>
+                </span>
+                {isExpanded && <span className="menu-label">Laporan</span>}
+              </Link>
+            )}
+          </nav>
 
           {/* Footer */}
           <div className="sidebar-footer">
@@ -328,10 +321,10 @@ export function Sidebar({ userName = "User", userRole = "Role" }: SidebarProps) 
                 </div>
               )}
             </div>
-            
-            <button 
-              onClick={handleLogout} 
-              className="menu-item logout-button" 
+
+            <button
+              onClick={handleLogout}
+              className="menu-item logout-button"
               title="Logout"
             >
               <span className="menu-icon">
@@ -347,21 +340,19 @@ export function Sidebar({ userName = "User", userRole = "Role" }: SidebarProps) 
         </div>
       </div>
 
-      {/* Popup Notifikasi - Simple untuk Mobile */}
+      {/* Popup Notifikasi */}
       {isNotificationOpen && (
         <div className="notification-popup-container">
-          <div 
-            className="notification-popup-overlay" 
-            onClick={() => {
-              if (!isMobile) setIsNotificationOpen(false); // Hanya tutup di desktop
-            }}
+          <div
+            className="notification-popup-overlay"
+            onClick={() => { if (!isMobile) setIsNotificationOpen(false); }}
           />
           <div
             ref={notificationRef}
             className={`notification-popup ${isMobile ? 'mobile' : ''}`}
             style={{
-              ...(isMobile 
-                ? {} 
+              ...(isMobile
+                ? {}
                 : {
                     top: `${(notificationButtonRef.current?.getBoundingClientRect().top ?? 0) + window.scrollY}px`,
                     left: `${(notificationButtonRef.current?.getBoundingClientRect().right ?? 0) + window.scrollX + 12}px`,
@@ -373,11 +364,7 @@ export function Sidebar({ userName = "User", userRole = "Role" }: SidebarProps) 
             <div className="notification-popup-header">
               <h3 className="notification-popup-title">Notifikasi Masalah</h3>
               <span className="notification-popup-count">{ngReports.length} masalah</span>
-              <button 
-                className="notification-popup-close" 
-                onClick={() => setIsNotificationOpen(false)}
-                title="Tutup"
-              >
+              <button className="notification-popup-close" onClick={() => setIsNotificationOpen(false)} title="Tutup">
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                   <path d="M18 6L6 18M6 6l12 12" />
                 </svg>
@@ -386,11 +373,7 @@ export function Sidebar({ userName = "User", userRole = "Role" }: SidebarProps) 
             <div className="notification-popup-content">
               {ngReports.length > 0 ? (
                 ngReports.map((report) => (
-                  <div
-                    key={report.id}
-                    onClick={() => handleNotificationItemClick(report.url)}
-                    className="notification-item"
-                  >
+                  <div key={report.id} onClick={() => handleNotificationItemClick(report.url)} className="notification-item-row">
                     <div className="notification-item-icon">
                       <div className="notification-item-icon-bg">
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -421,11 +404,8 @@ export function Sidebar({ userName = "User", userRole = "Role" }: SidebarProps) 
             </div>
             {ngReports.length > 0 && (
               <div className="notification-popup-footer">
-                <button 
-                  onClick={() => {
-                    setIsNotificationOpen(false);
-                    router.push('/pelaporan-list');
-                  }}
+                <button
+                  onClick={() => { setIsNotificationOpen(false); router.push('/pelaporan-list'); }}
                   className="notification-view-all"
                 >
                   Lihat Semua Laporan
@@ -444,74 +424,35 @@ export function Sidebar({ userName = "User", userRole = "Role" }: SidebarProps) 
           height: 100vh;
           display: flex;
           flex-direction: column;
-          transition: width 0.3s ease, transform 0.3s ease;
+          transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1), transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
           z-index: 40;
           box-shadow: 4px 0 12px rgba(0, 0, 0, 0.1);
           background: linear-gradient(180deg, #1e40af 0%, #1e3a8a 100%);
         }
 
-        .sidebar-container.collapsed {
-          width: 70px;
-        }
+        .sidebar-container.collapsed { width: ${SIDEBAR_COLLAPSED_W}px; }
+        .sidebar-container.expanded  { width: ${SIDEBAR_EXPANDED_W}px; }
 
-        .sidebar-container.expanded {
-          width: 240px;
-        }
+        /* Mobile */
+        .sidebar-container.mobile.collapsed { transform: translateX(-100%); width: ${SIDEBAR_EXPANDED_W}px; }
+        .sidebar-container.mobile.expanded  { transform: translateX(0);    width: ${SIDEBAR_EXPANDED_W}px; }
 
-        /* Mobile - Sidebar Hidden */
-        .sidebar-container.mobile.collapsed {
-          transform: translateX(-100%);
-          width: 240px;
-        }
-
-        .sidebar-container.mobile.expanded {
-          transform: translateX(0);
-          width: 240px;
-        }
-
-        /* Header - PUTIH */
+        /* Header */
         .sidebar-header {
           padding: 20px 16px;
           display: flex;
           justify-content: space-between;
           align-items: center;
           min-height: 80px;
-          position: relative;
           background: white;
           border-bottom: 1px solid #e5e7eb;
         }
+        .logo-section { display: flex; align-items: center; justify-content: center; flex: 1; }
+        .logo-wrapper { width: 100%; max-width: 180px; text-align: center; }
+        .logo-img { width: 100%; height: auto; max-height: 40px; }
+        .icon-wrapper { display: flex; justify-content: center; align-items: center; }
+        .icon-img { width: 28px; height: 28px; }
 
-        .logo-section {
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          flex: 1;
-        }
-
-        .logo-wrapper {
-          width: 100%;
-          max-width: 180px;
-          text-align: center;
-        }
-
-        .logo-img {
-          width: 100%;
-          height: auto;
-          max-height: 40px;
-        }
-
-        .icon-wrapper {
-          display: flex;
-          justify-content: center;
-          align-items: center;
-        }
-
-        .icon-img {
-          width: 28px;
-          height: 28px;
-        }
-
-        /* 🔁 Toggle Button di Header (Sebelah Kanan Logo) */
         .sidebar-toggle-btn {
           background: #1e40af;
           border: 1px solid rgba(30, 64, 175, 0.3);
@@ -526,17 +467,10 @@ export function Sidebar({ userName = "User", userRole = "Role" }: SidebarProps) 
           flex-shrink: 0;
           margin-left: 12px;
         }
+        .sidebar-toggle-btn:hover { background: #1e3a8a; transform: scale(1.05); }
+        .sidebar-toggle-btn:active { transform: scale(0.95); }
 
-        .sidebar-toggle-btn:hover {
-          background: #1e3a8a;
-          transform: scale(1.05);
-        }
-
-        .sidebar-toggle-btn:active {
-          transform: scale(0.95);
-        }
-
-        /* Body - BIRU GRADIENT */
+        /* Body */
         .sidebar-body {
           flex: 1;
           background: linear-gradient(180deg, #1e40af 0%, #1e3a8a 100%);
@@ -546,13 +480,7 @@ export function Sidebar({ userName = "User", userRole = "Role" }: SidebarProps) 
         }
 
         /* Navigation */
-        .sidebar-navigation {
-          flex: 1;
-          padding: 20px 0;
-          display: flex;
-          flex-direction: column;
-          gap: 8px;
-        }
+        .sidebar-navigation { flex: 1; padding: 20px 0; display: flex; flex-direction: column; gap: 8px; }
 
         .menu-item {
           display: flex;
@@ -564,15 +492,15 @@ export function Sidebar({ userName = "User", userRole = "Role" }: SidebarProps) 
           transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
           border-left: 3px solid transparent;
           background: transparent;
-          border: none;
+          border-top: none;
+          border-right: none;
+          border-bottom: none;
           cursor: pointer;
           width: 100%;
           text-align: left;
           position: relative;
           font-weight: 400;
         }
-
-        /* HOVER EFFECT - Prioritas tertinggi */
         .menu-item:hover {
           background: rgba(255, 255, 255, 0.18) !important;
           color: white !important;
@@ -580,8 +508,6 @@ export function Sidebar({ userName = "User", userRole = "Role" }: SidebarProps) 
           transform: translateX(2px);
           font-weight: 500 !important;
         }
-
-        /* ACTIVE STATE - Tanpa !important agar hover bisa override */
         .menu-item.active {
           background: rgba(255, 255, 255, 0.15);
           color: white;
@@ -589,141 +515,33 @@ export function Sidebar({ userName = "User", userRole = "Role" }: SidebarProps) 
           font-weight: 500;
           box-shadow: inset 0 0 10px rgba(96, 165, 250, 0.2);
         }
-
-        /* ACTIVE + HOVER - Lebih menonjol */
         .menu-item.active:hover {
           background: rgba(255, 255, 255, 0.25) !important;
           border-left-color: #93c5fd !important;
           box-shadow: inset 0 0 15px rgba(96, 165, 250, 0.3) !important;
         }
-
         .menu-icon {
-          width: 20px;
-          height: 20px;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          flex-shrink: 0;
-          position: relative;
+          width: 20px; height: 20px;
+          display: flex; align-items: center; justify-content: center;
+          flex-shrink: 0; position: relative;
           transition: transform 0.2s ease;
         }
-
-        .menu-item:hover .menu-icon {
-          transform: scale(1.1);
-        }
-
-        .menu-label {
-          font-size: 14px;
-          white-space: nowrap;
-          opacity: 0;
-          animation: fadeIn 0.3s ease forwards;
-        }
-
-        /* Notification - Perbaikan hover effect */
-        .notification-section {
-          padding: 0;
-        }
-
-        .notification-item {
-          margin: 8px 0;
-          position: relative;
-        }
-
-        /* HOVER untuk notifikasi */
-        .notification-item:hover {
-          background: rgba(255, 255, 255, 0.18) !important;
-          color: white !important;
-          border-left-color: rgba(239, 68, 68, 0.7) !important;
-          transform: translateX(4px);
-          font-weight: 500 !important;
-        }
-
-        /* ACTIVE untuk notifikasi */
-        .notification-item.active {
-          background: rgba(239, 68, 68, 0.1);
-          color: white;
-          border-left-color: #ef4444;
-          box-shadow: inset 0 0 10px rgba(239, 68, 68, 0.2);
-        }
-
-        /* ACTIVE + HOVER untuk notifikasi */
-        .notification-item.active:hover {
-          background: rgba(239, 68, 68, 0.2) !important;
-          border-left-color: #f87171 !important;
-          box-shadow: inset 0 0 15px rgba(239, 68, 68, 0.3) !important;
-        }
-
-        .notification-badge {
-          position: absolute;
-          top: -6px;
-          right: -6px;
-          background: #ef4444;
-          color: white;
-          font-size: 10px;
-          font-weight: 600;
-          border-radius: 9999px;
-          height: 18px;
-          min-width: 18px;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          padding: 0 4px;
-          border: 2px solid #1e40af;
-          animation: pulse 2s infinite;
-          z-index: 10;
-          box-shadow: 0 2px 6px rgba(239, 68, 68, 0.4);
-        }
+        .menu-item:hover .menu-icon { transform: scale(1.1); }
+        .menu-label { font-size: 14px; white-space: nowrap; opacity: 0; animation: fadeIn 0.3s ease forwards; }
 
         /* Footer */
-        .sidebar-footer {
-          padding: 20px 16px;
-          border-top: 1px solid rgba(255, 255, 255, 0.1);
-        }
-
-        .user-profile {
-          display: flex;
-          align-items: center;
-          gap: 12px;
-          margin-bottom: 20px;
-        }
-
+        .sidebar-footer { padding: 20px 16px; border-top: 1px solid rgba(255, 255, 255, 0.1); }
+        .user-profile { display: flex; align-items: center; gap: 12px; margin-bottom: 20px; }
         .user-avatar {
-          width: 40px;
-          height: 40px;
+          width: 40px; height: 40px;
           background: rgba(255, 255, 255, 0.2);
           border-radius: 8px;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          font-weight: 600;
-          font-size: 16px;
-          color: white;
-          flex-shrink: 0;
+          display: flex; align-items: center; justify-content: center;
+          font-weight: 600; font-size: 16px; color: white; flex-shrink: 0;
         }
-
-        .user-info {
-          opacity: 0;
-          animation: fadeIn 0.3s ease forwards;
-        }
-
-        .user-name {
-          font-size: 14px;
-          font-weight: 600;
-          margin: 0;
-          line-height: 1.2;
-        }
-
-        .user-role {
-          font-size: 12px;
-          opacity: 0.8;
-          margin: 0;
-          line-height: 1.2;
-        }
-
-        .logout-button {
-          margin-top: auto;
-        }
-
+        .user-info { opacity: 0; animation: fadeIn 0.3s ease forwards; }
+        .user-name { font-size: 14px; font-weight: 600; margin: 0; line-height: 1.2; }
+        .user-role { font-size: 12px; opacity: 0.8; margin: 0; line-height: 1.2; }
         .logout-button:hover {
           background: rgba(255, 255, 255, 0.18) !important;
           color: white !important;
@@ -731,41 +549,26 @@ export function Sidebar({ userName = "User", userRole = "Role" }: SidebarProps) 
           transform: translateX(2px);
         }
 
-        /* 📱 Mobile Toggle Button */
+        /* Mobile Toggle */
         .mobile-toggle-btn {
           position: fixed;
-          top: 16px;
-          right: 16px;
+          top: 16px; right: 16px;
           background: linear-gradient(135deg, #1e40af 0%, #1e3a8a 100%);
           border: none;
-          width: 48px;
-          height: 48px;
+          width: 48px; height: 48px;
           border-radius: 12px;
-          display: flex;
-          align-items: center;
-          justify-content: center;
+          display: flex; align-items: center; justify-content: center;
           cursor: pointer;
           box-shadow: 0 4px 12px rgba(30, 64, 175, 0.3);
           z-index: 50;
           transition: all 0.2s ease;
         }
+        .mobile-toggle-btn:hover { background: linear-gradient(135deg, #1e3a8a 0%, #1d4ed8 100%); transform: scale(1.05); }
+        .mobile-toggle-btn:active { transform: scale(0.95); }
 
-        .mobile-toggle-btn:hover {
-          background: linear-gradient(135deg, #1e3a8a 0%, #1d4ed8 100%);
-          transform: scale(1.05);
-        }
-
-        .mobile-toggle-btn:active {
-          transform: scale(0.95);
-        }
-
-        /* 📱 Mobile Overlay Layer */
+        /* Mobile Overlay */
         .mobile-sidebar-overlay {
-          position: fixed;
-          top: 0;
-          left: 0;
-          right: 0;
-          bottom: 0;
+          position: fixed; top: 0; left: 0; right: 0; bottom: 0;
           background: rgba(0, 0, 0, 0.5);
           z-index: 35;
           backdrop-filter: blur(4px);
@@ -774,160 +577,49 @@ export function Sidebar({ userName = "User", userRole = "Role" }: SidebarProps) 
           cursor: pointer;
         }
 
-        @keyframes fadeInOverlay {
-          from { opacity: 0; }
-          to { opacity: 1; }
-        }
-
-        /* Popup */
-        .notification-popup-container {
-          position: fixed;
-          inset: 0;
-          z-index: 50;
-          pointer-events: none;
-        }
-
-        .notification-popup-overlay {
-          position: fixed;
-          inset: 0;
-          background: rgba(0, 0, 0, 0.2);
-          pointer-events: auto;
-        }
-
+        /* Popup Notifikasi */
+        .notification-popup-container { position: fixed; inset: 0; z-index: 50; pointer-events: none; }
+        .notification-popup-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.2); pointer-events: auto; }
         .notification-popup {
-          background: white;
-          border: 1px solid #e5e7eb;
-          border-radius: 12px;
-          box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
-          width: 380px;
-          max-height: 500px;
-          overflow: hidden;
-          pointer-events: auto;
-          animation: slideIn 0.2s ease-out;
-          position: fixed;
-          transform-origin: left top;
+          background: white; border: 1px solid #e5e7eb; border-radius: 12px;
+          box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+          width: 380px; max-height: 500px; overflow: hidden;
+          pointer-events: auto; animation: slideIn 0.2s ease-out;
+          position: fixed; transform-origin: left top;
         }
-
         .notification-popup.mobile {
-          position: fixed;
-          top: 50%;
-          left: 50%;
+          position: fixed; top: 50%; left: 50%;
           transform: translate(-50%, -50%);
-          width: calc(100vw - 32px);
-          max-width: 400px;
-          max-height: 80vh;
+          width: calc(100vw - 32px); max-width: 400px; max-height: 80vh;
         }
-
         .notification-popup-header {
-          padding: 16px 20px;
-          border-bottom: 1px solid #f3f4f6;
-          background: #f8fafc;
-          display: flex;
-          align-items: center;
-          justify-content: space-between;
-          position: relative;
+          padding: 16px 20px; border-bottom: 1px solid #f3f4f6; background: #f8fafc;
+          display: flex; align-items: center; justify-content: space-between;
         }
-
-        .notification-popup-title {
-          font-size: 16px;
-          font-weight: 600;
-          color: #1f2937;
-          margin: 0;
-        }
-
-        .notification-popup-count {
-          background: #ef4444;
-          color: white;
-          font-size: 12px;
-          font-weight: 500;
-          padding: 4px 10px;
-          border-radius: 9999px;
-        }
-
-        .notification-popup-close {
-          background: transparent;
-          border: none;
-          cursor: pointer;
-          padding: 4px;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          color: #6b7280;
-          transition: color 0.2s ease;
-        }
-
-        .notification-popup-close:hover {
-          color: #1f2937;
-        }
-
-        .notification-popup-content {
-          max-height: 350px;
-          overflow-y: auto;
-        }
-
-        .notification-popup-footer {
-          padding: 16px 20px;
-          border-top: 1px solid #f3f4f6;
-          background: #f8fafc;
-        }
-
-        .notification-view-all {
-          width: 100%;
-          padding: 10px 16px;
-          background: #1e40af;
-          color: white;
-          border: none;
-          border-radius: 8px;
-          font-weight: 500;
-          cursor: pointer;
-          transition: all 0.2s ease;
-        }
-
-        .notification-view-all:hover {
-          background: #1e3a8a;
-          transform: translateY(-1px);
-          box-shadow: 0 4px 12px rgba(30, 64, 175, 0.3);
-        }
+        .notification-popup-title { font-size: 16px; font-weight: 600; color: #1f2937; margin: 0; }
+        .notification-popup-count { background: #ef4444; color: white; font-size: 12px; font-weight: 500; padding: 4px 10px; border-radius: 9999px; }
+        .notification-popup-close { background: transparent; border: none; cursor: pointer; padding: 4px; display: flex; align-items: center; justify-content: center; color: #6b7280; transition: color 0.2s ease; }
+        .notification-popup-close:hover { color: #1f2937; }
+        .notification-popup-content { max-height: 350px; overflow-y: auto; }
+        .notification-item-row { display: flex; align-items: center; gap: 12px; padding: 12px 20px; border-bottom: 1px solid #f3f4f6; cursor: pointer; transition: background 0.2s; }
+        .notification-item-row:hover { background: #f8fafc; }
+        .notification-popup-footer { padding: 16px 20px; border-top: 1px solid #f3f4f6; background: #f8fafc; }
+        .notification-view-all { width: 100%; padding: 10px 16px; background: #1e40af; color: white; border: none; border-radius: 8px; font-weight: 500; cursor: pointer; transition: all 0.2s ease; }
+        .notification-view-all:hover { background: #1e3a8a; }
+        .notification-empty { padding: 32px 20px; text-align: center; color: #6b7280; }
+        .notification-empty-subtitle { font-size: 12px; margin-top: 4px; }
 
         /* Animasi */
-        @keyframes fadeIn {
-          from { opacity: 0; transform: translateX(-10px); }
-          to { opacity: 1; transform: translateX(0); }
-        }
-
-        @keyframes slideIn {
-          from { opacity: 0; transform: translateY(-10px) scale(0.95); }
-          to { opacity: 1; transform: translateY(0) scale(1); }
-        }
-
+        @keyframes fadeIn { from { opacity: 0; transform: translateX(-10px); } to { opacity: 1; transform: translateX(0); } }
+        @keyframes slideIn { from { opacity: 0; transform: translateY(-10px) scale(0.95); } to { opacity: 1; transform: translateY(0) scale(1); } }
+        @keyframes fadeInOverlay { from { opacity: 0; } to { opacity: 1; } }
         @keyframes pulse {
-          0%, 100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.4); }
-          50% { transform: scale(1.1); box-shadow: 0 0 0 4px rgba(239, 68, 68, 0); }
+          0%, 100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(239,68,68,0.4); }
+          50% { transform: scale(1.1); box-shadow: 0 0 0 4px rgba(239,68,68,0); }
         }
-
         @media (max-width: 768px) {
-          .sidebar-container {
-            box-shadow: 0 0 20px rgba(0, 0, 0, 0.2);
-            left: 0;
-            z-index: 45;
-          }
-          
-          .sidebar-container.mobile.collapsed {
-            transform: translateX(-100%);
-          }
-          
-          .notification-popup {
-            width: calc(100vw - 32px);
-            max-width: 400px;
-            left: 50% !important;
-            top: 50% !important;
-            transform: translate(-50%, -50%) !important;
-          }
-          
-          /* Di mobile, hover tetap bekerja dengan baik */
-          .menu-item:hover {
-            background: rgba(255, 255, 255, 0.22) !important;
-          }
+          .sidebar-container { box-shadow: 0 0 20px rgba(0,0,0,0.2); z-index: 45; }
+          .menu-item:hover { background: rgba(255,255,255,0.22) !important; }
         }
       `}</style>
     </>

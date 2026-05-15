@@ -1,39 +1,22 @@
 // scripts/generate-all-qr.js
 /**
- * Generate QR codes untuk SEMUA checksheet di status-ga DAN e-checksheet folders
+ * ✅ UPDATED QR Code Generator untuk SEMUA checksheet
+ * 
+ * Fitur:
+ * - Menambahkan TITLE di atas setiap QR code untuk mudah printing
+ * - menggunakan DATA REAL dari aplikasi (zona, area, slug, lokasi)
+ * - Sesuai dengan ACTUAL ROUTING di app/
+ * - Support format: echecksheet:///[tipo]/[parameter]
  * 
  * Routing Pattern:
- * STATUS-GA (inside /app/status-ga/):
- * - fire-alarm: /status-ga/fire-alarm/{zona}
- * - inspeksi-apar: /status-ga/inspeksi-apar/{slug}
- * - checksheet-toilet: /status-ga/checksheet-toilet/{areaId}
- * - panel: /status-ga/panel?openPanel={panel}
- * - form-inspeksi-stop-kontak: /status-ga/form-inspeksi-stop-kontak/{type}
- * - ga-inf-jalan: /status-ga/ga-inf-jalan?search={search}
- * - tg-listrik: /status-ga/tg-listrik?openArea={area}
- * - inspeksi-emergency: /status-ga/inspeksi-emergency/{area}
- * - exit-lamp-pintu-darurat: /status-ga/exit-lamp-pintu-darurat/{category}
- * - inspeksi-preventif-lift-barang: /status-ga/inspeksi-preventif-lift-barang/{subtype}
- * - smoke-detector: /status-ga/smoke-detector?openArea={area}
- * - selang-hydrant: /status-ga/selang-hydrant?openArea={zona}
- * - inspeksi-apd: /status-ga/inspeksi-apd?areaId={areaId}
- * - lift-barang: /status-ga/lift-barang?openLift={name}
- * - inspeksi-hydrant: /status-ga/inspeksi-hydrant?openHydrant={no}
- * 
- * E-CHECKSHEET (outside /app/status-ga/, direct routes):
- * - e-checksheet-hydrant: /e-checksheet-hydrant?openHydrant={no}
- * - e-checksheet-inf-jalan: /e-checksheet-inf-jalan?search={area}
- * - e-checksheet-ins-apd: /e-checksheet-ins-apd?areaId={type}
- * - e-checksheet-lift-barang: /e-checksheet-lift-barang?openLift={unit}
- * - e-checksheet-panel: /e-checksheet-panel?openPanel={name}
- * - e-checksheet-slg-hydrant: /e-checksheet-slg-hydrant?openArea={zona}
- * - e-checksheet-smoke-detector: /e-checksheet-smoke-detector?openArea={area}
- * - e-checksheet-tg-listrik: /e-checksheet-tg-listrik?openArea={area}
+ * STATUS-GA: fire-alarm, inspeksi-hydrant, inspeksi-apar, checksheet-toilet, dll
+ * E-CHECKSHEET: e-checksheet-hydrant, e-checksheet-apd, dll
  */
 
 const fs = require("fs");
 const path = require("path");
 const QRCode = require("qrcode");
+const { createCanvas, registerFont } = require("canvas");
 
 // ✅ FIRE ALARM - Zona-based (18 zones)
 const FIRE_ALARM_ZONES = [
@@ -43,12 +26,66 @@ const FIRE_ALARM_ZONES = [
   "zona-20", "zona-22", "zona-23"
 ];
 
-// ✅ HYDRANT - Number-based (36 hydrants)
+// Map zona ke deskripsi
+const FIRE_ALARM_ZONES_MAP = {
+  "zona-1": "Lobby & Hydrant Main Office",
+  "zona-2": "EXIM",
+  "zona-3": "Toilet C, Rest Area, Musholla, Pintu 1-2 Genba A",
+  "zona-4": "Office Warehouse, Lift Barang WHS, USM Area",
+  "zona-5": "Hydrant Jig Proto, Office Jig Proto",
+  "zona-6": "Hydrant Training",
+  "zona-7": "Hydrant Genba C, Dinding Mezzanine, Gel Sheet",
+  "zona-8": "Pump Room",
+  "zona-9": "Power House A, TPS B3",
+  "zona-10": "Hydrant Canteen",
+  "zona-11": "Auditorium",
+  "zona-12": "Samping Panel Genba B",
+  "zona-13": "Area Timur Genba B",
+  "zona-14": "Power House B, Parkir Bawah & Atas",
+  "zona-15": "Prepare Box EXIM, Office EXIM",
+  "zona-20": "Axis 8 - Selatan Pintu 7",
+  "zona-22": "New Warehouse",
+  "zona-23": "Bawah Mezzanine, Ministore Warehouse",
+};
+
+// ✅ HYDRANT - 36 hydrants dengan lokasi/zona/jenis lengkap
 const HYDRANT_LIST = [
-  1, 2, 3, 4, 5, 6, 7, 8, 9, 10,
-  11, 12, 13, 14, 15, 16, 17, 18, 19, 20,
-  21, 22, 23, 24, 25, 26, 27, 28, 29, 30,
-  31, 32, 33, 34, 35, 36
+  { no: 1, lokasi: "KANTIN", zona: "BARAT", jenisHydrant: "HYDRANT INDOOR" },
+  { no: 2, lokasi: "AUDITORIUM", zona: "BARAT", jenisHydrant: "HYDRANT INDOOR" },
+  { no: 3, lokasi: "MAIN OFFICE SISI SELATAN", zona: "BARAT", jenisHydrant: "HYDRANT INDOOR" },
+  { no: 4, lokasi: "BELAKANG RAK KARTON BOX EXIM", zona: "TIMUR", jenisHydrant: "HYDRANT INDOOR" },
+  { no: 5, lokasi: "PINTU 9 CV 2B / GENBA A", zona: "TIMUR", jenisHydrant: "HYDRANT INDOOR" },
+  { no: 6, lokasi: "CV AT6 GENBA A", zona: "TIMUR", jenisHydrant: "HYDRANT INDOOR" },
+  { no: 7, lokasi: "CV AT7 GENBA A", zona: "TIMUR", jenisHydrant: "HYDRANT INDOOR" },
+  { no: 8, lokasi: "CV AT 11 GENBA A", zona: "TIMUR", jenisHydrant: "HYDRANT INDOOR" },
+  { no: 9, lokasi: "PINTU 7 GENBA A", zona: "TIMUR", jenisHydrant: "HYDRANT INDOOR" },
+  { no: 10, lokasi: "SEBELAH UTARA PINTU 7", zona: "TIMUR", jenisHydrant: "HYDRANT INDOOR" },
+  { no: 11, lokasi: "NEW BUILDING WHS (RAK TOYOTA)", zona: "UTARA", jenisHydrant: "HYDRANT INDOOR" },
+  { no: 12, lokasi: "SAMPING LIFT BARANG WHS", zona: "UTARA", jenisHydrant: "HYDRANT INDOOR" },
+  { no: 13, lokasi: "OFFICE WHS", zona: "UTARA", jenisHydrant: "HYDRANT INDOOR" },
+  { no: 14, lokasi: "CV 12B / AREA BARAT", zona: "BARAT", jenisHydrant: "HYDRANT INDOOR" },
+  { no: 15, lokasi: "CV AB 10", zona: "BARAT", jenisHydrant: "HYDRANT INDOOR" },
+  { no: 16, lokasi: "CV AB 5", zona: "BARAT", jenisHydrant: "HYDRANT INDOOR" },
+  { no: 17, lokasi: "PINTU 1 GENBA A", zona: "BARAT", jenisHydrant: "HYDRANT INDOOR" },
+  { no: 18, lokasi: "CV 8A", zona: "TIMUR", jenisHydrant: "HYDRANT INDOOR" },
+  { no: 19, lokasi: "SUB ASSY B1", zona: "TIMUR", jenisHydrant: "HYDRANT INDOOR" },
+  { no: 20, lokasi: "SUB ASSY C7", zona: "BARAT", jenisHydrant: "HYDRANT INDOOR" },
+  { no: 21, lokasi: "SHILD WIRE C4 / AREA TIMUR", zona: "BARAT", jenisHydrant: "HYDRANT INDOOR" },
+  { no: 22, lokasi: "RAYCHAM NPR.07", zona: "BARAT", jenisHydrant: "HYDRANT INDOOR" },
+  { no: 23, lokasi: "CV 5A M/S / AREA BARAT", zona: "BARAT", jenisHydrant: "HYDRANT INDOOR" },
+  { no: 24, lokasi: "TRAINING ROOM", zona: "BARAT", jenisHydrant: "HYDRANT INDOOR" },
+  { no: 25, lokasi: "JIG PROTO / STOCK MATERIAL", zona: "BARAT", jenisHydrant: "HYDRANT INDOOR" },
+  { no: 26, lokasi: "MEZZANINE SISI BARAT", zona: "BARAT", jenisHydrant: "HYDRANT INDOOR" },
+  { no: 27, lokasi: "DEPAN MASJID", zona: "BARAT", jenisHydrant: "HYDRANT PILLAR" },
+  { no: 28, lokasi: "DEPAN GENBA C", zona: "BARAT", jenisHydrant: "HYDRANT PILLAR" },
+  { no: 29, lokasi: "SAMPING PUMP ROOM", zona: "BARAT", jenisHydrant: "HYDRANT PILLAR" },
+  { no: 30, lokasi: "SAMPING LOADING DOCK WH", zona: "TIMUR", jenisHydrant: "HYDRANT PILLAR" },
+  { no: 31, lokasi: "SEBELAH UTARA PINTU 8", zona: "TIMUR", jenisHydrant: "HYDRANT PILLAR" },
+  { no: 32, lokasi: "SAMPING LOADING DOCK EXIM", zona: "TIMUR", jenisHydrant: "HYDRANT PILLAR" },
+  { no: 33, lokasi: "DEPAN AREA PARKIR", zona: "TIMUR", jenisHydrant: "HYDRANT PILLAR" },
+  { no: 34, lokasi: "PARKIR BAWAH", zona: "SELATAN", jenisHydrant: "HYDRANT INDOOR" },
+  { no: 35, lokasi: "PARKIR ATAS", zona: "SELATAN", jenisHydrant: "HYDRANT INDOOR" },
+  { no: 36, lokasi: "DEPAN POWER HOUSE A", zona: "UTARA", jenisHydrant: "HYDRANT OUTDOOR" },
 ];
 
 // ✅ APAR - Slug-based (30 areas)
@@ -160,12 +197,19 @@ function sanitizeFileName(str) {
     .toLowerCase();
 }
 
-async function generateQR(text, filePath) {
+/**
+ * Generate QR dengan TITLE di atas
+ * @param {string} text - URL/content untuk QR
+ * @param {string} filePath - Path file output
+ * @param {string} title - Title yang ditampilkan di atas QR
+ */
+async function generateQRWithTitle(text, filePath, title) {
   try {
     const dir = path.dirname(filePath);
     ensureDir(dir);
 
-    await QRCode.toFile(filePath, text, {
+    // Generate QR code buffer
+    const qrBuffer = await QRCode.toDataURL(text, {
       width: 300,
       margin: 2,
       color: {
@@ -173,10 +217,66 @@ async function generateQR(text, filePath) {
         light: "#ffffff",
       },
     });
-    return true;
+
+    // Decode base64 ke buffer
+    const base64Data = qrBuffer.replace(/^data:image\/png;base64,/, "");
+    const qrImageBuffer = Buffer.from(base64Data, "base64");
+
+    // Load QR image
+    const { Image } = require("canvas");
+    const qrImage = new Image();
+    qrImage.onload = () => {
+      // Buat canvas dengan space untuk title di atas
+      const titleHeight = 60;
+      const canvas = createCanvas(400, qrImage.height + titleHeight);
+      const ctx = canvas.getContext("2d");
+
+      // Background putih
+      ctx.fillStyle = "#ffffff";
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      // Title dengan font lebih besar
+      ctx.fillStyle = "#0d47a1";
+      ctx.font = "bold 18px Arial";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+
+      // Wrap title jika terlalu panjang
+      const maxWidth = 390;
+      const words = title.split(" ");
+      let lines = [];
+      let currentLine = "";
+
+      for (const word of words) {
+        const testLine = currentLine + (currentLine ? " " : "") + word;
+        const metrics = ctx.measureText(testLine);
+        if (metrics.width > maxWidth && currentLine) {
+          lines.push(currentLine);
+          currentLine = word;
+        } else {
+          currentLine = testLine;
+        }
+      }
+      if (currentLine) lines.push(currentLine);
+
+      // Draw title lines
+      const lineHeight = 20;
+      const startY = 15 + (lines.length > 1 ? 5 : 10);
+      lines.forEach((line, idx) => {
+        ctx.fillText(line, canvas.width / 2, startY + idx * lineHeight);
+      });
+
+      // Draw QR code di bawah title
+      ctx.drawImage(qrImage, 50, titleHeight, 300, 300);
+
+      // Save to file
+      const buffer = canvas.toBuffer("image/png");
+      fs.writeFileSync(filePath, buffer);
+      console.log(`✅ ${path.basename(filePath)}`);
+    };
+    qrImage.src = qrImageBuffer;
   } catch (err) {
     console.error(`❌ Error creating ${filePath}:`, err.message);
-    return false;
   }
 }
 
@@ -186,12 +286,14 @@ async function generateFireAlarmQR() {
 
   for (const zona of FIRE_ALARM_ZONES) {
     const text = `echecksheet:///status-ga/fire-alarm/${zona}`;
+    const zoneName = FIRE_ALARM_ZONES_MAP[zona] || zona;
+    const title = `Fire Alarm - ${zoneName}`;
     const filePath = path.join(process.cwd(), "public", "generated-qr", "fire-alarm", `${zona}.png`);
 
-    if (await generateQR(text, filePath)) count++;
+    if (await generateQRWithTitle(text, filePath, title)) count++;
   }
 
-  console.log(`✅ Fire Alarm: ${count} QR codes created`);
+  console.log(`✅ Fire Alarm: ${count} QR codes created\n`);
   return count;
 }
 
@@ -199,14 +301,15 @@ async function generateHydrantQR() {
   console.log("💧 Generating Hydrant QR codes...");
   let count = 0;
 
-  for (const no of HYDRANT_LIST) {
-    const text = `echecksheet:///status-ga/inspeksi-hydrant?openHydrant=${no}`;
-    const filePath = path.join(process.cwd(), "public", "generated-qr", "hydrant", `hydrant-${no}.png`);
+  for (const hydrant of HYDRANT_LIST) {
+    const text = `echecksheet:///status-ga/inspeksi-hydrant?openHydrant=${hydrant.no}`;
+    const title = `Hydrant #${hydrant.no} - ${hydrant.lokasi}`;
+    const filePath = path.join(process.cwd(), "public", "generated-qr", "hydrant", `hydrant-${hydrant.no}.png`);
 
-    if (await generateQR(text, filePath)) count++;
+    if (await generateQRWithTitle(text, filePath, title)) count++;
   }
 
-  console.log(`✅ Hydrant: ${count} QR codes created`);
+  console.log(`✅ Hydrant: ${count} QR codes created\n`);
   return count;
 }
 

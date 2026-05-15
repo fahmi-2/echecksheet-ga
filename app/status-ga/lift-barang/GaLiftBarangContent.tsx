@@ -1,7 +1,7 @@
 // app/status-ga/lift-barang/GaLiftBarangContent.tsx
 "use client";
 import { useState, useEffect, useRef } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
 import { Sidebar } from "@/components/Sidebar";
 import QrScanner from 'qr-scanner';
@@ -36,10 +36,15 @@ const parseLocationName = (fullName: string): string => {
 
 export function GaLiftBarangContent() {
   const router = useRouter();
-  const searchParams = useSearchParams();
   const { user, loading: authLoading, isInitialized } = useAuth();
-  
-  const openAreaParam = searchParams.get('openLift') || '';
+
+  // ✅ FIX: Use native URL API instead of useSearchParams hook to avoid conflicts
+  const getQueryParam = (name: string): string => {
+    if (typeof window === 'undefined') return '';
+    return new URLSearchParams(window.location.search).get(name) || '';
+  };
+
+  const openAreaParam = getQueryParam('openLift');
   const TYPE_SLUG = 'lift-barang';
   
   const [isMounted, setIsMounted] = useState(false);
@@ -189,12 +194,12 @@ export function GaLiftBarangContent() {
       setAuthVerified(false);
       return;
     }
-    if (user && user.role === "inspector-ga") {
+    if (user && user.role === "inspector-ga-equipment") {
       setAuthVerified(true);
       return;
     }
     const verificationTimeout = setTimeout(() => {
-      if (!user || user.role !== "inspector-ga") {
+      if (!user || user.role !== "inspector-ga-equipment") {
         router.push("/login-page");
       } else {
         setAuthVerified(true);

@@ -4,7 +4,12 @@ import { useState, useEffect, useRef, useMemo } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
 import { Sidebar } from "@/components/Sidebar";
+import { QrCode } from "lucide-react";
 import React from "react";
+
+// ✅ TAMBAHKAN IMPORT HOOK SCAN VERIFICATION
+import { useScanVerification } from "@/lib/hooks/useScanVerification";
+
 // ✅ Import API helper yang reusable
 import {
   getItemsByType,
@@ -15,6 +20,7 @@ import {
   ChecklistItem,
   ChecklistData
 } from "@/lib/api/checksheet";
+
 
 // ✅ Helper: Extract tahun dari tanggal
 const getYear = (dateString: string) => new Date(dateString).getFullYear();
@@ -57,13 +63,21 @@ const groupDatesByYearMonth = (dates: string[]) => {
 
 export function EChecksheetInfJalanForm() {
   const router = useRouter();
-  const searchParams = useSearchParams();
   const { user, loading: authLoading, isInitialized } = useAuth();
-  
-  // ✅ Gunakan useSearchParams untuk membaca parameter
-  const areaName = searchParams.get('areaName') || '';
-  const kategori = searchParams.get('kategori') || '';
-  const lokasi = searchParams.get('lokasi') || '';
+
+  // ✅ TAMBAHKAN HOOK INI - WAJIB DI TOP LEVEL
+  const { isScanned, isLoading: scanLoading } = useScanVerification();
+
+  // ✅ FIX: Use native URL API instead of useSearchParams hook to avoid conflicts
+  const getQueryParam = (name: string): string => {
+    if (typeof window === 'undefined') return '';
+    return new URLSearchParams(window.location.search).get(name) || '';
+  };
+
+  // ✅ Gunakan helper untuk membaca parameter
+  const areaName = getQueryParam('areaName');
+  const kategori = getQueryParam('kategori');
+  const lokasi = getQueryParam('lokasi');
   const TYPE_SLUG = 'inf-jalan';
   
   // ✅ CRITICAL FIX: State untuk tracking auth verification
@@ -104,6 +118,7 @@ export function EChecksheetInfJalanForm() {
     loadItems();
   }, []);
   
+  
   // ✅ Load areaId dan available dates - HANYA SETELAH AUTH VERIFIED
   useEffect(() => {
     if (!areaName || !isMounted || !authVerified) return;
@@ -128,6 +143,15 @@ export function EChecksheetInfJalanForm() {
             setSelectedYear(currentYear);
             setSelectedMonth(currentMonth);
           }
+          
+          // ✅ Set default filter to current year & month
+          if (dates.length > 0) {
+            const latestDate = dates[0];
+            const currentYear = getYear(latestDate);
+            const currentMonth = getMonth(latestDate);
+            setSelectedYear(currentYear);
+            setSelectedMonth(currentMonth);
+          }
         } else {
           // Fallback: cari berdasarkan areaName saja
           const fallbackArea = areas.find((a: any) => a.name.startsWith(areaName));
@@ -143,22 +167,33 @@ export function EChecksheetInfJalanForm() {
               setSelectedYear(currentYear);
               setSelectedMonth(currentMonth);
             }
+            
+            if (dates.length > 0) {
+              const latestDate = dates[0];
+              const currentYear = getYear(latestDate);
+              const currentMonth = getMonth(latestDate);
+              setSelectedYear(currentYear);
+              setSelectedMonth(currentMonth);
+            }
           } else {
             alert(`Area "${areaName}" tidak ditemukan.`);
           }
         }
       } catch (error) {
-        console.error("Failed to load area data:", error);
+        console.error("Failed to load area ", error);
         alert("Gagal memuat data area.");
       }
     };
     
+    
     loadAreaData();
   }, [areaName, kategori, lokasi, isMounted, authVerified]);
+  
   
   useEffect(() => {
     setIsMounted(true);
   }, []);
+  
   
   // ✅ CRITICAL FIX: Authentication verification dengan state tracking dan delay
   useEffect(() => {
@@ -173,9 +208,10 @@ export function EChecksheetInfJalanForm() {
       return;
     }
     
+    
     // Beri waktu 1.5 detik sebelum redirect
     const verificationTimeout = setTimeout(() => {
-      if (!user || user.role !== "inspector-ga") {
+      if (!user || user.role !== "inspector-ga-personal") {
         console.error('❌ Auth verification failed after delay:', { user, authLoading });
         router.push("/login-page");
       } else {
@@ -183,8 +219,10 @@ export function EChecksheetInfJalanForm() {
       }
     }, 1500);
     
+    
     return () => clearTimeout(verificationTimeout);
   }, [user, authLoading, isInitialized, router, isMounted]);
+  
   
   // ✅ Camera useEffect
   useEffect(() => {
@@ -194,6 +232,7 @@ export function EChecksheetInfJalanForm() {
         const stream = await navigator.mediaDevices.getUserMedia({
           video: { facingMode: "environment" }
         });
+        
         
         setCameraStream(stream);
         if (videoRef.current) {
@@ -206,7 +245,9 @@ export function EChecksheetInfJalanForm() {
       }
     };
     
+    
     startCamera();
+    
     
     return () => {
       if (cameraStream) {
@@ -214,6 +255,24 @@ export function EChecksheetInfJalanForm() {
       }
     };
   }, [showCameraModal]);
+  
+  // ✅ Filter dates when year or month changes (3 DROPDOWN SYSTEM)
+  useEffect(() => {
+    if (selectedYear === "" || selectedMonth === "") {
+      setFilteredDates([]);
+      return;
+    }
+    
+    const grouped = groupDatesByYearMonth(availableDates);
+    const datesForSelection = grouped[selectedYear]?.[selectedMonth] || [];
+    
+    setFilteredDates(datesForSelection);
+    
+    // ✅ FIXED: TIDAK AUTO-SELECT tanggal
+    // Biarkan selectedDate tetap kosong, user harus pilih manual
+  }, [selectedYear, selectedMonth, availableDates]);
+  
+  // ✅ Load existing data - HANYA saat user klik "Muat Data"
   
   // ✅ Filter dates when year or month changes (3 DROPDOWN SYSTEM)
   useEffect(() => {
@@ -257,12 +316,14 @@ export function EChecksheetInfJalanForm() {
           existingData[`${itemKey}_dueDate`] = entry.dueDate || "";
           existingData[`${itemKey}_verify`] = entry.verify || "";
           
+          
           if (entry.images && Array.isArray(entry.images)) {
             entry.images.forEach((url: string) => {
               loadedImages.push({ key: itemKey, url });
             });
           }
         });
+        
         
         setAnswers(existingData);
         setImages(loadedImages);
@@ -273,12 +334,13 @@ export function EChecksheetInfJalanForm() {
         setImages([]);
       }
     } catch (error) {
-      console.error("Error loading checklist data:", error);
+      console.error("Error loading checklist ", error);
       alert("Gagal memuat data.");
     } finally {
       setIsLoading(false);
     }
   };
+  
   
   // ✅ Save to API
   const handleSave = async () => {
@@ -296,17 +358,21 @@ export function EChecksheetInfJalanForm() {
       return;
     }
     
+    
     const allFieldsFilled = inspectionItems.every((item) => 
       answers[`${item.item_key}_hasil`]
     );
+    
     
     if (!allFieldsFilled) {
       alert("Mohon isi Hasil Pemeriksaan untuk semua item!");
       return;
     }
     
+    
     try {
       setIsLoading(true);
+      
       
       const checklistData: ChecklistData = {};
       
@@ -327,6 +393,7 @@ export function EChecksheetInfJalanForm() {
         };
       });
       
+      
       await saveChecklist(
         TYPE_SLUG,
         areaId,
@@ -336,20 +403,23 @@ export function EChecksheetInfJalanForm() {
         user.fullName || "Unknown Inspector"
       );
       
+      
       alert(`Data berhasil disimpan untuk tanggal ${new Date(selectedDate).toLocaleDateString("id-ID")}`);
       
       router.push(`/status-ga/inf-jalan?openArea=${encodeURIComponent(areaName)}`);
     } catch (error) {
-      console.error("Error saving checklist data:", error);
+      console.error("Error saving checklist ", error);
       alert("Gagal menyimpan data.");
     } finally {
       setIsLoading(false);
     }
   };
   
+  
   const handleInputChange = (field: string, value: string): void => {
     setAnswers((prev) => ({ ...prev, [field]: value }));
   };
+  
   
   const handleImageUpload = (event: React.ChangeEvent<HTMLInputElement>, itemKey: string) => {
     const files = event.target.files;
@@ -363,24 +433,29 @@ export function EChecksheetInfJalanForm() {
     });
   };
   
+  
   const removeImage = (index: number) => {
     setImages(prev => prev.filter((_, i) => i !== index));
   };
+  
   
   const openImageModal = (imgUrl: string) => {
     setCurrentImage(imgUrl);
     setShowImageModal(true);
   };
   
+  
   const closeImageModal = () => {
     setShowImageModal(false);
     setCurrentImage("");
   };
   
+  
   const openCamera = (itemKey: string) => {
     setCurrentItemKey(itemKey);
     setShowCameraModal(true);
   };
+  
   
   const captureImage = () => {
     if (!videoRef.current || !canvasRef.current) return;
@@ -388,20 +463,25 @@ export function EChecksheetInfJalanForm() {
     const canvas = canvasRef.current as any;
     const context = canvas.getContext('2d');
     
+    
     if (!context) return;
+    
     
     canvas.width = video.videoWidth;
     canvas.height = video.videoHeight;
     context.drawImage(video, 0, 0, canvas.width, canvas.height);
     
+    
     const imageUrl = canvas.toDataURL('image/jpeg', 0.8);
     setImages(prev => [...prev, { key: currentItemKey, url: imageUrl }]);
     setShowCameraModal(false);
+    
     
     if (cameraStream) {
       cameraStream.getTracks().forEach(track => track.stop());
     }
   };
+  
   
   // ✅ FIX: Hitung tanggal maksimum dengan benar
   const getMaxDate = () => {
@@ -415,6 +495,7 @@ export function EChecksheetInfJalanForm() {
     const years = new Set(availableDates.map(date => getYear(date)));
     return Array.from(years).sort((a, b) => b - a); // Sort descending
   }, [availableDates]);
+  
   
   // ✅ CRITICAL FIX: Tampilkan loading screen selama auth belum verified
   if (!isMounted || !isInitialized || !authVerified) {
@@ -438,6 +519,7 @@ export function EChecksheetInfJalanForm() {
       </div>
     );
   }
+  
   
   // ✅ Hanya render UI jika auth sudah verified
   return (
@@ -638,7 +720,11 @@ export function EChecksheetInfJalanForm() {
                     const date = e.target.value;
                     setSelectedDate(date);
                     console.log('📅 Date selected from filter:', date);
+                    setSelectedDate(date);
+                    console.log('📅 Date selected from filter:', date);
                   }}
+                  disabled={!isScanned}
+                  title={!isScanned ? "Harap scan QR code terlebih dahulu" : ""}
                   style={{
                     color: "#0d47a1",
                     padding: "8px 12px",
@@ -776,6 +862,7 @@ export function EChecksheetInfJalanForm() {
                     width: "100px"
                   }}>DUE DATE</th>
                   {/* ✅ KOLOM VERIFY DIHAPUS */}
+                  {/* ✅ KOLOM VERIFY DIHAPUS */}
                 </tr>
               </thead>
               <tbody>
@@ -809,7 +896,8 @@ export function EChecksheetInfJalanForm() {
                       <select
                         value={answers[`${item.item_key}_hasil`] || ""}
                         onChange={(e) => handleInputChange(`${item.item_key}_hasil`, e.target.value)}
-                        disabled={!selectedDate}
+                        disabled={!isScanned}
+                        title={!isScanned ? "Harap scan QR code terlebih dahulu" : ""}
                         style={{
                           width: "100%",
                           padding: "4px",
@@ -817,8 +905,9 @@ export function EChecksheetInfJalanForm() {
                           borderRadius: "4px",
                           fontSize: "11px",
                           fontWeight: "600",
-                          cursor: selectedDate ? "pointer" : "not-allowed",
-                          opacity: selectedDate ? 1 : 0.5
+                          cursor: isScanned ? "pointer" : "not-allowed",
+                          opacity: isScanned ? 1 : 0.5,
+                          background: isScanned ? "white" : "#f5f5f5"
                         }}
                       >
                         <option value="">-</option>
@@ -835,7 +924,8 @@ export function EChecksheetInfJalanForm() {
                       <textarea
                         value={answers[`${item.item_key}_keterangan`] || ""}
                         onChange={(e) => handleInputChange(`${item.item_key}_keterangan`, e.target.value)}
-                        disabled={!selectedDate}
+                        disabled={!isScanned}
+                        title={!isScanned ? "Harap scan QR code terlebih dahulu" : ""}
                         placeholder="Keterangan..."
                         rows={2}
                         style={{
@@ -845,7 +935,9 @@ export function EChecksheetInfJalanForm() {
                           resize: "vertical",
                           border: "1px solid #ccc",
                           borderRadius: "4px",
-                          opacity: selectedDate ? 1 : 0.5
+                          opacity: isScanned ? 1 : 0.5,
+                          background: isScanned ? "white" : "#f5f5f5",
+                          cursor: isScanned ? "text" : "not-allowed"
                         }}
                       />
                     </td>
@@ -863,14 +955,15 @@ export function EChecksheetInfJalanForm() {
                               setCurrentItemKey(item.item_key);
                               setShowCameraModal(true);
                             }}
-                            disabled={!selectedDate}
+                            disabled={!isScanned}
+                            title={!isScanned ? "Harap scan QR code terlebih dahulu" : ""}
                             style={{
                               padding: "4px 8px",
-                              background: selectedDate ? "#1e88e5" : "#bdbdbd",
+                              background: isScanned ? "#1e88e5" : "#bdbdbd",
                               color: "white",
                               borderRadius: "4px",
                               fontSize: "11px",
-                              cursor: selectedDate ? "pointer" : "not-allowed",
+                              cursor: isScanned ? "pointer" : "not-allowed",
                               textAlign: "center",
                               whiteSpace: "nowrap",
                               border: "none"
@@ -882,14 +975,16 @@ export function EChecksheetInfJalanForm() {
                             htmlFor={`file-${item.item_key}`}
                             style={{
                               padding: "4px 8px",
-                              background: selectedDate ? "#4caf50" : "#bdbdbd",
+                              background: isScanned ? "#4caf50" : "#bdbdbd",
                               color: "white",
                               borderRadius: "4px",
                               fontSize: "11px",
-                              cursor: selectedDate ? "pointer" : "not-allowed",
+                              cursor: isScanned ? "pointer" : "not-allowed",
                               textAlign: "center",
-                              whiteSpace: "nowrap"
+                              whiteSpace: "nowrap",
+                              opacity: isScanned ? 1 : 0.6
                             }}
+                            title={!isScanned ? "Harap scan QR code terlebih dahulu" : ""}
                           >
                             🖼️ File
                           </label>
@@ -898,7 +993,7 @@ export function EChecksheetInfJalanForm() {
                             type="file"
                             accept="image/*"
                             multiple
-                            disabled={!selectedDate}
+                            disabled={!isScanned}
                             onChange={(e) => handleImageUpload(e, item.item_key)}
                             style={{ display: "none" }}
                           />
@@ -922,18 +1017,20 @@ export function EChecksheetInfJalanForm() {
                                   e.stopPropagation();
                                   removeImage(images.findIndex(i => i.key === item.item_key && i.url === img.url));
                                 }}
+                                disabled={!isScanned}
+                                title={!isScanned ? "Harap scan QR code terlebih dahulu" : ""}
                                 style={{
                                   position: "absolute",
                                   top: "2px",
                                   right: "2px",
-                                  background: "rgba(0,0,0,0.5)",
+                                  background: isScanned ? "rgba(0,0,0,0.5)" : "rgba(200,200,200,0.5)",
                                   color: "white",
                                   border: "none",
                                   borderRadius: "50%",
                                   width: "16px",
                                   height: "16px",
                                   fontSize: "10px",
-                                  cursor: "pointer",
+                                  cursor: isScanned ? "pointer" : "not-allowed",
                                   padding: "0"
                                 }}
                               >
@@ -953,7 +1050,8 @@ export function EChecksheetInfJalanForm() {
                       <textarea
                         value={answers[`${item.item_key}_tindakan`] || ""}
                         onChange={(e) => handleInputChange(`${item.item_key}_tindakan`, e.target.value)}
-                        disabled={!selectedDate}
+                        disabled={!isScanned}
+                        title={!isScanned ? "Harap scan QR code terlebih dahulu" : ""}
                         placeholder="Tindakan..."
                         rows={2}
                         style={{
@@ -963,7 +1061,9 @@ export function EChecksheetInfJalanForm() {
                           resize: "vertical",
                           border: "1px solid #ccc",
                           borderRadius: "4px",
-                          opacity: selectedDate ? 1 : 0.5
+                          opacity: isScanned ? 1 : 0.5,
+                          background: isScanned ? "white" : "#f5f5f5",
+                          cursor: isScanned ? "text" : "not-allowed"
                         }}
                       />
                     </td>
@@ -977,7 +1077,8 @@ export function EChecksheetInfJalanForm() {
                         type="text"
                         value={answers[`${item.item_key}_pic`] || ""}
                         onChange={(e) => handleInputChange(`${item.item_key}_pic`, e.target.value)}
-                        disabled={!selectedDate}
+                        disabled={!isScanned}
+                        title={!isScanned ? "Harap scan QR code terlebih dahulu" : ""}
                         placeholder="PIC"
                         style={{
                           width: "100%",
@@ -985,7 +1086,9 @@ export function EChecksheetInfJalanForm() {
                           fontSize: "11px",
                           border: "1px solid #ccc",
                           borderRadius: "4px",
-                          opacity: selectedDate ? 1 : 0.5
+                          opacity: isScanned ? 1 : 0.5,
+                          background: isScanned ? "white" : "#f5f5f5",
+                          cursor: isScanned ? "text" : "not-allowed"
                         }}
                       />
                     </td>
@@ -999,17 +1102,21 @@ export function EChecksheetInfJalanForm() {
                         type="date"
                         value={answers[`${item.item_key}_dueDate`] || ""}
                         onChange={(e) => handleInputChange(`${item.item_key}_dueDate`, e.target.value)}
-                        disabled={!selectedDate}
+                        disabled={!isScanned}
+                        title={!isScanned ? "Harap scan QR code terlebih dahulu" : ""}
                         style={{
                           width: "100%",
                           padding: "4px",
                           fontSize: "11px",
                           border: "1px solid #ccc",
                           borderRadius: "4px",
-                          opacity: selectedDate ? 1 : 0.5
+                          opacity: isScanned ? 1 : 0.5,
+                          background: isScanned ? "white" : "#f5f5f5",
+                          cursor: isScanned ? "pointer" : "not-allowed"
                         }}
                       />
                     </td>
+                    {/* ✅ KOLOM VERIFY DIHAPUS */}
                     {/* ✅ KOLOM VERIFY DIHAPUS */}
                   </tr>
                 ))}

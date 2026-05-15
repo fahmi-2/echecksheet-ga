@@ -31,7 +31,7 @@ export default function RiwayatPreventivePage() {
   useEffect(() => {
     if (redirected) return;
     if (!user) return;
-    if (user.role !== "inspector-ga") {
+    if (user.role !== "inspector-ga-equipment") {
       setRedirected(true);
       router.push("/home");
       return;
@@ -190,7 +190,7 @@ const handleEditStart = (entry: PreventiveHistoryEntry) => {
   };
 
   if (!user) return <div>Loading...</div>;
-  if (user.role !== "inspector-ga") return null;
+  if (user.role !== "inspector-ga-equipment") return null;
 
   if (loading && !error) {
     return (

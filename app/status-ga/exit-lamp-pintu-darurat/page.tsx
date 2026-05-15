@@ -17,7 +17,7 @@ export default function ExitLampPintuDaruratPage() {
   // Validasi akses
   useEffect(() => {
     if (redirected) return;
-    if (!user || user.role !== "inspector-ga") {
+    if (!user || user.role !== "inspector-ga-fire") {
       setRedirected(true);
       router.push("/home");
     }

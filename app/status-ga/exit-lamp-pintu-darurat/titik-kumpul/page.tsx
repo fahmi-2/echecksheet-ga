@@ -5,10 +5,17 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
 import { Sidebar } from "@/components/Sidebar";
+import { QrCode } from "lucide-react";
+
+// ✅ TAMBAHKAN IMPORT HOOK SCAN VERIFICATION
+import { useScanVerification } from "@/lib/hooks/useScanVerification";
 
 export default function TitikKumpulChecklist() {
   const router = useRouter();
   const { user } = useAuth();
+
+  // ✅ TAMBAHKAN HOOK INI - WAJIB DI TOP LEVEL
+  const { isScanned, isLoading: scanLoading } = useScanVerification();
 
   const today = new Date().toISOString().split("T")[0];
   const date = today;
@@ -37,7 +44,7 @@ export default function TitikKumpulChecklist() {
 
   // Validasi akses
   useEffect(() => {
-    if (!user || user.role !== "inspector-ga") {
+    if (!user || user.role !== "inspector-ga-fire") {
       router.push("/home");
     }
   }, [user, router]);
@@ -322,11 +329,30 @@ export default function TitikKumpulChecklist() {
           </p>
         </div>
 
+        {/* ✅ SCAN WARNING BANNER - TAMBAHAN BARU */}
+        {!isScanned && (
+          <div className="banner banner-warning scan-warning">
+            <span>🔒 Akses melalui scan QR code terlebih dahulu untuk mengisi checksheet ini.</span>
+            <button 
+              onClick={() => router.push("/scan")} 
+              className="banner-btn"
+              disabled={isSubmitting}
+            >
+              <QrCode size={14} /> Scan Sekarang
+            </button>
+          </div>
+        )}
+
         {!showPreview ? (
           <div className="card-container">
             {/* Tombol OK All */}
             <div className="quick-actions">
-              <button onClick={handleOkAll} className="btn-ok-all">
+              <button 
+                onClick={handleOkAll} 
+                className="btn-ok-all"
+                disabled={!isScanned}
+                title={!isScanned ? "Harap scan QR code terlebih dahulu" : ""}
+              >
                 ✅ OK All (Isi Semua dengan OK)
               </button>
             </div>
@@ -360,6 +386,8 @@ export default function TitikKumpulChecklist() {
                           value={item.areaAman}
                           onChange={(e) => handleTitikKumpulChange(index, "areaAman", e.target.value)}
                           className="status-select"
+                          disabled={!isScanned}
+                          title={!isScanned ? "Harap scan QR code terlebih dahulu" : ""}
                         >
                           <option value="">Pilih</option>
                           <option value="OK">OK</option>
@@ -373,6 +401,8 @@ export default function TitikKumpulChecklist() {
                             handleTitikKumpulChange(index, "identitasTitikKumpul", e.target.value)
                           }
                           className="status-select"
+                          disabled={!isScanned}
+                          title={!isScanned ? "Harap scan QR code terlebih dahulu" : ""}
                         >
                           <option value="">Pilih</option>
                           <option value="OK">OK</option>
@@ -386,6 +416,8 @@ export default function TitikKumpulChecklist() {
                             handleTitikKumpulChange(index, "areaMobilPMK", e.target.value)
                           }
                           className="status-select"
+                          disabled={!isScanned}
+                          title={!isScanned ? "Harap scan QR code terlebih dahulu" : ""}
                         >
                           <option value="">Pilih</option>
                           <option value="OK">OK</option>
@@ -399,6 +431,8 @@ export default function TitikKumpulChecklist() {
                           onChange={(e) => handleTitikKumpulChange(index, "keterangan", e.target.value)}
                           placeholder="Wajib diisi jika NG"
                           className="notes-input"
+                          disabled={!isScanned}
+                          title={!isScanned ? "Harap scan QR code terlebih dahulu" : ""}
                         />
                       </td>
                       <td>
@@ -410,6 +444,8 @@ export default function TitikKumpulChecklist() {
                           }
                           placeholder="Tindakan perbaikan..."
                           className="notes-input"
+                          disabled={!isScanned}
+                          title={!isScanned ? "Harap scan QR code terlebih dahulu" : ""}
                         />
                       </td>
                       <td>
@@ -424,18 +460,22 @@ export default function TitikKumpulChecklist() {
                                 type="button"
                                 onClick={() => handleTitikKumpulChange(index, "foto", "")}
                                 className="remove-btn"
+                                disabled={!isScanned}
+                                title={!isScanned ? "Harap scan QR code terlebih dahulu" : ""}
                               >
                                 ✕
                               </button>
                             </div>
                           ) : (
-                            <label className="file-label">
+                            <label className={`file-label ${!isScanned ? 'disabled' : ''}`}
+                              title={!isScanned ? "Harap scan QR code terlebih dahulu" : ""}>
                               📷 Unggah
                               <input
                                 type="file"
                                 accept="image/*"
                                 onChange={(e) => handleImageUpload(e, index, "titik")}
                                 className="file-input"
+                                disabled={!isScanned}
                               />
                             </label>
                           )}
@@ -469,6 +509,8 @@ export default function TitikKumpulChecklist() {
                           value={item.areaAman}
                           onChange={(e) => handleTitikKumpulChange(index, "areaAman", e.target.value)}
                           className="status-select"
+                          disabled={!isScanned}
+                          title={!isScanned ? "Harap scan QR code terlebih dahulu" : ""}
                         >
                           <option value="">Pilih</option>
                           <option value="OK">OK</option>
@@ -484,6 +526,8 @@ export default function TitikKumpulChecklist() {
                             handleTitikKumpulChange(index, "identitasTitikKumpul", e.target.value)
                           }
                           className="status-select"
+                          disabled={!isScanned}
+                          title={!isScanned ? "Harap scan QR code terlebih dahulu" : ""}
                         >
                           <option value="">Pilih</option>
                           <option value="OK">OK</option>
@@ -499,6 +543,8 @@ export default function TitikKumpulChecklist() {
                             handleTitikKumpulChange(index, "areaMobilPMK", e.target.value)
                           }
                           className="status-select"
+                          disabled={!isScanned}
+                          title={!isScanned ? "Harap scan QR code terlebih dahulu" : ""}
                         >
                           <option value="">Pilih</option>
                           <option value="OK">OK</option>
@@ -514,6 +560,8 @@ export default function TitikKumpulChecklist() {
                           onChange={(e) => handleTitikKumpulChange(index, "keterangan", e.target.value)}
                           placeholder="Wajib diisi jika NG"
                           className="notes-input"
+                          disabled={!isScanned}
+                          title={!isScanned ? "Harap scan QR code terlebih dahulu" : ""}
                         />
                       </div>
 
@@ -527,6 +575,8 @@ export default function TitikKumpulChecklist() {
                           }
                           placeholder="Tindakan perbaikan..."
                           className="notes-input"
+                          disabled={!isScanned}
+                          title={!isScanned ? "Harap scan QR code terlebih dahulu" : ""}
                         />
                       </div>
 
@@ -545,18 +595,22 @@ export default function TitikKumpulChecklist() {
                                 type="button"
                                 onClick={() => handleTitikKumpulChange(index, "foto", "")}
                                 className="remove-btn"
+                                disabled={!isScanned}
+                                title={!isScanned ? "Harap scan QR code terlebih dahulu" : ""}
                               >
                                 ✕
                               </button>
                             </div>
                           ) : (
-                            <label className="file-label file-label-large">
+                            <label className={`file-label file-label-large ${!isScanned ? 'disabled' : ''}`}
+                              title={!isScanned ? "Harap scan QR code terlebih dahulu" : ""}>
                               📷 Unggah Foto
                               <input
                                 type="file"
                                 accept="image/*"
                                 onChange={(e) => handleImageUpload(e, index, "titik")}
                                 className="file-input"
+                                disabled={!isScanned}
                               />
                             </label>
                           )}
@@ -597,6 +651,8 @@ export default function TitikKumpulChecklist() {
                           value={item.hasilCek}
                           onChange={(e) => handleJalurEvakuasiChange(index, "hasilCek", e.target.value)}
                           className="status-select"
+                          disabled={!isScanned}
+                          title={!isScanned ? "Harap scan QR code terlebih dahulu" : ""}
                         >
                           <option value="">Pilih</option>
                           <option value="OK">OK</option>
@@ -610,6 +666,8 @@ export default function TitikKumpulChecklist() {
                           onChange={(e) => handleJalurEvakuasiChange(index, "keterangan", e.target.value)}
                           placeholder="Wajib diisi jika NG"
                           className="notes-input"
+                          disabled={!isScanned}
+                          title={!isScanned ? "Harap scan QR code terlebih dahulu" : ""}
                         />
                       </td>
                       <td>
@@ -621,6 +679,8 @@ export default function TitikKumpulChecklist() {
                           }
                           placeholder="Tindakan perbaikan..."
                           className="notes-input"
+                          disabled={!isScanned}
+                          title={!isScanned ? "Harap scan QR code terlebih dahulu" : ""}
                         />
                       </td>
                       <td>
@@ -635,18 +695,22 @@ export default function TitikKumpulChecklist() {
                                 type="button"
                                 onClick={() => handleJalurEvakuasiChange(index, "foto", "")}
                                 className="remove-btn"
+                                disabled={!isScanned}
+                                title={!isScanned ? "Harap scan QR code terlebih dahulu" : ""}
                               >
                                 ✕
                               </button>
                             </div>
                           ) : (
-                            <label className="file-label">
+                            <label className={`file-label ${!isScanned ? 'disabled' : ''}`}
+                              title={!isScanned ? "Harap scan QR code terlebih dahulu" : ""}>
                               📷 Unggah
                               <input
                                 type="file"
                                 accept="image/*"
                                 onChange={(e) => handleImageUpload(e, index, "jalur")}
                                 className="file-input"
+                                disabled={!isScanned}
                               />
                             </label>
                           )}
@@ -680,6 +744,8 @@ export default function TitikKumpulChecklist() {
                           value={item.hasilCek}
                           onChange={(e) => handleJalurEvakuasiChange(index, "hasilCek", e.target.value)}
                           className="status-select"
+                          disabled={!isScanned}
+                          title={!isScanned ? "Harap scan QR code terlebih dahulu" : ""}
                         >
                           <option value="">Pilih</option>
                           <option value="OK">OK</option>
@@ -695,6 +761,8 @@ export default function TitikKumpulChecklist() {
                           onChange={(e) => handleJalurEvakuasiChange(index, "keterangan", e.target.value)}
                           placeholder="Wajib diisi jika NG"
                           className="notes-input"
+                          disabled={!isScanned}
+                          title={!isScanned ? "Harap scan QR code terlebih dahulu" : ""}
                         />
                       </div>
 
@@ -708,6 +776,8 @@ export default function TitikKumpulChecklist() {
                           }
                           placeholder="Tindakan perbaikan..."
                           className="notes-input"
+                          disabled={!isScanned}
+                          title={!isScanned ? "Harap scan QR code terlebih dahulu" : ""}
                         />
                       </div>
 
@@ -726,18 +796,22 @@ export default function TitikKumpulChecklist() {
                                 type="button"
                                 onClick={() => handleJalurEvakuasiChange(index, "foto", "")}
                                 className="remove-btn"
+                                disabled={!isScanned}
+                                title={!isScanned ? "Harap scan QR code terlebih dahulu" : ""}
                               >
                                 ✕
                               </button>
                             </div>
                           ) : (
-                            <label className="file-label file-label-large">
+                            <label className={`file-label file-label-large ${!isScanned ? 'disabled' : ''}`}
+                              title={!isScanned ? "Harap scan QR code terlebih dahulu" : ""}>
                               📷 Unggah Foto
                               <input
                                 type="file"
                                 accept="image/*"
                                 onChange={(e) => handleImageUpload(e, index, "jalur")}
                                 className="file-input"
+                                disabled={!isScanned}
                               />
                             </label>
                           )}
@@ -753,7 +827,12 @@ export default function TitikKumpulChecklist() {
               <button onClick={() => router.back()} className="btn-cancel">
                 Batal
               </button>
-              <button onClick={handleShowPreview} className="btn-submit">
+              <button 
+                onClick={handleShowPreview} 
+                className="btn-submit"
+                disabled={!isScanned}
+                title={!isScanned ? "Harap scan QR code terlebih dahulu" : ""}
+              >
                 👁️ Preview & Simpan
               </button>
             </div>
@@ -1058,6 +1137,39 @@ export default function TitikKumpulChecklist() {
           letter-spacing: 0.3px;
         }
 
+        /* ── Banners ────────────────────────────────────── */
+        .banner {
+          border-radius: 10px; padding: 12px 18px; margin-bottom: 18px;
+          display: flex; align-items: center; gap: 10px; font-weight: 500;
+        }
+        .banner-warning {
+          background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
+          border: 1px solid #f59e0b; color: #92400e;
+          box-shadow: 0 2px 8px rgba(245,158,11,0.12);
+        }
+        .banner-btn {
+          margin-left: auto; background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+          color: white; border: none; border-radius: 7px; padding: 8px 16px;
+          cursor: pointer; font-size: 0.85rem; font-weight: 600; transition: all 0.2s;
+          box-shadow: 0 2px 6px rgba(245,158,11,0.3);
+          display: inline-flex;
+          align-items: center;
+          gap: 6px;
+          min-height: 36px;
+        }
+        .banner-btn:hover { transform: translateY(-1px); box-shadow: 0 4px 10px rgba(245,158,11,0.4); }
+        .scan-warning {
+          background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
+          border-left: 4px solid #f59e0b; justify-content: space-between;
+        }
+        .scan-warning .banner-btn {
+          background: linear-gradient(135deg, #7c3aed 0%, #5b21b6 100%);
+          padding: 8px 16px;
+        }
+        .scan-warning .banner-btn:hover {
+          transform: translateY(-1px); box-shadow: 0 4px 10px rgba(124, 58, 237, 0.4);
+        }
+
         .card-container {
           background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
           border-radius: 16px;
@@ -1103,7 +1215,14 @@ export default function TitikKumpulChecklist() {
           box-shadow: 0 6px 16px rgba(76, 175, 80, 0.4);
         }
 
-        .btn-ok-all:active {
+        .btn-ok-all:disabled {
+          opacity: 0.6;
+          cursor: not-allowed;
+          transform: none;
+          box-shadow: none;
+        }
+
+        .btn-ok-all:active:not(:disabled) {
           transform: translateY(0);
         }
 
@@ -1181,10 +1300,23 @@ export default function TitikKumpulChecklist() {
           box-shadow: 0 0 0 2px rgba(79, 195, 247, 0.3);
         }
 
+        .status-select:disabled,
+        .notes-input:disabled {
+          background: rgba(255,255,255,0.5);
+          cursor: not-allowed;
+        }
+
         .info-cell {
           background: rgba(255, 255, 255, 0.4);
           color: white;
           font-weight: 500;
+        }
+
+        /* File Label Disabled State */
+        .file-label.disabled {
+          background: rgba(255,255,255,0.5);
+          cursor: not-allowed;
+          color: #666;
         }
 
         /* Mobile Card Styles */
@@ -1383,7 +1515,7 @@ export default function TitikKumpulChecklist() {
           padding: 12px 16px;
         }
 
-        .file-label:hover {
+        .file-label:hover:not(.disabled) {
           background: rgba(255, 255, 255, 1);
         }
 
@@ -1436,6 +1568,12 @@ export default function TitikKumpulChecklist() {
           transform: scale(1.1);
         }
 
+        .remove-btn:disabled {
+          opacity: 0.5;
+          cursor: not-allowed;
+          transform: none;
+        }
+
         .form-actions,
         .preview-actions {
           display: flex;
@@ -1485,6 +1623,11 @@ export default function TitikKumpulChecklist() {
 
         .btn-submit:hover {
           background: #43a047;
+        }
+
+        .btn-submit:disabled {
+          opacity: 0.5;
+          cursor: not-allowed;
         }
 
         .save-btn {
