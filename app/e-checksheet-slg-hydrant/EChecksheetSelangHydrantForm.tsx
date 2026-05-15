@@ -1,7 +1,7 @@
 // app/e-checksheet-slg-hydrant/EChecksheetSelangHydrantForm.tsx
 "use client";
 import { useState, useEffect, useRef, useMemo } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
 import { Sidebar } from "@/components/Sidebar";
 import { QrCode } from "lucide-react";
@@ -19,6 +19,45 @@ import {
   ChecklistItem,
   ChecklistData
 } from "@/lib/api/checksheet";
+
+// ✅ Helper: Extract tahun dari tanggal
+const getYear = (dateString: string) => new Date(dateString).getFullYear();
+
+// ✅ Helper: Extract bulan dari tanggal (0-11)
+const getMonth = (dateString: string) => new Date(dateString).getMonth();
+
+// ✅ Helper: Format nama bulan dalam Bahasa Indonesia
+const monthNames = [
+  "Januari", "Februari", "Maret", "April", "Mei", "Juni",
+  "Juli", "Agustus", "September", "Oktober", "November", "Desember"
+];
+
+// ✅ Helper: Group dates by year and month
+const groupDatesByYearMonth = (dates: string[]) => {
+  const grouped: Record<number, Record<number, string[]>> = {};
+  
+  dates.forEach(date => {
+    const year = getYear(date);
+    const month = getMonth(date);
+    
+    if (!grouped[year]) {
+      grouped[year] = {};
+    }
+    if (!grouped[year][month]) {
+      grouped[year][month] = [];
+    }
+    grouped[year][month].push(date);
+  });
+  
+  // Sort dates within each month (newest first)
+  Object.values(grouped).forEach(yearData => {
+    Object.values(yearData).forEach(monthDates => {
+      monthDates.sort((a, b) => new Date(b).getTime() - new Date(a).getTime());
+    });
+  });
+  
+  return grouped;
+};
 
 // ✅ Helper: Extract tahun dari tanggal
 const getYear = (dateString: string) => new Date(dateString).getFullYear();
@@ -99,11 +138,20 @@ export function EChecksheetSelangHydrantForm() {
   
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  
+  // ✅ Filter States untuk Riwayat Isian
+  const [selectedYear, setSelectedYear] = useState<number | "">("");
+  const [selectedMonth, setSelectedMonth] = useState<number | "">("");
+  const [filteredDates, setFilteredDates] = useState<string[]>([]);
+  
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
 
   useEffect(() => {
     setIsMounted(true);
   }, []);
 
+  // Auth check
   // Auth check
   useEffect(() => {
     if (!isMounted || !isInitialized) return;
@@ -112,7 +160,7 @@ export function EChecksheetSelangHydrantForm() {
       console.log('⏳ Waiting for user data...');
       return;
     }
-    if (user.role !== "inspector-ga-fire") {
+    if (user.role !== "inspector-ga") {
       console.warn('⚠️ Unauthorized - wrong role:', user.role);
       router.replace("/login-page");
       return;
@@ -120,6 +168,7 @@ export function EChecksheetSelangHydrantForm() {
     console.log('✅ Access granted:', user.fullName, 'Role:', user.role);
   }, [user, authLoading, isInitialized, router, isMounted]);
 
+  // Load inspection items
   // Load inspection items
   useEffect(() => {
     if (!user) return;
@@ -137,6 +186,7 @@ export function EChecksheetSelangHydrantForm() {
   }, [user]);
 
   // Load areaId and available dates
+  // Load areaId and available dates
   useEffect(() => {
     if (!lokasi || !user) return;
     const loadAreaData = async () => {
@@ -151,7 +201,17 @@ export function EChecksheetSelangHydrantForm() {
           setAreaId(area.id);
           const dates = await getAvailableDates(TYPE_SLUG, area.id);
           console.log('📅 Available dates:', dates);
+          console.log('📅 Available dates:', dates);
           setAvailableDates(dates);
+          
+          // ✅ Set default filter to current year & month
+          if (dates.length > 0) {
+            const latestDate = dates[0];
+            const currentYear = getYear(latestDate);
+            const currentMonth = getMonth(latestDate);
+            setSelectedYear(currentYear);
+            setSelectedMonth(currentMonth);
+          }
           
           // ✅ Set default filter to current year & month
           if (dates.length > 0) {
@@ -176,6 +236,14 @@ export function EChecksheetSelangHydrantForm() {
               setSelectedYear(currentYear);
               setSelectedMonth(currentMonth);
             }
+            
+            if (dates.length > 0) {
+              const latestDate = dates[0];
+              const currentYear = getYear(latestDate);
+              const currentMonth = getMonth(latestDate);
+              setSelectedYear(currentYear);
+              setSelectedMonth(currentMonth);
+            }
           } else {
             console.warn('⚠️ Area not found:', lokasi);
             alert(`Area "${lokasi}" tidak ditemukan.`);
@@ -190,6 +258,25 @@ export function EChecksheetSelangHydrantForm() {
   }, [lokasi, zona, jenisHydrant, picDefault, user]);
 
   // ✅ Filter dates when year or month changes
+  // ✅ Filter dates when year or month changes
+  useEffect(() => {
+    if (selectedYear === "" || selectedMonth === "") {
+      setFilteredDates([]);
+      return;
+    }
+    
+    const grouped = groupDatesByYearMonth(availableDates);
+    const datesForSelection = grouped[selectedYear]?.[selectedMonth] || [];
+    
+    setFilteredDates(datesForSelection);
+    
+    // ✅ Auto-select latest date when month changes
+    if (datesForSelection.length > 0 && !selectedDate) {
+      setSelectedDate(datesForSelection[0]);
+    }
+  }, [selectedYear, selectedMonth, availableDates, selectedDate]);
+
+  // Camera useEffect
   useEffect(() => {
     if (selectedYear === "" || selectedMonth === "") {
       setFilteredDates([]);
@@ -234,6 +321,7 @@ export function EChecksheetSelangHydrantForm() {
   }, [showCameraModal]);
 
   // Load existing data
+  // Load existing data
   const handleLoadExisting = async () => {
     if (!selectedDate) {
       alert("Pilih tanggal terlebih dahulu!");
@@ -253,6 +341,7 @@ export function EChecksheetSelangHydrantForm() {
         const existingData: Record<string, string> = {};
         const loadedImages: { key: string; url: string }[] = [];
 
+        Object.entries(data).forEach(([itemKey, entry]: [string, any]) => {
         Object.entries(data).forEach(([itemKey, entry]: [string, any]) => {
           existingData[`${itemKey}_hasil`] = entry.hasilPemeriksaan || "";
           existingData[`${itemKey}_keterangan`] = entry.keteranganTemuan || "";
@@ -286,6 +375,7 @@ export function EChecksheetSelangHydrantForm() {
     }
   };
 
+  // Save to API
   // Save to API
   const handleSave = async () => {
     if (!user) {
@@ -421,6 +511,12 @@ export function EChecksheetSelangHydrantForm() {
     return Array.from(years).sort((a, b) => b - a); // Sort descending
   }, [availableDates]);
 
+  // ✅ Get unique years from available dates
+  const availableYears = useMemo(() => {
+    const years = new Set(availableDates.map(date => getYear(date)));
+    return Array.from(years).sort((a, b) => b - a); // Sort descending
+  }, [availableDates]);
+
   // ✅ Show loading during mount/init/auth
   if (!isMounted || !isInitialized || authLoading) {
     return (
@@ -435,11 +531,14 @@ export function EChecksheetSelangHydrantForm() {
           <div style={{ fontSize: "48px", marginBottom: "16px" }}>⏳</div>
           <p style={{ fontSize: "16px", color: "#666", margin: "0" }}>Loading...</p>
           <p style={{ fontSize: "14px", color: "#999", marginTop: "8px" }}>Please wait</p>
+          <p style={{ fontSize: "16px", color: "#666", margin: "0" }}>Loading...</p>
+          <p style={{ fontSize: "14px", color: "#999", marginTop: "8px" }}>Please wait</p>
         </div>
       </div>
     );
   }
 
+  // Guard: Don't render form if user not authorized
   // Guard: Don't render form if user not authorized
   if (!user) {
     return (
@@ -452,6 +551,7 @@ export function EChecksheetSelangHydrantForm() {
       }}>
         <div style={{ textAlign: "center" }}>
           <div style={{ fontSize: "48px", marginBottom: "16px" }}>🔒</div>
+          <p style={{ fontSize: "16px", color: "#666", margin: "0" }}>Redirecting to login...</p>
           <p style={{ fontSize: "16px", color: "#666", margin: "0" }}>Redirecting to login...</p>
         </div>
       </div>
@@ -471,11 +571,14 @@ export function EChecksheetSelangHydrantForm() {
           <div style={{ fontSize: "48px", marginBottom: "16px" }}>❌</div>
           <p style={{ fontSize: "16px", color: "#666", margin: "0" }}>Access Denied</p>
           <p style={{ fontSize: "13px", color: "#999", marginTop: "8px" }}>Wrong role for this page</p>
+          <p style={{ fontSize: "16px", color: "#666", margin: "0" }}>Access Denied</p>
+          <p style={{ fontSize: "13px", color: "#999", marginTop: "8px" }}>Wrong role for this page</p>
         </div>
       </div>
     );
   }
 
+  // Render normal UI (user is guaranteed to be authorized at this point)
   // Render normal UI (user is guaranteed to be authorized at this point)
   return (
     <div style={{ minHeight: "100vh", background: "#f8f9fa" }}>
@@ -547,6 +650,11 @@ export function EChecksheetSelangHydrantForm() {
             <div style={{ color: "black" }}><strong>Lokasi:</strong> {lokasi}</div>
             <div style={{ color: "black" }}><strong>PIC Default:</strong> {picDefault}</div>
             <div style={{ color: "black" }}><strong>Inspector:</strong> {user.fullName}</div>
+            <div style={{ color: "black" }}><strong>Zona:</strong> {zona}</div>
+            <div style={{ color: "black" }}><strong>Jenis Hydrant:</strong> {jenisHydrant}</div>
+            <div style={{ color: "black" }}><strong>Lokasi:</strong> {lokasi}</div>
+            <div style={{ color: "black" }}><strong>PIC Default:</strong> {picDefault}</div>
+            <div style={{ color: "black" }}><strong>Inspector:</strong> {user.fullName}</div>
           </div>
         </div>
 
@@ -561,6 +669,7 @@ export function EChecksheetSelangHydrantForm() {
         }}>
           <div style={{ marginBottom: "12px" }}>
             <strong style={{ color: "#0d47a1", fontSize: "15px" }}>
+            <strong style={{ color: "#0d47a1", fontSize: "15px" }}>
               📅 Jadwal Inspeksi: Setiap 2 Bulan (Jan, Mar, Mei, Jul, Sep, Nov)
             </strong>
           </div>
@@ -573,11 +682,16 @@ export function EChecksheetSelangHydrantForm() {
             marginBottom: "12px" 
           }}>
             <label style={{ fontWeight: "700", color: "#0d47a1", fontSize: "14px" }}>
+            <label style={{ fontWeight: "700", color: "#0d47a1", fontSize: "14px" }}>
               Tanggal Inspeksi:
             </label>
             <input
               type="date"
               value={selectedDate}
+              onChange={(e) => {
+                console.log('📅 Date input changed:', e.target.value);
+                setSelectedDate(e.target.value);
+              }}
               onChange={(e) => {
                 console.log('📅 Date input changed:', e.target.value);
                 setSelectedDate(e.target.value);
@@ -599,6 +713,7 @@ export function EChecksheetSelangHydrantForm() {
           </div>
 
           {/* ✅ RIWAYAT ISIAN dengan Filter Tahun & Bulan */}
+          {/* ✅ RIWAYAT ISIAN dengan Filter Tahun & Bulan */}
           {availableDates.length > 0 && (
             <div style={{ 
               display: "flex", 
@@ -612,7 +727,17 @@ export function EChecksheetSelangHydrantForm() {
             }}>
               <label style={{ fontWeight: "700", color: "#0d47a1", fontSize: "14px" }}>
                 📁 Riwayat Isian:
+              flexWrap: "wrap",
+              padding: "12px",
+              background: "#f5f9ff",
+              borderRadius: "8px",
+              border: "1px solid #e3f2fd"
+            }}>
+              <label style={{ fontWeight: "700", color: "#0d47a1", fontSize: "14px" }}>
+                📁 Riwayat Isian:
               </label>
+              
+              {/* Dropdown Tahun */}
               
               {/* Dropdown Tahun */}
               <select
@@ -624,8 +749,6 @@ export function EChecksheetSelangHydrantForm() {
                   setSelectedDate(""); // Reset date when year changes
                   console.log('📅 Year changed:', year);
                 }}
-                disabled={!isScanned}
-                title={!isScanned ? "Harap scan QR code terlebih dahulu" : ""}
                 style={{
                   color: "#0d47a1",
                   padding: "8px 12px",
@@ -633,8 +756,8 @@ export function EChecksheetSelangHydrantForm() {
                   borderRadius: "6px",
                   fontSize: "14px",
                   minWidth: "100px",
-                  background: isScanned ? "white" : "#f5f5f5",
-                  cursor: isScanned ? "pointer" : "not-allowed",
+                  background: "white",
+                  cursor: "pointer",
                   fontWeight: "500"
                 }}
               >
@@ -653,17 +776,16 @@ export function EChecksheetSelangHydrantForm() {
                   setSelectedDate(""); // Reset date when month changes
                   console.log('📅 Month changed:', month);
                 }}
-                disabled={selectedYear === "" || !isScanned}
-                title={!isScanned ? "Harap scan QR code terlebih dahulu" : ""}
+                disabled={selectedYear === ""}
                 style={{
-                  color: selectedYear === "" || !isScanned ? "#999" : "#0d47a1",
+                  color: selectedYear === "" ? "#999" : "#0d47a1",
                   padding: "8px 12px",
                   border: "2px solid #1e88e5",
                   borderRadius: "6px",
                   fontSize: "14px",
                   minWidth: "140px",
-                  background: isScanned ? "white" : "#f5f5f5",
-                  cursor: (selectedYear !== "" && isScanned) ? "pointer" : "not-allowed",
+                  background: "white",
+                  cursor: selectedYear === "" ? "not-allowed" : "pointer",
                   fontWeight: "500"
                 }}
               >
@@ -682,8 +804,6 @@ export function EChecksheetSelangHydrantForm() {
                     setSelectedDate(date);
                     console.log('📅 Date selected from filter:', date);
                   }}
-                  disabled={!isScanned}
-                  title={!isScanned ? "Harap scan QR code terlebih dahulu" : ""}
                   style={{
                     color: "#0d47a1",
                     padding: "8px 12px",
@@ -691,8 +811,8 @@ export function EChecksheetSelangHydrantForm() {
                     borderRadius: "6px",
                     fontSize: "14px",
                     minWidth: "160px",
-                    background: isScanned ? "white" : "#f5f5f5",
-                    cursor: isScanned ? "pointer" : "not-allowed",
+                    background: "white",
+                    cursor: "pointer",
                     fontWeight: "500"
                   }}
                 >
@@ -719,13 +839,34 @@ export function EChecksheetSelangHydrantForm() {
                   color: "white",
                   border: "none",
                   borderRadius: "6px",
-                  cursor: (selectedDate && !isLoading && isScanned) ? "pointer" : "not-allowed",
+                  cursor: (selectedDate && !isLoading) ? "pointer" : "not-allowed",
                   fontWeight: "600",
                   fontSize: "14px"
                 }}
               >
                 {isLoading ? "⏳ Memuat..." : "📥 Muat Data"}
+                {isLoading ? "⏳ Memuat..." : "📥 Muat Data"}
               </button>
+            </div>
+          )}
+
+          {/* Debug info (development only) */}
+          {process.env.NODE_ENV === 'development' && (
+            <div style={{
+              marginTop: "12px",
+              padding: "8px 12px",
+              background: "#f0f0f0",
+              borderRadius: "6px",
+              fontSize: "11px",
+              color: "#666"
+            }}>
+              <strong>Debug Info:</strong><br/>
+              selectedDate: {selectedDate || '(empty)'}<br/>
+              selectedYear: {selectedYear || '(empty)'}<br/>
+              selectedMonth: {selectedMonth !== "" ? monthNames[selectedMonth] : '(empty)'}<br/>
+              availableDates count: {availableDates.length}<br/>
+              filteredDates count: {filteredDates.length}<br/>
+              areaId: {areaId || '(null)'}
             </div>
           )}
 
@@ -899,7 +1040,7 @@ export function EChecksheetSelangHydrantForm() {
                                     position: "absolute",
                                     top: "2px",
                                     right: "2px",
-                                    background: isScanned ? "rgba(244,67,54,0.9)" : "rgba(200,200,200,0.9)",
+                                    background: "rgba(244,67,54,0.9)",
                                     color: "white",
                                     border: "none",
                                     borderRadius: "50%",
@@ -1067,6 +1208,7 @@ export function EChecksheetSelangHydrantForm() {
                 }}
               />
               <div style={{ marginTop: "16px", color: "white", fontSize: "14px" }}>
+              <div style={{ marginTop: "16px", color: "white", fontSize: "14px" }}>
                 Click outside to close
               </div>
             </div>
@@ -1107,6 +1249,7 @@ export function EChecksheetSelangHydrantForm() {
               }}
             >
               <h3 style={{ margin: "0 0 12px 0", color: "#212121" }}>📸 Ambil Foto</h3>
+              <h3 style={{ margin: "0 0 12px 0", color: "#212121" }}>📸 Ambil Foto</h3>
               <video
                 ref={videoRef}
                 autoPlay
@@ -1120,6 +1263,7 @@ export function EChecksheetSelangHydrantForm() {
                 }}
               />
               <canvas ref={canvasRef} style={{ display: "none" }} />
+              <div style={{ marginTop: "16px", display: "flex", gap: "12px", justifyContent: "center" }}>
               <div style={{ marginTop: "16px", display: "flex", gap: "12px", justifyContent: "center" }}>
                 <button
                   onClick={captureImage}

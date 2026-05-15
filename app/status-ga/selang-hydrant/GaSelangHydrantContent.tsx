@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
-import { Sidebar } from "@/components/Sidebar";
+import { NavbarStatic } from "@/components/navbar-static";
 import QrScanner from 'qr-scanner';
 import { ArrowLeft, Edit2, Plus, Trash2, X } from "lucide-react";
 import {
@@ -14,14 +14,15 @@ import {
   ChecklistItem
 } from "@/lib/api/checksheet";
 
-interface Area {
-  id: number;
+interface HydrantItem {
   no: number;
-  name: string;
-  location: string;
+  zona: string;
+  jenisHydrant: string;
+  lokasi: string;
+  pic: string;
 }
 
-export function GaSelangHydrantContent() {
+export function GaSelangHydrantContent({ openArea }: { openArea: string }) {
   const router = useRouter();
   const { user, loading: authLoading, isInitialized } = useAuth();
 
@@ -37,19 +38,8 @@ export function GaSelangHydrantContent() {
   const [isMounted, setIsMounted] = useState(false);
   const [showModal, setShowModal] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
-  const [showImageModal, setShowImageModal] = useState(false);
-  const [currentImageUrl, setCurrentImageUrl] = useState("");
-  const [showImagePreviewModal, setShowImagePreviewModal] = useState(false);
-  const [currentPreviewImage, setCurrentPreviewImage] = useState("");
-  const [areas, setAreas] = useState<Area[]>([]);
-  const [selectedArea, setSelectedArea] = useState<Area | null>(null);
-  const [checksheetData, setChecksheetData] = useState<any | null>(null);
-  const [selectedDateInModal, setSelectedDateInModal] = useState("");
-  const [availableDates, setAvailableDates] = useState<string[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
-  const [inspectionItems, setInspectionItems] = useState<ChecklistItem[]>([]);
-  const [areaStatuses, setAreaStatuses] = useState<Record<number, { statusLabel: string; statusColor: string; lastCheck: string }>>({});
-  const [isLoadingStatuses, setIsLoadingStatuses] = useState(false);
+
+  // QR Scanner
   const [isScanning, setIsScanning] = useState(false);
   const videoRef = useRef<HTMLVideoElement>(null);
   const qrScannerRef = useRef<QrScanner | null>(null);
@@ -192,10 +182,7 @@ export function GaSelangHydrantContent() {
     });
 
     if (found) {
-      console.log('✅ Found area, opening detail:', found.name);
-      setTimeout(() => openDetail(found), 300);
-    } else {
-      console.warn('⚠️ Area not found for auto-open:', openAreaParam);
+      setTimeout(() => openDetail(found), 50);
     }
   }, [isMounted, user, openAreaParam, areas]);
 
@@ -397,6 +384,7 @@ export function GaSelangHydrantContent() {
     };
   }, []);
 
+  // QR Scanner logic
   useEffect(() => {
     if (!isScanning || !videoRef.current) return;
     const video = videoRef.current;
@@ -493,6 +481,9 @@ export function GaSelangHydrantContent() {
       </div>
     );
   }
+  if (!user || (user.role !== "inspector-ga")) {
+    return null;
+  }
 
   return (
     <div style={{ minHeight: "100vh", background: "#f8f9fa" }}>
@@ -534,8 +525,8 @@ export function GaSelangHydrantContent() {
             <h1 style={{ margin: "0 0 6px 0", color: "white", fontSize: "26px", fontWeight: "600", letterSpacing: "-0.5px" }}>
               🚒 Selang Hydrant Inspection Dashboard
             </h1>
-            <p style={{ margin: 0, color: "#e3f2fd", fontSize: "14px", fontWeight: "400" }}>
-              Bi-monthly inspection schedule and maintenance records
+            <p style={{ margin: 0, color: "rgba(255,255,255,0.9)", fontSize: "clamp(12px, 3vw, 14px)", fontWeight: "400" }}>
+              Manajemen Data Inspeksi Selang & Hydrant – 2 Bulan Sekali
             </p>
           </div>
         </div>
@@ -543,7 +534,7 @@ export function GaSelangHydrantContent() {
         {/* ✅ Search Bar + Edit Data Button (SEJAJAR) */}
         <div style={{
           background: "white",
-          borderRadius: "8px",
+          borderRadius: "10px",
           padding: "16px 20px",
           marginBottom: "24px",
           boxShadow: "0 1px 3px rgba(0,0,0,0.08)",
@@ -739,31 +730,16 @@ export function GaSelangHydrantContent() {
           )}
         </div>
 
-        {/* Loading Status Indicator */}
-        {isLoadingStatuses && (
-          <div style={{ 
-            padding: "12px 20px", 
-            background: "#fff3cd", 
-            borderRadius: "6px",
-            marginBottom: "16px",
-            color: "#856404",
-            fontSize: "13px",
-            textAlign: "center"
-          }}>
-            ⏳ Loading status data...
-          </div>
-        )}
-
         {/* Table */}
         <div style={{
           background: "white",
-          borderRadius: "8px",
-          boxShadow: "0 1px 4px rgba(0,0,0,0.08)",
+          borderRadius: "12px",
+          boxShadow: "0 2px 8px rgba(0,0,0,0.06)",
           overflow: "hidden",
-          border: "1px solid #e0e0e0"
+          border: "1px solid #e8e8e8"
         }}>
           <div style={{ overflowX: "auto" }}>
-            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "14px", minWidth: "900px" }}>
+            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "14px", minWidth: "800px" }}>
               <thead>
                 <tr style={{ borderBottom: "2px solid #e0e0e0" }}>
                   <th style={{ padding: "14px 16px", textAlign: "center", background: "#fafafa", fontWeight: "600", color: "#424242", fontSize: "13px" }}>No</th>
@@ -1219,10 +1195,10 @@ export function GaSelangHydrantContent() {
           </div>
         )}
 
-        {/* Modal Detail */}
-        {showModal && selectedArea && (
+        {/* ✅ Modal Tambah Lokasi */}
+        {showAddModal && (
           <div
-            onClick={closeDetail}
+            onClick={() => setShowAddModal(false)}
             style={{
               position: "fixed",
               top: 0,
@@ -1233,7 +1209,7 @@ export function GaSelangHydrantContent() {
               display: "flex",
               justifyContent: "center",
               alignItems: "center",
-              zIndex: 1000,
+              zIndex: 2000,
               padding: "20px"
             }}
           >
@@ -1662,12 +1638,7 @@ export function GaSelangHydrantContent() {
                 width: "100%",
               }}
             >
-              <h3 style={{ 
-                margin: "0 0 12px 0", 
-                color: "#212121" 
-              }}>
-                Scan Selang Hydrant QR Code
-              </h3>
+              <h3 style={{ margin: "0 0 12px 0", color: "#212121" }}>Scan QR Code Selang Hydrant</h3>
               <video
                 ref={videoRef}
                 style={{
@@ -1677,12 +1648,8 @@ export function GaSelangHydrantContent() {
                   background: "#000"
                 }}
               />
-              <p style={{ 
-                fontSize: "13px", 
-                color: "#666", 
-                marginTop: "12px" 
-              }}>
-                Point your camera at the QR code on the selang hydrant
+              <p style={{ fontSize: "13px", color: "#666", marginTop: "12px" }}>
+                Arahkan kamera ke QR code pada unit selang hydrant
               </p>
               <button
                 onClick={() => {
@@ -1702,168 +1669,11 @@ export function GaSelangHydrantContent() {
                   cursor: "pointer"
                 }}
               >
-                Cancel
+                Batal
               </button>
             </div>
           </div>
         )}
-
-        {/* Modal Popup Gambar Dokumentasi */}
-        {showImageModal && (
-          <div
-            onClick={closeImageModal}
-            style={{
-              position: "fixed",
-              top: 0,
-              left: 0,
-              right: 0,
-              bottom: 0,
-              background: "rgba(0,0,0,0.8)",
-              display: "flex",
-              justifyContent: "center",
-              alignItems: "center",
-              zIndex: 2000,
-              padding: "20px"
-            }}
-          >
-            <div onClick={(e) => e.stopPropagation()} style={{ textAlign: "center" }}>
-              <img
-                src={currentImageUrl}
-                alt="Dokumentasi"
-                style={{
-                  maxHeight: "90vh",
-                  maxWidth: "90vw",
-                  objectFit: "contain",
-                  borderRadius: "8px",
-                  border: "3px solid white"
-                }}
-              />
-              <div style={{ 
-                marginTop: "16px", 
-                color: "white", 
-                fontSize: "14px" 
-              }}>
-                Click outside to close
-              </div>
-            </div>
-          </div>
-        )}
-
-        <style jsx>{`
-          @media (max-width: 1200px) {
-            div[style*="paddingLeft"] {
-              padding-left: 80px !important;
-            }
-          }
-
-          @media (max-width: 768px) {
-            div[style*="paddingLeft"] {
-              padding-left: 25px !important;
-              padding-right: 15px !important;
-              padding-top: 20px !important;
-              padding-bottom: 20px !important;
-            }
-
-            div[style*="gridTemplateColumns"] {
-              grid-template-columns: 1fr !important;
-              gap: 8px !important;
-            }
-
-            h1 {
-              font-size: 20px !important;
-              margin-bottom: 6px !important;
-            }
-
-            p {
-              font-size: 12px !important;
-            }
-
-            table {
-              font-size: 12px !important;
-              min-width: 600px;
-              overflow-x: auto;
-              -webkit-overflow-scrolling: touch;
-            }
-
-            table th,
-            table td {
-              padding: 8px 6px !important;
-              border: 1px solid #ddd !important;
-            }
-
-            input[type="search"],
-            input[type="text"],
-            select {
-              font-size: 14px !important;
-              min-height: 36px !important;
-              width: 100% !important;
-              padding: 8px 8px !important;
-            }
-
-            button {
-              font-size: 13px !important;
-              min-height: 36px !important;
-              padding: 8px 12px !important;
-            }
-
-            div[style*="display: flex"] {
-              flex-direction: column !important;
-              gap: 10px !important;
-            }
-          }
-
-          @media (max-width: 480px) {
-            div[style*="paddingLeft"] {
-              padding-left: 15px !important;
-              padding-right: 12px !important;
-              padding-top: 16px !important;
-              padding-bottom: 16px !important;
-            }
-
-            h1 {
-              font-size: 18px !important;
-              margin-bottom: 4px !important;
-            }
-
-            p {
-              font-size: 11px !important;
-            }
-
-            table {
-              font-size: 10px !important;
-              min-width: 500px;
-              overflow-x: auto;
-              -webkit-overflow-scrolling: touch;
-            }
-
-            table th,
-            table td {
-              padding: 6px 4px !important;
-              border: 1px solid #ddd !important;
-            }
-
-            input[type="search"],
-            input[type="text"],
-            select {
-              font-size: 14px !important;
-              min-height: 34px !important;
-              width: 100% !important;
-              padding: 6px 6px !important;
-            }
-
-            button {
-              font-size: 12px !important;
-              min-height: 40px !important;
-              padding: 8px 10px !important;
-              width: 100% !important;
-            }
-
-            div[style*="display: flex"] {
-              flex-direction: column !important;
-              gap: 8px !important;
-            }
-          }
-        `}</style>
       </div>
     </div>
   );
