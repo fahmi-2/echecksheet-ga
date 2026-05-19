@@ -1,7 +1,7 @@
 // app/e-checksheet-ins-apd/EChecksheetInsApdForm.tsx
 "use client";
 import { useState, useEffect } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
 import { Sidebar } from "@/components/Sidebar";
 import {
@@ -15,19 +15,14 @@ import {
 
 export function EChecksheetInsApdForm() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { user, loading: authLoading, isInitialized } = useAuth();
-
-  // ✅ FIX: Use native URL API instead of useSearchParams hook to avoid conflicts
-  const getQueryParam = (name: string): string => {
-    if (typeof window === 'undefined') return '';
-    return new URLSearchParams(window.location.search).get(name) || '';
-  };
-
+  
   // ✅ Handle both 'areaId' and 'areald' (typo in URL)
-  const areaIdParam = getQueryParam('areaId') || getQueryParam('areald');
-  const areaNameParam = getQueryParam('areaName') || 'Area';
-  const areaType = getQueryParam('areaType') || 'Type';
-
+  const areaIdParam = searchParams.get('areaId') || searchParams.get('areald');
+  const areaNameParam = searchParams.get('areaName') || 'Area';
+  const areaType = searchParams.get('areaType') || 'Type';
+  
   const TYPE_SLUG = 'inspeksi-apd';
   const [isMounted, setIsMounted] = useState(false);
   const [authVerified, setAuthVerified] = useState(false);
@@ -207,13 +202,13 @@ export function EChecksheetInsApdForm() {
       setAuthVerified(false);
       return;
     }
-    if (user && user.role === "inspector-ga-personal") {
+    if (user && user.role === "inspector-ga") {
       setAuthVerified(true);
       return;
     }
 
     const verificationTimeout = setTimeout(() => {
-      if (!user || user.role !== "inspector-ga-personal") {
+      if (!user || user.role !== "inspector-ga") {
         router.push("/login-page");
       } else {
         setAuthVerified(true);

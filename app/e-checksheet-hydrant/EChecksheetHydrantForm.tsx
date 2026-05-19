@@ -16,7 +16,7 @@ import {
 
 export function EChecksheetHydrantForm() {
   const router = useRouter();
-  const searchParams = useSearchParams(); // ✅ FIX: Call the hook
+  const searchParams = useSearchParams();
   const { user, loading } = useAuth();
   
   const no = searchParams.get('no') || '';
@@ -56,7 +56,7 @@ export function EChecksheetHydrantForm() {
 
   useEffect(() => {
     if (!isMounted || loading) return;
-    if (!user || user.role !== "inspector-ga-fire") {
+    if (!user || user.role !== "inspector-ga") {
       router.push("/login-page");
     }
   }, [user, loading, router, isMounted]);
@@ -292,7 +292,7 @@ export function EChecksheetHydrantForm() {
     );
   }
 
-  if (!user || user.role !== "inspector-ga-fire") {
+  if (!user || user.role !== "inspector-ga") {
     return null;
   }
 
@@ -370,6 +370,7 @@ export function EChecksheetHydrantForm() {
           {availableDates.length > 0 && (
             <div style={{ display: "flex", alignItems: "center", gap: "12px", flexWrap: "wrap" }}>
               <label style={{ fontWeight: "600", color: "#424242", fontSize: "14px" }}>Riwayat Isian:</label>
+              {/* ✅ FIX: value={selectedDate} agar menampilkan tanggal terpilih */}
               <select
                 value={selectedDate}
                 onChange={(e) => setSelectedDate(e.target.value)}
@@ -812,22 +813,19 @@ function InfoItem({ label, value }: { label: string; value: string }) {
   );
 }
 
-function RefButton({ label, onClick, disabled, title }: { label: string; onClick: () => void; disabled?: boolean; title?: string }) {
+function RefButton({ label, onClick }: { label: string; onClick: () => void }) {
   return (
     <button
       onClick={onClick}
-      disabled={disabled}
-      title={title}
       style={{
         padding: "8px 16px",
-        background: disabled ? "#e0e0e0" : "#e3f2fd",
-        color: disabled ? "#9e9e9e" : "#1976d2",
-        border: `1px solid ${disabled ? "#ccc" : "#1976d2"}`,
+        background: "#e3f2fd",
+        color: "#1976d2",
+        border: "1px solid #1976d2",
         borderRadius: "6px",
         fontSize: "12px",
-        cursor: disabled ? "not-allowed" : "pointer",
-        fontWeight: "500",
-        opacity: disabled ? 0.6 : 1
+        cursor: "pointer",
+        fontWeight: "500"
       }}
     >
       {label}
