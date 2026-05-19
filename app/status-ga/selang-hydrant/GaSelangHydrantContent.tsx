@@ -14,7 +14,11 @@ interface HydrantItem {
   pic: string;
 }
 
-export function GaSelangHydrantContent({ openArea }: { openArea: string }) {
+export function GaSelangHydrantContent({
+  openArea = "",
+}: {
+  openArea?: string;
+}) {
   const router = useRouter();
   const { user, loading } = useAuth();
 
@@ -33,7 +37,7 @@ export function GaSelangHydrantContent({ openArea }: { openArea: string }) {
 
   useEffect(() => {
     if (loading) return;
-    if (!user || (user.role !== "inspector-ga-fire")) {
+    if (!user || (user.role !== "inspector-ga")) {
       router.push("/login-page");
     }
   }, [user, loading, router]);
@@ -226,7 +230,7 @@ export function GaSelangHydrantContent({ openArea }: { openArea: string }) {
       </div>
     );
   }
-  if (!user || (user.role !== "inspector-ga-fire")) {
+  if (!user || (user.role !== "inspector-ga")) {
     return null;
   }
 

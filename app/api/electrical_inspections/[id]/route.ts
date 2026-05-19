@@ -27,12 +27,16 @@ interface ItemRow {
   created_at: string;
 }
 
+// Type helper untuk params (Next.js 15+)
+type RouteParams = Promise<{ id: string }>;
+
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: RouteParams }
 ) {
   try {
-    const { id } = params;
+    // ⚠️ Await params karena bertipe Promise di Next.js 15+
+    const { id } = await params;
     
     // Validasi ID
     if (!id || isNaN(Number(id))) {
@@ -110,10 +114,11 @@ export async function GET(
 
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: RouteParams }
 ) {
   try {
-    const { id } = params;
+    // ⚠️ Await params karena bertipe Promise di Next.js 15+
+    const { id } = await params;
     
     // Validasi ID
     if (!id || isNaN(Number(id))) {

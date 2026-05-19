@@ -5,7 +5,6 @@ import { useState, useEffect, useRef } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
 import { Sidebar } from "@/components/Sidebar";
-import { QrCode } from "lucide-react";
 import React from "react";
 
 import {
@@ -18,13 +17,19 @@ import {
   ChecklistData
 } from "@/lib/api/checksheet";
 
-export function EChecksheetTgListrikForm() {
+interface EChecksheetTgListrikFormProps {
+  areaName: string;
+  lokasi: string;
+}
+
+export function EChecksheetTgListrikForm({
+  areaName,
+  lokasi,
+}: EChecksheetTgListrikFormProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { user, loading } = useAuth();
   
-  const areaName = searchParams.get('areaName') || '';
-  const lokasi = searchParams.get('lokasi') || '';
   const TYPE_SLUG = 'tg-listrik';
   
   const [isMounted, setIsMounted] = useState(false);
@@ -40,7 +45,6 @@ export function EChecksheetTgListrikForm() {
   const [availableDates, setAvailableDates] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [areaId, setAreaId] = useState<number | null>(null);
-  const [isScanned, setIsScanned] = useState(true); // default true until QR scan flow implemented
 
   // ✅ 3-Dropdown Riwayat States
   const [selectedYear, setSelectedYear] = useState<number | "">("");
@@ -109,7 +113,7 @@ export function EChecksheetTgListrikForm() {
           alert(`Area "${areaName}" tidak ditemukan di database.`);
         }
       } catch (error) {
-        console.error("❌ Failed to load area ", error);
+        console.error("❌ Failed to load area data:", error);
         alert("Gagal memuat data area. Silakan coba lagi.");
       }
     };
@@ -377,11 +381,10 @@ export function EChecksheetTgListrikForm() {
               {/* Tombol Muat */}
               <button
                 onClick={handleLoadExisting}
-                disabled={!selectedDate || isLoading || !isScanned}
-                title={!isScanned ? "Harap scan QR code terlebih dahulu" : ""}
+                disabled={!selectedDate || isLoading}
                 style={{
                   padding: "8px 16px",
-                  background: (selectedDate && !isLoading && isScanned) ? "#ff9800" : "#bdbdbd",
+                  background: (selectedDate && !isLoading) ? "#ff9800" : "#bdbdbd",
                   color: "white",
                   border: "none",
                   borderRadius: "6px",
@@ -468,8 +471,7 @@ export function EChecksheetTgListrikForm() {
                             <textarea
                               value={answers[`${item.item_key}_keterangan`] || ""}
                               onChange={(e) => handleInputChange(`${item.item_key}_keterangan`, e.target.value)}
-                              disabled={!isScanned}
-                              title={!isScanned ? "Harap scan QR code terlebih dahulu" : ""}
+                              disabled={!selectedDate}
                               placeholder="Keterangan..."
                               rows={2}
                               style={{ width: "100%", padding: "4px", fontSize: "11px", resize: "vertical" }}
@@ -510,8 +512,7 @@ export function EChecksheetTgListrikForm() {
                             <textarea
                               value={answers[`${item.item_key}_tindakan`] || ""}
                               onChange={(e) => handleInputChange(`${item.item_key}_tindakan`, e.target.value)}
-                              disabled={!isScanned}
-                              title={!isScanned ? "Harap scan QR code terlebih dahulu" : ""}
+                              disabled={!selectedDate}
                               placeholder="Tindakan..."
                               rows={2}
                               style={{ width: "100%", padding: "4px", fontSize: "11px", resize: "vertical" }}
@@ -523,8 +524,7 @@ export function EChecksheetTgListrikForm() {
                               type="text"
                               value={answers[`${item.item_key}_pic`] !== undefined ? answers[`${item.item_key}_pic`] : (selectedDate ? user.fullName : "")}
                               onChange={(e) => handleInputChange(`${item.item_key}_pic`, e.target.value)}
-                              disabled={!isScanned}
-                              title={!isScanned ? "Harap scan QR code terlebih dahulu" : ""}
+                              disabled={!selectedDate}
                               placeholder="PIC"
                               style={{ width: "100%", padding: "4px", fontSize: "11px" }}
                             />
@@ -560,8 +560,7 @@ export function EChecksheetTgListrikForm() {
           </button>
           <button
             onClick={handleSave}
-            disabled={!selectedDate || isLoading || !areaId || !isScanned}
-            title={!isScanned ? "Harap scan QR code terlebih dahulu" : ""}
+            disabled={!selectedDate || isLoading || !areaId}
             style={{
               padding: "12px 28px",
               background: (selectedDate && !isLoading && areaId) ? "linear-gradient(135deg, #1e88e5, #0d47a1)" : "#bdbdbd",
@@ -569,8 +568,8 @@ export function EChecksheetTgListrikForm() {
               border: "none",
               borderRadius: "8px",
               fontWeight: "600",
-              cursor: (selectedDate && !isLoading && areaId && isScanned) ? "pointer" : "not-allowed",
-              opacity: (selectedDate && !isLoading && areaId && isScanned) ? 1 : 0.6
+              cursor: (selectedDate && !isLoading && areaId) ? "pointer" : "not-allowed",
+              opacity: (selectedDate && !isLoading && areaId) ? 1 : 0.6
             }}
           >
             {isLoading ? "⏳ Menyimpan..." : "✓ Simpan Data"}

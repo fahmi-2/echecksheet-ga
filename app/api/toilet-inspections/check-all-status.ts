@@ -1,5 +1,13 @@
+// app/api/toilet-inspections/check-all-status.ts
 import type { NextApiRequest, NextApiResponse } from 'next';
 import pool from '../../../lib/db';
+
+// Type untuk hasil query status
+interface StatusResult {
+  area_code: string;
+  filled: boolean;
+  status: string | null;
+}
 
 export default async function handler(
   req: NextApiRequest,
@@ -20,21 +28,30 @@ export default async function handler(
     }
 
     const areasArray = String(area_codes).split(',');
-    const placeholders = areasArray.map(() => '?').join(',');
+    
+    // ⚠️ FIX 1: Generate PostgreSQL placeholders: $1, $2, $3, ...
+    const placeholders = areasArray.map((_, index) => `$${index + 1}`).join(',');
+    
+    // ⚠️ FIX 2: Tambahkan placeholder untuk inspection_date: $N+1
+    const datePlaceholder = `$${areasArray.length + 1}`;
 
-    const [results] = await pool.query(
+    // ⚠️ FIX 3: Jangan destructuring array, akses langsung result
+    const results = await pool.query<StatusResult>(
       `SELECT 
         area_code,
         CASE WHEN COUNT(id) > 0 THEN true ELSE false END as filled,
         MAX(overall_status) as status
        FROM toilet_inspections 
        WHERE area_code IN (${placeholders}) 
-       AND inspection_date = ?
+       AND inspection_date = ${datePlaceholder}
        GROUP BY area_code`,
-      [...areasArray, inspection_date]
+      [...areasArray, inspection_date]  // Parameters: [area1, area2, ..., date]
     );
 
-    const statusMap = new Map<string, any>();
+    // ⚠️ FIX 4: Akses .rows dari QueryResult
+    const inspectionsArray = results.rows;
+    
+    const statusMap = new Map<string, { area_code: string; filled: boolean; status: string | null }>();
     
     // Initialize all areas as not filled
     areasArray.forEach(area => {
@@ -42,8 +59,7 @@ export default async function handler(
     });
 
     // Update with actual data
-    const inspectionsArray = results as any[];
-    inspectionsArray.forEach((item: any) => {
+    inspectionsArray.forEach((item) => {
       statusMap.set(item.area_code, {
         area_code: item.area_code,
         filled: !!item.filled,
@@ -61,7 +77,8 @@ export default async function handler(
     console.error('Check all status error:', error);
     return res.status(500).json({ 
       success: false, 
-      message: 'Terjadi kesalahan server' 
+      message: 'Terjadi kesalahan server',
+      error: process.env.NODE_ENV === 'development' ? (error as Error).message : undefined
     });
   }
 }
