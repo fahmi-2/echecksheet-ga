@@ -1,14 +1,10 @@
 // app/e-checksheet-slg-hydrant/EChecksheetSelangHydrantForm.tsx
 "use client";
 import { useState, useEffect, useRef, useMemo } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
 import { Sidebar } from "@/components/Sidebar";
-import { QrCode } from "lucide-react";
-
-// ✅ Import hook scan verification
-import { useScanVerification } from "@/lib/hooks/useScanVerification";
-
+import React from "react";
 import {
   getItemsByType,
   getChecklistByDate,
@@ -19,15 +15,19 @@ import {
   ChecklistData
 } from "@/lib/api/checksheet";
 
-// ✅ Helper functions (defined ONCE)
+// ✅ Helper: Extract tahun dari tanggal
 const getYear = (dateString: string) => new Date(dateString).getFullYear();
+
+// ✅ Helper: Extract bulan dari tanggal (0-11)
 const getMonth = (dateString: string) => new Date(dateString).getMonth();
 
+// ✅ Helper: Format nama bulan dalam Bahasa Indonesia
 const monthNames = [
   "Januari", "Februari", "Maret", "April", "Mei", "Juni",
   "Juli", "Agustus", "September", "Oktober", "November", "Desember"
 ];
 
+// ✅ Helper: Group dates by year and month
 const groupDatesByYearMonth = (dates: string[]) => {
   const grouped: Record<number, Record<number, string[]>> = {};
   
@@ -35,11 +35,16 @@ const groupDatesByYearMonth = (dates: string[]) => {
     const year = getYear(date);
     const month = getMonth(date);
     
-    if (!grouped[year]) grouped[year] = {};
-    if (!grouped[year][month]) grouped[year][month] = [];
+    if (!grouped[year]) {
+      grouped[year] = {};
+    }
+    if (!grouped[year][month]) {
+      grouped[year][month] = [];
+    }
     grouped[year][month].push(date);
   });
   
+  // Sort dates within each month (newest first)
   Object.values(grouped).forEach(yearData => {
     Object.values(yearData).forEach(monthDates => {
       monthDates.sort((a, b) => new Date(b).getTime() - new Date(a).getTime());
@@ -51,19 +56,13 @@ const groupDatesByYearMonth = (dates: string[]) => {
 
 export function EChecksheetSelangHydrantForm() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { user, loading: authLoading, isInitialized } = useAuth();
-  const { isScanned, isLoading: scanLoading } = useScanVerification();
-
-  // ✅ Use native URL API instead of useSearchParams
-  const getQueryParam = (name: string): string => {
-    if (typeof window === 'undefined') return '';
-    return new URLSearchParams(window.location.search).get(name) || '';
-  };
-
-  const lokasi = getQueryParam('lokasi');
-  const zona = getQueryParam('zona');
-  const jenisHydrant = getQueryParam('jenisHydrant');
-  const picDefault = getQueryParam('pic');
+  
+  const lokasi = searchParams.get('lokasi') || '';
+  const zona = searchParams.get('zona') || '';
+  const jenisHydrant = searchParams.get('jenisHydrant') || '';
+  const picDefault = searchParams.get('pic') || '';
   const TYPE_SLUG = 'selang-hydrant';
   
   const [isMounted, setIsMounted] = useState(false);
@@ -80,7 +79,7 @@ export function EChecksheetSelangHydrantForm() {
   const [isLoading, setIsLoading] = useState(false);
   const [areaId, setAreaId] = useState<number | null>(null);
   
-  // ✅ Filter States for history
+  // ✅ Filter States untuk Riwayat Isian
   const [selectedYear, setSelectedYear] = useState<number | "">("");
   const [selectedMonth, setSelectedMonth] = useState<number | "">("");
   const [filteredDates, setFilteredDates] = useState<string[]>([]);
@@ -96,11 +95,16 @@ export function EChecksheetSelangHydrantForm() {
   useEffect(() => {
     if (!isMounted || !isInitialized) return;
     if (authLoading) return;
-    if (!user) return;
-    if (user.role !== "inspector-ga-fire") {
+    if (!user) {
+      console.log('⏳ Waiting for user data...');
+      return;
+    }
+    if (user.role !== "inspector-ga") {
+      console.warn('⚠️ Unauthorized - wrong role:', user.role);
       router.replace("/login-page");
       return;
     }
+    console.log('✅ Access granted:', user.fullName, 'Role:', user.role);
   }, [user, authLoading, isInitialized, router, isMounted]);
 
   // Load inspection items
@@ -109,6 +113,7 @@ export function EChecksheetSelangHydrantForm() {
     const loadItems = async () => {
       try {
         const items = await getItemsByType(TYPE_SLUG);
+        console.log('✅ Loaded inspection items:', items.length);
         setInspectionItems(items);
       } catch (error) {
         console.error("❌ Failed to load checklist items:", error);
@@ -123,34 +128,43 @@ export function EChecksheetSelangHydrantForm() {
     if (!lokasi || !user) return;
     const loadAreaData = async () => {
       try {
-        const areaName = `${lokasi}\u0007${zona}\u0007${jenisHydrant}\u0007${picDefault}`;
+        const areaName = `${lokasi} \u0007 ${zona} \u0007 ${jenisHydrant} \u0007 ${picDefault}`;
         
         const areas = await getAreasByType(TYPE_SLUG);
         const area = areas.find((a: any) => a.name === areaName);
         
         if (area) {
+          console.log('✅ Found area:', area.id);
           setAreaId(area.id);
           const dates = await getAvailableDates(TYPE_SLUG, area.id);
+          console.log('📅 Available dates:', dates);
           setAvailableDates(dates);
           
+          // ✅ Set default filter to current year & month
           if (dates.length > 0) {
             const latestDate = dates[0];
-            setSelectedYear(getYear(latestDate));
-            setSelectedMonth(getMonth(latestDate));
+            const currentYear = getYear(latestDate);
+            const currentMonth = getMonth(latestDate);
+            setSelectedYear(currentYear);
+            setSelectedMonth(currentMonth);
           }
         } else {
           const fallbackArea = areas.find((a: any) => a.name.startsWith(lokasi));
           if (fallbackArea) {
+            console.log('✅ Found fallback area:', fallbackArea.id);
             setAreaId(fallbackArea.id);
             const dates = await getAvailableDates(TYPE_SLUG, fallbackArea.id);
             setAvailableDates(dates);
             
             if (dates.length > 0) {
               const latestDate = dates[0];
-              setSelectedYear(getYear(latestDate));
-              setSelectedMonth(getMonth(latestDate));
+              const currentYear = getYear(latestDate);
+              const currentMonth = getMonth(latestDate);
+              setSelectedYear(currentYear);
+              setSelectedMonth(currentMonth);
             }
           } else {
+            console.warn('⚠️ Area not found:', lokasi);
             alert(`Area "${lokasi}" tidak ditemukan.`);
           }
         }
@@ -162,7 +176,7 @@ export function EChecksheetSelangHydrantForm() {
     loadAreaData();
   }, [lokasi, zona, jenisHydrant, picDefault, user]);
 
-  // Filter dates when year or month changes
+  // ✅ Filter dates when year or month changes
   useEffect(() => {
     if (selectedYear === "" || selectedMonth === "") {
       setFilteredDates([]);
@@ -174,6 +188,7 @@ export function EChecksheetSelangHydrantForm() {
     
     setFilteredDates(datesForSelection);
     
+    // ✅ Auto-select latest date when month changes
     if (datesForSelection.length > 0 && !selectedDate) {
       setSelectedDate(datesForSelection[0]);
     }
@@ -217,13 +232,14 @@ export function EChecksheetSelangHydrantForm() {
     }
     try {
       setIsLoading(true);
+      console.log('📥 Loading existing data for date:', selectedDate);
+      
       const data = await getChecklistByDate(TYPE_SLUG, areaId, selectedDate);
       
       if (data) {
         const existingData: Record<string, string> = {};
         const loadedImages: { key: string; url: string }[] = [];
 
-        // ✅ FIX: Single forEach loop (was duplicated causing syntax error)
         Object.entries(data).forEach(([itemKey, entry]: [string, any]) => {
           existingData[`${itemKey}_hasil`] = entry.hasilPemeriksaan || "";
           existingData[`${itemKey}_keterangan`] = entry.keteranganTemuan || "";
@@ -241,8 +257,10 @@ export function EChecksheetSelangHydrantForm() {
 
         setAnswers(existingData);
         setImages(loadedImages);
+        console.log('✅ Data loaded successfully');
         alert("✅ Data berhasil dimuat!");
       } else {
+        console.log('⚠️ No data found for this date');
         alert("⚠️ Tidak ada data untuk tanggal ini.");
         setAnswers({});
         setImages([]);
@@ -281,6 +299,7 @@ export function EChecksheetSelangHydrantForm() {
 
     try {
       setIsLoading(true);
+      console.log('💾 Saving checklist data...');
 
       const checklistData: ChecklistData = {};
       
@@ -310,7 +329,9 @@ export function EChecksheetSelangHydrantForm() {
         user.fullName || "Unknown Inspector"
       );
 
+      console.log('✅ Data saved successfully');
       alert(`✅ Data berhasil disimpan untuk tanggal ${new Date(selectedDate).toLocaleDateString("id-ID")}`);
+      
       router.push(`/status-ga/selang-hydrant?openArea=${encodeURIComponent(lokasi)}`);
     } catch (error) {
       console.error("❌ Error saving checklist data:", error);
@@ -381,13 +402,13 @@ export function EChecksheetSelangHydrantForm() {
     return today.toISOString().split('T')[0];
   };
 
-  // Get unique years from available dates
+  // ✅ Get unique years from available dates
   const availableYears = useMemo(() => {
     const years = new Set(availableDates.map(date => getYear(date)));
-    return Array.from(years).sort((a, b) => b - a);
+    return Array.from(years).sort((a, b) => b - a); // Sort descending
   }, [availableDates]);
 
-  // Show loading during mount/init/auth
+  // ✅ Show loading during mount/init/auth
   if (!isMounted || !isInitialized || authLoading) {
     return (
       <div style={{
@@ -400,12 +421,14 @@ export function EChecksheetSelangHydrantForm() {
         <div style={{ textAlign: "center" }}>
           <div style={{ fontSize: "48px", marginBottom: "16px" }}>⏳</div>
           <p style={{ fontSize: "16px", color: "#666", margin: "0" }}>Loading...</p>
+          <p style={{ fontSize: "14px", color: "#999", marginTop: "8px" }}>Please wait</p>
         </div>
       </div>
     );
   }
 
-  if (!user || user.role !== "inspector-ga-fire") {
+  // Guard: Don't render form if user not authorized
+  if (!user) {
     return (
       <div style={{
         display: "flex",
@@ -416,12 +439,31 @@ export function EChecksheetSelangHydrantForm() {
       }}>
         <div style={{ textAlign: "center" }}>
           <div style={{ fontSize: "48px", marginBottom: "16px" }}>🔒</div>
-          <p style={{ fontSize: "16px", color: "#666", margin: "0" }}>Access Denied</p>
+          <p style={{ fontSize: "16px", color: "#666", margin: "0" }}>Redirecting to login...</p>
         </div>
       </div>
     );
   }
 
+  if (user.role !== "inspector-ga") {
+    return (
+      <div style={{
+        display: "flex",
+        justifyContent: "center",
+        alignItems: "center",
+        minHeight: "100vh",
+        background: "#f5f5f5"
+      }}>
+        <div style={{ textAlign: "center" }}>
+          <div style={{ fontSize: "48px", marginBottom: "16px" }}>❌</div>
+          <p style={{ fontSize: "16px", color: "#666", margin: "0" }}>Access Denied</p>
+          <p style={{ fontSize: "13px", color: "#999", marginTop: "8px" }}>Wrong role for this page</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Render normal UI (user is guaranteed to be authorized at this point)
   return (
     <div style={{ minHeight: "100vh", background: "#f8f9fa" }}>
       <Sidebar userName={user.fullName} />
@@ -441,28 +483,23 @@ export function EChecksheetSelangHydrantForm() {
             padding: "20px 24px",
             boxShadow: "0 4px 12px rgba(13, 71, 161, 0.15)"
           }}>
-            <h1 style={{ margin: "0 0 8px 0", color: "white", fontSize: "clamp(20px, 5vw, 28px)", fontWeight: "700" }}>
+            <h1 style={{
+              margin: "0 0 8px 0",
+              color: "white",
+              fontSize: "clamp(20px, 5vw, 28px)",
+              fontWeight: "700"
+            }}>
               Check Sheet Selang & Hydrant
             </h1>
-            <p style={{ margin: 0, color: "rgba(255,255,255,0.9)", fontSize: "14px" }}>
+            <p style={{
+              margin: 0,
+              color: "rgba(255,255,255,0.9)",
+              fontSize: "14px"
+            }}>
               Inspeksi 2 Bulan Sekali – Fire Hydrant System
             </p>
           </div>
         </div>
-
-        {/* Scan Warning Banner */}
-        {!isScanned && (
-          <div className="banner banner-warning scan-warning">
-            <span>🔒 Akses melalui scan QR code terlebih dahulu untuk mengisi checksheet ini.</span>
-            <button 
-              onClick={() => router.push("/scan")} 
-              className="banner-btn"
-              disabled={isLoading}
-            >
-              <QrCode size={14} /> Scan Sekarang
-            </button>
-          </div>
-        )}
 
         {/* Info Area */}
         <div style={{
@@ -473,7 +510,11 @@ export function EChecksheetSelangHydrantForm() {
           boxShadow: "0 2px 6px rgba(0,0,0,0.05)",
           marginBottom: "20px"
         }}>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: "12px" }}>
+          <div style={{ 
+            display: "grid", 
+            gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", 
+            gap: "12px" 
+          }}>
             <div style={{ color: "black" }}><strong>Zona:</strong> {zona}</div>
             <div style={{ color: "black" }}><strong>Jenis Hydrant:</strong> {jenisHydrant}</div>
             <div style={{ color: "black" }}><strong>Lokasi:</strong> {lokasi}</div>
@@ -497,31 +538,36 @@ export function EChecksheetSelangHydrantForm() {
             </strong>
           </div>
 
-          <div style={{ display: "flex", alignItems: "center", gap: "12px", flexWrap: "wrap", marginBottom: "12px" }}>
+          <div style={{ 
+            display: "flex", 
+            alignItems: "center", 
+            gap: "12px", 
+            flexWrap: "wrap", 
+            marginBottom: "12px" 
+          }}>
             <label style={{ fontWeight: "700", color: "#0d47a1", fontSize: "14px" }}>
               Tanggal Inspeksi:
             </label>
             <input
               type="date"
               value={selectedDate}
-              onChange={(e) => setSelectedDate(e.target.value)}
+              onChange={(e) => {
+                console.log('📅 Date input changed:', e.target.value);
+                setSelectedDate(e.target.value);
+              }}
               max={getMaxDate()}
-              disabled={!isScanned}
-              title={!isScanned ? "Harap scan QR code terlebih dahulu" : ""}
               style={{
                 color: "#0d47a1",
                 padding: "8px 12px",
                 border: "2px solid #1e88e5",
                 borderRadius: "6px",
                 fontSize: "14px",
-                minWidth: "160px",
-                background: isScanned ? "white" : "#f5f5f5",
-                cursor: isScanned ? "pointer" : "not-allowed"
+                minWidth: "160px"
               }}
             />
           </div>
 
-          {/* History with Year & Month Filter */}
+          {/* ✅ RIWAYAT ISIAN dengan Filter Tahun & Bulan */}
           {availableDates.length > 0 && (
             <div style={{ 
               display: "flex", 
@@ -537,14 +583,15 @@ export function EChecksheetSelangHydrantForm() {
                 📁 Riwayat Isian:
               </label>
               
-              {/* Year Dropdown */}
+              {/* Dropdown Tahun */}
               <select
                 value={selectedYear}
                 onChange={(e) => {
                   const year = e.target.value ? parseInt(e.target.value) : "";
                   setSelectedYear(year);
-                  setSelectedMonth("");
-                  setSelectedDate("");
+                  setSelectedMonth(""); // Reset month when year changes
+                  setSelectedDate(""); // Reset date when year changes
+                  console.log('📅 Year changed:', year);
                 }}
                 style={{
                   color: "#0d47a1",
@@ -564,13 +611,14 @@ export function EChecksheetSelangHydrantForm() {
                 ))}
               </select>
               
-              {/* Month Dropdown */}
+              {/* Dropdown Bulan */}
               <select
                 value={selectedMonth}
                 onChange={(e) => {
                   const month = e.target.value ? parseInt(e.target.value) : "";
                   setSelectedMonth(month);
-                  setSelectedDate("");
+                  setSelectedDate(""); // Reset date when month changes
+                  console.log('📅 Month changed:', month);
                 }}
                 disabled={selectedYear === ""}
                 style={{
@@ -591,11 +639,15 @@ export function EChecksheetSelangHydrantForm() {
                 ))}
               </select>
               
-              {/* Date Dropdown */}
+              {/* Dropdown Tanggal (setelah tahun & bulan dipilih) */}
               {filteredDates.length > 0 && (
                 <select
                   value={selectedDate}
-                  onChange={(e) => setSelectedDate(e.target.value)}
+                  onChange={(e) => {
+                    const date = e.target.value;
+                    setSelectedDate(date);
+                    console.log('📅 Date selected from filter:', date);
+                  }}
                   style={{
                     color: "#0d47a1",
                     padding: "8px 12px",
@@ -623,15 +675,14 @@ export function EChecksheetSelangHydrantForm() {
               
               <button
                 onClick={handleLoadExisting}
-                disabled={!selectedDate || isLoading || !isScanned}
-                title={!isScanned ? "Harap scan QR code terlebih dahulu" : ""}
+                disabled={!selectedDate || isLoading}
                 style={{
                   padding: "8px 16px",
-                  background: (selectedDate && !isLoading && isScanned) ? "#ff9800" : "#bdbdbd",
+                  background: (selectedDate && !isLoading) ? "#ff9800" : "#bdbdbd",
                   color: "white",
                   border: "none",
                   borderRadius: "6px",
-                  cursor: (selectedDate && !isLoading && isScanned) ? "pointer" : "not-allowed",
+                  cursor: (selectedDate && !isLoading) ? "pointer" : "not-allowed",
                   fontWeight: "600",
                   fontSize: "14px"
                 }}
@@ -641,7 +692,7 @@ export function EChecksheetSelangHydrantForm() {
             </div>
           )}
 
-          {/* Debug info */}
+          {/* Debug info (development only) */}
           {process.env.NODE_ENV === 'development' && (
             <div style={{
               marginTop: "12px",
@@ -651,15 +702,29 @@ export function EChecksheetSelangHydrantForm() {
               fontSize: "11px",
               color: "#666"
             }}>
-              <strong>Debug:</strong> date:{selectedDate || '-'} | yr:{selectedYear || '-'} | mo:{selectedMonth !== "" ? monthNames[selectedMonth] : '-'} | areas:{availableDates.length} | filtered:{filteredDates.length} | areaId:{areaId || 'null'}
+              <strong>Debug Info:</strong><br/>
+              selectedDate: {selectedDate || '(empty)'}<br/>
+              selectedYear: {selectedYear || '(empty)'}<br/>
+              selectedMonth: {selectedMonth !== "" ? monthNames[selectedMonth] : '(empty)'}<br/>
+              availableDates count: {availableDates.length}<br/>
+              filteredDates count: {filteredDates.length}<br/>
+              areaId: {areaId || '(null)'}
             </div>
           )}
         </div>
 
         {/* Checksheet Table */}
         {inspectionItems.length === 0 ? (
-          <div style={{ textAlign: "center", padding: "40px", background: "white", borderRadius: "12px", border: "2px dashed #ccc" }}>
-            <p style={{ color: "#999", fontSize: "16px", margin: 0 }}>⏳ Loading checklist items...</p>
+          <div style={{ 
+            textAlign: "center", 
+            padding: "40px", 
+            background: "white",
+            borderRadius: "12px",
+            border: "2px dashed #ccc"
+          }}>
+            <p style={{ color: "#999", fontSize: "16px", margin: 0 }}>
+              ⏳ Loading checklist items...
+            </p>
           </div>
         ) : (
           <div style={{
@@ -694,12 +759,8 @@ export function EChecksheetSelangHydrantForm() {
                         <select
                           value={answers[`${item.item_key}_hasil`] || ""}
                           onChange={(e) => handleInputChange(`${item.item_key}_hasil`, e.target.value)}
-                          disabled={!isScanned}
-                          title={!isScanned ? "Harap scan QR code terlebih dahulu" : ""}
-                          style={{ 
-                            width: "100%", padding: "6px", border: "1px solid #1e88e5", borderRadius: "4px",
-                            background: isScanned ? "white" : "#f5f5f5", cursor: isScanned ? "pointer" : "not-allowed"
-                          }}
+                          disabled={!selectedDate}
+                          style={{ width: "100%", padding: "6px", border: "1px solid #1e88e5", borderRadius: "4px" }}
                         >
                           <option value="">-</option>
                           <option value="OK">✓ OK</option>
@@ -710,27 +771,41 @@ export function EChecksheetSelangHydrantForm() {
                         <textarea
                           value={answers[`${item.item_key}_keterangan`] || ""}
                           onChange={(e) => handleInputChange(`${item.item_key}_keterangan`, e.target.value)}
-                          disabled={!isScanned}
-                          title={!isScanned ? "Harap scan QR code terlebih dahulu" : ""}
+                          disabled={!selectedDate}
                           placeholder="Keterangan jika NG..."
                           rows={2}
-                          style={{ width: "100%", padding: "6px", fontSize: "12px", resize: "vertical", background: isScanned ? "white" : "#f5f5f5", cursor: isScanned ? "text" : "not-allowed" }}
+                          style={{ width: "100%", padding: "6px", fontSize: "12px", resize: "vertical" }}
                         />
                       </td>
                       <td style={{ padding: "8px", border: "1px solid #0d47a1" }}>
                         <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
                           <button
                             onClick={() => openCamera(item.item_key)}
-                            disabled={!isScanned}
-                            title={!isScanned ? "Harap scan QR code terlebih dahulu" : ""}
-                            style={{ padding: "4px 8px", background: isScanned ? "#1e88e5" : "#bdbdbd", color: "white", borderRadius: "4px", fontSize: "11px", cursor: isScanned ? "pointer" : "not-allowed", textAlign: "center", border: "none" }}
+                            disabled={!selectedDate}
+                            style={{
+                              padding: "4px 8px",
+                              background: selectedDate ? "#1e88e5" : "#bdbdbd",
+                              color: "white",
+                              borderRadius: "4px",
+                              fontSize: "11px",
+                              cursor: selectedDate ? "pointer" : "not-allowed",
+                              textAlign: "center",
+                              border: "none"
+                            }}
                           >
                             📷 Kamera
                           </button>
                           <label
                             htmlFor={`file-${item.item_key}`}
-                            style={{ padding: "4px 8px", background: isScanned ? "#4caf50" : "#bdbdbd", color: "white", borderRadius: "4px", fontSize: "11px", cursor: isScanned ? "pointer" : "not-allowed", textAlign: "center", opacity: isScanned ? 1 : 0.6 }}
-                            title={!isScanned ? "Harap scan QR code terlebih dahulu" : ""}
+                            style={{
+                              padding: "4px 8px",
+                              background: selectedDate ? "#4caf50" : "#bdbdbd",
+                              color: "white",
+                              borderRadius: "4px",
+                              fontSize: "11px",
+                              cursor: selectedDate ? "pointer" : "not-allowed",
+                              textAlign: "center"
+                            }}
                           >
                             🖼️ File
                           </label>
@@ -739,7 +814,7 @@ export function EChecksheetSelangHydrantForm() {
                             type="file"
                             accept="image/*"
                             multiple
-                            disabled={!isScanned}
+                            disabled={!selectedDate}
                             onChange={(e) => handleImageUpload(e, item.item_key)}
                             style={{ display: "none" }}
                           />
@@ -750,16 +825,34 @@ export function EChecksheetSelangHydrantForm() {
                                   src={img.url}
                                   alt={`Dokumentasi ${item.item_key} ${idx + 1}`}
                                   onClick={() => openImageModal(img.url)}
-                                  style={{ width: "100%", height: "100%", objectFit: "cover", cursor: "pointer" }}
+                                  style={{
+                                    width: "100%",
+                                    height: "100%",
+                                    objectFit: "cover",
+                                    cursor: "pointer"
+                                  }}
                                 />
                                 <button
                                   onClick={(e) => {
                                     e.stopPropagation();
                                     removeImage(images.findIndex(i => i.key === item.item_key && i.url === img.url));
                                   }}
-                                  disabled={!isScanned}
-                                  title={!isScanned ? "Harap scan QR code terlebih dahulu" : ""}
-                                  style={{ position: "absolute", top: "2px", right: "2px", background: "rgba(244,67,54,0.9)", color: "white", border: "none", borderRadius: "50%", width: "18px", height: "18px", fontSize: "12px", cursor: isScanned ? "pointer" : "not-allowed", display: "flex", alignItems: "center", justifyContent: "center" }}
+                                  style={{
+                                    position: "absolute",
+                                    top: "2px",
+                                    right: "2px",
+                                    background: "rgba(244,67,54,0.9)",
+                                    color: "white",
+                                    border: "none",
+                                    borderRadius: "50%",
+                                    width: "18px",
+                                    height: "18px",
+                                    fontSize: "12px",
+                                    cursor: "pointer",
+                                    display: "flex",
+                                    alignItems: "center",
+                                    justifyContent: "center"
+                                  }}
                                 >
                                   ×
                                 </button>
@@ -772,11 +865,10 @@ export function EChecksheetSelangHydrantForm() {
                         <textarea
                           value={answers[`${item.item_key}_tindakan`] || ""}
                           onChange={(e) => handleInputChange(`${item.item_key}_tindakan`, e.target.value)}
-                          disabled={!isScanned}
-                          title={!isScanned ? "Harap scan QR code terlebih dahulu" : ""}
+                          disabled={!selectedDate}
                           placeholder="Tindakan perbaikan..."
                           rows={2}
-                          style={{ width: "100%", padding: "6px", fontSize: "12px", resize: "vertical", background: isScanned ? "white" : "#f5f5f5", cursor: isScanned ? "text" : "not-allowed" }}
+                          style={{ width: "100%", padding: "6px", fontSize: "12px", resize: "vertical" }}
                         />
                       </td>
                       <td style={{ padding: "8px", border: "1px solid #0d47a1" }}>
@@ -784,10 +876,9 @@ export function EChecksheetSelangHydrantForm() {
                           type="text"
                           value={answers[`${item.item_key}_pic`] || picDefault}
                           onChange={(e) => handleInputChange(`${item.item_key}_pic`, e.target.value)}
-                          disabled={!isScanned}
-                          title={!isScanned ? "Harap scan QR code terlebih dahulu" : ""}
+                          disabled={!selectedDate}
                           placeholder="PIC"
-                          style={{ width: "100%", padding: "6px", fontSize: "12px", background: isScanned ? "white" : "#f5f5f5", cursor: isScanned ? "text" : "not-allowed" }}
+                          style={{ width: "100%", padding: "6px", fontSize: "12px" }}
                         />
                       </td>
                       <td style={{ padding: "8px", border: "1px solid #0d47a1" }}>
@@ -795,9 +886,8 @@ export function EChecksheetSelangHydrantForm() {
                           type="date"
                           value={answers[`${item.item_key}_dueDate`] || ""}
                           onChange={(e) => handleInputChange(`${item.item_key}_dueDate`, e.target.value)}
-                          disabled={!isScanned}
-                          title={!isScanned ? "Harap scan QR code terlebih dahulu" : ""}
-                          style={{ width: "100%", padding: "6px", background: isScanned ? "white" : "#f5f5f5", cursor: isScanned ? "pointer" : "not-allowed" }}
+                          disabled={!selectedDate}
+                          style={{ width: "100%", padding: "6px" }}
                         />
                       </td>
                       <td style={{ padding: "8px", border: "1px solid #0d47a1" }}>
@@ -805,10 +895,9 @@ export function EChecksheetSelangHydrantForm() {
                           type="text"
                           value={answers[`${item.item_key}_verify`] || ""}
                           onChange={(e) => handleInputChange(`${item.item_key}_verify`, e.target.value)}
-                          disabled={!isScanned}
-                          title={!isScanned ? "Harap scan QR code terlebih dahulu" : ""}
+                          disabled={!selectedDate}
                           placeholder="Verifikasi"
-                          style={{ width: "100%", padding: "6px", fontSize: "12px", background: isScanned ? "white" : "#f5f5f5", cursor: isScanned ? "text" : "not-allowed" }}
+                          style={{ width: "100%", padding: "6px", fontSize: "12px" }}
                         />
                       </td>
                     </tr>
@@ -820,73 +909,169 @@ export function EChecksheetSelangHydrantForm() {
         )}
 
         {/* Action Buttons */}
-        <div style={{ display: "flex", gap: "12px", justifyContent: "center", padding: "20px 0" }}>
+        <div style={{ 
+          display: "flex", 
+          gap: "12px", 
+          justifyContent: "center", 
+          padding: "20px 0" 
+        }}>
           <button
             onClick={() => router.push("/status-ga/selang-hydrant")}
-            style={{ padding: "12px 28px", background: "#bdbdbd", color: "white", border: "none", borderRadius: "8px", fontWeight: "600", cursor: "pointer" }}
+            style={{
+              padding: "12px 28px",
+              background: "#bdbdbd",
+              color: "white",
+              border: "none",
+              borderRadius: "8px",
+              fontWeight: "600",
+              cursor: "pointer"
+            }}
           >
             ← Kembali
           </button>
           <button
             onClick={handleSave}
-            disabled={!selectedDate || isLoading || !areaId || !isScanned}
-            title={!isScanned ? "Harap scan QR code terlebih dahulu" : ""}
+            disabled={!selectedDate || isLoading || !areaId}
             style={{
               padding: "12px 28px",
-              background: (selectedDate && !isLoading && areaId && isScanned) ? "linear-gradient(135deg, #1e88e5, #0d47a1)" : "#bdbdbd",
+              background: (selectedDate && !isLoading && areaId) 
+                ? "linear-gradient(135deg, #1e88e5, #0d47a1)" 
+                : "#bdbdbd",
               color: "white",
               border: "none",
               borderRadius: "8px",
               fontWeight: "600",
-              cursor: (selectedDate && !isLoading && areaId && isScanned) ? "pointer" : "not-allowed",
-              opacity: (selectedDate && !isLoading && areaId && isScanned) ? 1 : 0.6
+              cursor: (selectedDate && !isLoading && areaId) ? "pointer" : "not-allowed",
+              opacity: (selectedDate && !isLoading && areaId) ? 1 : 0.6
             }}
           >
             {isLoading ? "⏳ Menyimpan..." : "✓ Simpan Data"}
           </button>
         </div>
 
-        {/* Image Modal */}
+        {/* Modal Gambar */}
         {showImageModal && (
-          <div onClick={closeImageModal} style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, background: "rgba(0,0,0,0.8)", display: "flex", justifyContent: "center", alignItems: "center", zIndex: 2000, padding: "20px" }}>
+          <div
+            onClick={closeImageModal}
+            style={{
+              position: "fixed",
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              background: "rgba(0,0,0,0.8)",
+              display: "flex",
+              justifyContent: "center",
+              alignItems: "center",
+              zIndex: 2000,
+              padding: "20px"
+            }}
+          >
             <div onClick={(e) => e.stopPropagation()} style={{ textAlign: "center" }}>
-              <img src={currentImage} alt="Dokumentasi" style={{ maxHeight: "90vh", maxWidth: "90vw", objectFit: "contain", borderRadius: "8px", border: "3px solid white" }} />
-              <div style={{ marginTop: "16px", color: "white", fontSize: "14px" }}>Click outside to close</div>
+              <img
+                src={currentImage}
+                alt="Dokumentasi"
+                style={{
+                  maxHeight: "90vh",
+                  maxWidth: "90vw",
+                  objectFit: "contain",
+                  borderRadius: "8px",
+                  border: "3px solid white",
+                }}
+              />
+              <div style={{ marginTop: "16px", color: "white", fontSize: "14px" }}>
+                Click outside to close
+              </div>
             </div>
           </div>
         )}
 
-        {/* Camera Modal */}
+        {/* Modal Kamera */}
         {showCameraModal && (
-          <div onClick={() => { setShowCameraModal(false); if (cameraStream) cameraStream.getTracks().forEach(track => track.stop()); }} style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, background: "rgba(0,0,0,0.8)", display: "flex", justifyContent: "center", alignItems: "center", zIndex: 2000 }}>
-            <div onClick={(e) => e.stopPropagation()} style={{ background: "white", borderRadius: "8px", padding: "16px 20px", textAlign: "center", maxWidth: "90vw", width: "100%" }}>
+          <div
+            onClick={() => {
+              setShowCameraModal(false);
+              if (cameraStream) {
+                cameraStream.getTracks().forEach(track => track.stop());
+              }
+            }}
+            style={{
+              position: "fixed",
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              background: "rgba(0,0,0,0.8)",
+              display: "flex",
+              justifyContent: "center",
+              alignItems: "center",
+              zIndex: 2000,
+            }}
+          >
+            <div
+              onClick={(e) => e.stopPropagation()}
+              style={{
+                background: "white",
+                borderRadius: "8px",
+                padding: "16px 20px",
+                textAlign: "center",
+                maxWidth: "90vw",
+                width: "100%",
+              }}
+            >
               <h3 style={{ margin: "0 0 12px 0", color: "#212121" }}>📸 Ambil Foto</h3>
-              <video ref={videoRef} autoPlay playsInline style={{ width: "100%", maxHeight: "60vh", borderRadius: "6px", background: "#000", transform: "scaleX(-1)" }} />
+              <video
+                ref={videoRef}
+                autoPlay
+                playsInline
+                style={{
+                  width: "100%",
+                  maxHeight: "60vh",
+                  borderRadius: "6px",
+                  background: "#000",
+                  transform: "scaleX(-1)"
+                }}
+              />
               <canvas ref={canvasRef} style={{ display: "none" }} />
               <div style={{ marginTop: "16px", display: "flex", gap: "12px", justifyContent: "center" }}>
-                <button onClick={captureImage} disabled={!isScanned} style={{ padding: "10px 20px", background: isScanned ? "#4caf50" : "#bdbdbd", color: "white", border: "none", borderRadius: "6px", fontWeight: "600", cursor: isScanned ? "pointer" : "not-allowed" }}>📸 Ambil Foto</button>
-                <button onClick={() => { setShowCameraModal(false); if (cameraStream) cameraStream.getTracks().forEach(track => track.stop()); }} style={{ padding: "10px 20px", background: "#757575", color: "white", border: "none", borderRadius: "6px", fontWeight: "600", cursor: "pointer" }}>Batal</button>
+                <button
+                  onClick={captureImage}
+                  style={{
+                    padding: "10px 20px",
+                    background: "#4caf50",
+                    color: "white",
+                    border: "none",
+                    borderRadius: "6px",
+                    fontWeight: "600",
+                    cursor: "pointer"
+                  }}
+                >
+                  📸 Ambil Foto
+                </button>
+                <button
+                  onClick={() => {
+                    setShowCameraModal(false);
+                    if (cameraStream) {
+                      cameraStream.getTracks().forEach(track => track.stop());
+                    }
+                  }}
+                  style={{
+                    padding: "10px 20px",
+                    background: "#757575",
+                    color: "white",
+                    border: "none",
+                    borderRadius: "6px",
+                    fontWeight: "600",
+                    cursor: "pointer"
+                  }}
+                >
+                  Batal
+                </button>
               </div>
             </div>
           </div>
         )}
       </div>
-
-      {/* CSS Styles */}
-      <style jsx global>{`
-        .banner { border-radius: 10px; padding: 12px 18px; margin-bottom: 18px; display: flex; align-items: center; gap: 10px; font-weight: 500; font-size: 13px; }
-        .banner-warning { background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%); border: 1px solid #f59e0b; color: #92400e; box-shadow: 0 2px 8px rgba(245,158,11,0.12); }
-        .banner-btn { margin-left: auto; background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%); color: white; border: none; border-radius: 7px; padding: 8px 16px; cursor: pointer; font-size: 12px; font-weight: 600; transition: all 0.2s; box-shadow: 0 2px 6px rgba(245,158,11,0.3); display: inline-flex; align-items: center; gap: 6px; min-height: 36px; }
-        .banner-btn:hover { transform: translateY(-1px); box-shadow: 0 4px 10px rgba(245,158,11,0.4); }
-        .banner-btn:disabled { opacity: 0.6; cursor: not-allowed; transform: none; }
-        .scan-warning { background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%); border-left: 4px solid #f59e0b; justify-content: space-between; }
-        .scan-warning .banner-btn { background: linear-gradient(135deg, #7c3aed 0%, #5b21b6 100%); padding: 8px 16px; }
-        .scan-warning .banner-btn:hover { transform: translateY(-1px); box-shadow: 0 4px 10px rgba(124, 58, 237, 0.4); }
-        input:disabled, select:disabled, textarea:disabled, button:disabled { background: #f5f5f5 !important; cursor: not-allowed !important; opacity: 0.7; color: #9e9e9e !important; }
-        label:has(input:disabled), label:has(select:disabled), label:has(textarea:disabled) { opacity: 0.7; cursor: not-allowed; }
-        @media (hover: none) and (pointer: coarse) { input, select, textarea, button { font-size: 16px !important; min-height: 44px !important; } }
-        @media (max-width: 768px) { .page-content { padding: 12px !important; } table { font-size: 11px !important; } th, td { padding: 8px 6px !important; } }
-      `}</style>
     </div>
   );
 }
