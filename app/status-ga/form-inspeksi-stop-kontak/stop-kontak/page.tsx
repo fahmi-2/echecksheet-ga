@@ -106,7 +106,7 @@ export default function FormStopKontak() {
         additional_notes: ""
       };
 
-      const response = await fetch('/api/electrical_inspections/submit', {
+      const response = await fetch('/e-checksheet-ga/api/electrical_inspections/submit', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'

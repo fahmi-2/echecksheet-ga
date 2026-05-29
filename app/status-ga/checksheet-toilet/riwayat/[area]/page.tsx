@@ -377,7 +377,7 @@ export default function RiwayatToilet({ params }: { params: Promise<{ area: stri
       });
       if (filterDate) queryParams.append("inspection_date", filterDate);
       
-      const response = await fetch(`/api/toilet-inspections/history?${queryParams.toString()}`);
+      const response = await fetch(`/e-checksheet-ga/api/toilet-inspections/history?${queryParams.toString()}`);
       if (response.ok) {
         const data = await response.json();
         if (data.success && Array.isArray(data.data)) {
@@ -524,7 +524,7 @@ export default function RiwayatToilet({ params }: { params: Promise<{ area: stri
 
     setIsSubmitting(true);
     try {
-      const response = await fetch('/api/toilet-inspections/edit', {
+      const response = await fetch('/e-checksheet-ga/api/toilet-inspections/edit', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

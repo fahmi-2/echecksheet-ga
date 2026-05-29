@@ -29,7 +29,7 @@ export function UserActivityPanel({ userId, limit = 20 }: UserActivityPanelProps
   useEffect(() => {
     const fetchActivities = async () => {
       try {
-        const response = await fetch(`/api/activities/user/${userId}?limit=${limit}`);
+        const response = await fetch(`/e-checksheet-ga/e-checksheet-ga/api/activities/user/${userId}?limit=${limit}`);
         const data = await response.json();
         if (data.success) {
           setActivities(data.data.activities);

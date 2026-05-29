@@ -121,9 +121,9 @@ export default function GADashboard() {
       };
 
       const [analyticsResult, topUsersResult, historyResult] = await Promise.allSettled([
-        fetchAnalytics(formConfig.analyticsEndpoint ?? '/api/analytics', analyticsParams),
-        fetchTopUsers('/analytics/top-users', analyticsParams),
-        fetchHistory('/analytics/history', form.slug, undefined, itemsPerPage, dateFrom, dateTo, currentPage),
+        fetchAnalytics(formConfig.analyticsEndpoint ?? '/e-checksheet-ga/api/analytics', analyticsParams),
+        fetchTopUsers('/e-checksheet-ga/analytics/top-users', analyticsParams),
+        fetchHistory('/e-checksheet-ga/analytics/history', form.slug, undefined, itemsPerPage, dateFrom, dateTo, currentPage),
       ]);
 
       let analytics: AnalyticsResponse | null = null;

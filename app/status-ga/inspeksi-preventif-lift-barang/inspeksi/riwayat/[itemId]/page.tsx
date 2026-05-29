@@ -109,7 +109,7 @@ export default function RiwayatInspeksiPerItemPage({ params }: { params: Promise
         setError(null);
 
         const response = await fetch(
-          `/api/lift-barang/inspeksi/history?item_id=${itemId}&limit=20`
+          `/e-checksheet-ga/api/lift-barang/inspeksi/history?item_id=${itemId}&limit=20`
         );
 
         if (!response.ok) {
@@ -162,7 +162,7 @@ export default function RiwayatInspeksiPerItemPage({ params }: { params: Promise
   const loadRecords = async () => {
     try {
       setLoading(true);
-      const response = await fetch(`/api/lift-barang/inspeksi/history?item_id=${itemId}&t=${Date.now()}`);
+      const response = await fetch(`/e-checksheet-ga/api/lift-barang/inspeksi/history?item_id=${itemId}&t=${Date.now()}`);
       
       if (!response.ok) {
         const errorText = await response.text();
@@ -332,7 +332,7 @@ export default function RiwayatInspeksiPerItemPage({ params }: { params: Promise
 
     setIsSubmitting(true);
     try {
-      const response = await fetch('/api/lift-barang/inspeksi/edit', {
+      const response = await fetch('/e-checksheet-ga/api/lift-barang/inspeksi/edit', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

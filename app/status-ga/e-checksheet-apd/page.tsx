@@ -202,7 +202,7 @@ export default function EChecksheetApdPage() {
         }))
       };
       console.log('📤 Sending to API:', apiPayload);
-      const response = await fetch('/api/apd/submit', {
+      const response = await fetch('/e-checksheet-ga/api/apd/submit', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

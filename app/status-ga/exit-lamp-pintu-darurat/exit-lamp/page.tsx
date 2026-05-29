@@ -164,7 +164,7 @@ export default function ExitLampChecklist() {
         return;
       }
 
-      const response = await fetch('/api/exit-lamp/submit', {
+      const response = await fetch('/e-checksheet-ga/api/exit-lamp/submit', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

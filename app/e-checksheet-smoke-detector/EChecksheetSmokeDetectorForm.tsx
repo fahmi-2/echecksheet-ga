@@ -151,7 +151,7 @@ export function EChecksheetSmokeDetectorForm() {
     const fetchAreaInfo = async () => {
       try {
         setLoadingArea(true);
-        const response = await fetch(`/api/ga/checksheet/${TYPE_SLUG}/areas`);
+        const response = await fetch(`/e-checksheet-ga/api/ga/checksheet/${TYPE_SLUG}/areas`);
         const result = await response.json();
         
         if (result.success) {
@@ -181,7 +181,7 @@ export function EChecksheetSmokeDetectorForm() {
     const fetchItems = async () => {
       try {
         setLoadingItems(true);
-        const response = await fetch(`/api/ga/checksheet/${TYPE_SLUG}/items`);
+        const response = await fetch(`/e-checksheet-ga/api/ga/checksheet/${TYPE_SLUG}/items`);
         const result = await response.json();
         
         if (result.success) {
@@ -220,7 +220,7 @@ export function EChecksheetSmokeDetectorForm() {
     const fetchDates = async () => {
       try {
         setLoadingDates(true);
-        const response = await fetch(`/api/ga/checksheet/${TYPE_SLUG}/by-area/${areaId}/dates`);
+        const response = await fetch(`/e-checksheet-ga/api/ga/checksheet/${TYPE_SLUG}/by-area/${areaId}/dates`);
         const result = await response.json();
         
         if (result.success && result.data) {
@@ -283,7 +283,7 @@ export function EChecksheetSmokeDetectorForm() {
         setIsLoading(true);
         console.log('📥 Loading existing data for date:', selectedDate);
         const response = await fetch(
-          `/api/ga/checksheet/${TYPE_SLUG}/by-area/${areaId}/${selectedDate}`
+          `/e-checksheet-ga/api/ga/checksheet/${TYPE_SLUG}/by-area/${areaId}/${selectedDate}`
         );
         const result = await response.json();
         
@@ -372,7 +372,7 @@ export function EChecksheetSmokeDetectorForm() {
       console.log('💾 Saving checklist data...');
       
       const response = await fetch(
-        `/api/ga/checksheet/${TYPE_SLUG}/by-area/${areaId}/${selectedDate}`,
+        `/e-checksheet-ga/api/ga/checksheet/${TYPE_SLUG}/by-area/${areaId}/${selectedDate}`,
         {
           method: 'POST',
           headers: {
@@ -761,7 +761,7 @@ export function EChecksheetSmokeDetectorForm() {
                   try {
                     console.log('📥 Loading existing data for date:', selectedDate);
                     const response = await fetch(
-                      `/api/ga/checksheet/${TYPE_SLUG}/by-area/${areaId}/${selectedDate}`
+                      `/e-checksheet-ga/api/ga/checksheet/${TYPE_SLUG}/by-area/${areaId}/${selectedDate}`
                     );
                     const result = await response.json();
                     

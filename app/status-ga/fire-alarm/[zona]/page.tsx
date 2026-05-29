@@ -116,7 +116,7 @@ export default function ChecksheetFireAlarm({
     setMasterError(null);
     setMasterInfo(null);
     try {
-      const url = `/api/fire-alarm/master?zona=${encodeURIComponent(zona)}&_t=${Date.now()}`;
+      const url = `/e-checksheet-ga/api/fire-alarm/master?zona=${encodeURIComponent(zona)}&_t=${Date.now()}`;
       const res = await fetch(url, {
         method: "GET",
         cache: "no-store",
@@ -191,7 +191,7 @@ export default function ChecksheetFireAlarm({
       formData.append("file", file);
       formData.append("zona", zona);
       formData.append("lokasi", items[index].lokasi);
-      const response = await fetch("/api/fire-alarm/upload", { method: "POST", body: formData });
+      const response = await fetch("/e-checksheet-ga/api/fire-alarm/upload", { method: "POST", body: formData });
       const result = await response.json();
       if (response.ok && result.success) {
         updateItem(index, "foto", result.data.path);
@@ -249,7 +249,7 @@ export default function ChecksheetFireAlarm({
         checkerNik: checkerNik.trim(),
         items: items.map((item, idx) => ({ ...item, no: idx + 1 })),
       };
-      const res = await fetch("/api/fire-alarm/submit", {
+      const res = await fetch("/e-checksheet-ga/api/fire-alarm/submit", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),

@@ -243,7 +243,7 @@ export default function InspeksiFormDetailPage() {
   useEffect(() => {
     if (viewId && itemId) {
       setIsViewMode(true);
-      fetch(`/api/lift-barang/inspeksi/history?itemId=${itemId}`)
+      fetch(`/e-checksheet-ga/api/lift-barang/inspeksi/history?itemId=${itemId}`)
         .then(res => res.json())
         .then(result => {
           if (result.success && result.data.length > 0) {
@@ -326,7 +326,7 @@ export default function InspeksiFormDetailPage() {
       formDataUpload.append('itemId', itemId);
       formDataUpload.append('subItemId', subId);
 
-      const response = await fetch('/api/lift-barang/upload', {
+      const response = await fetch('/e-checksheet-ga/api/lift-barang/upload', {
         method: 'POST',
         body: formDataUpload,
       });
@@ -420,7 +420,7 @@ export default function InspeksiFormDetailPage() {
         sample_item: submitData.data[Object.keys(submitData.data)[0]]
       });
 
-      const response = await fetch('/api/lift-barang/inspeksi/submit', {
+      const response = await fetch('/e-checksheet-ga/api/lift-barang/inspeksi/submit', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(submitData),

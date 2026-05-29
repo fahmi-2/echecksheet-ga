@@ -21,7 +21,7 @@ export default function AdminActivities() {
 
     const fetchAllActivities = async () => {
       try {
-        const response = await fetch('/api/activities?limit=100');
+        const response = await fetch('/e-checksheet-ga/api/activities?limit=100');
         const data = await response.json();
         if (data.success) {
           setAllActivities(data.data);

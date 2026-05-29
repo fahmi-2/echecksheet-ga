@@ -6,7 +6,7 @@
     "build": "next build",
     "dev": "next dev -p 3039",
     "lint": "next lint .",
-    "start": "next start",
+    "start": "next start -p 3039",
     "gen-qr": "node scripts/generate-all-qr.js",
     "gen-qr-v2": "node scripts/generate-all-qr-v2.js",
     "gen-qr-fire": "node scripts/generate-fire-alarm-qr.js",

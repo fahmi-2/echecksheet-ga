@@ -116,7 +116,7 @@ export default function RiwayatFireAlarm({ params }: { params: Promise<{ zona: s
       queryParams.append('limit', '100');
       queryParams.append('offset', '0');
 
-      const response = await fetch(`/api/fire-alarm/history?${queryParams.toString()}`);
+      const response = await fetch(`/e-checksheet-ga/api/fire-alarm/history?${queryParams.toString()}`);
       if (response.ok) {
         const data = await response.json();
         if (data.success) {
@@ -285,7 +285,7 @@ export default function RiwayatFireAlarm({ params }: { params: Promise<{ zona: s
   const handleDelete = async (recordId: string) => {
     if (!confirm("Yakin ingin menghapus data ini?")) return;
     try {
-      const response = await fetch(`/api/fire-alarm/delete?id=${recordId}`, { method: 'DELETE' });
+      const response = await fetch(`/e-checksheet-ga/api/fire-alarm/delete?id=${recordId}`, { method: 'DELETE' });
       if (response.ok) {
         await loadData();
         alert('Data berhasil dihapus!');
@@ -308,7 +308,7 @@ export default function RiwayatFireAlarm({ params }: { params: Promise<{ zona: s
   // ==========================================
   const openEditModal = async (record: FireAlarmRecord) => {
     try {
-      const response = await fetch(`/api/fire-alarm/history?zona=${zona}&record_id=${record.id}`);
+      const response = await fetch(`/e-checksheet-ga/api/fire-alarm/history?zona=${zona}&record_id=${record.id}`);
       if (response.ok) {
         const data = await response.json();
         if (data.success && data.data?.[0]) {
@@ -485,7 +485,7 @@ export default function RiwayatFireAlarm({ params }: { params: Promise<{ zona: s
     }
     setIsSubmitting(true);
     try {
-      const response = await fetch('/api/fire-alarm/edit', {
+      const response = await fetch('/e-checksheet-ga/api/fire-alarm/edit', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

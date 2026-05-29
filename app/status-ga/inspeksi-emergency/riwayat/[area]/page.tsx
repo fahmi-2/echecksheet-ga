@@ -100,7 +100,7 @@ export default function RiwayatEmergency() {
       queryParams.append('limit', '100');
       queryParams.append('offset', '0');
 
-      const response = await fetch(`/api/emergency-lamp/history?${queryParams.toString()}`);
+      const response = await fetch(`/e-checksheet-ga/api/emergency-lamp/history?${queryParams.toString()}`);
 
       if (response.ok) {
         const data = await response.json();
@@ -153,7 +153,7 @@ export default function RiwayatEmergency() {
     if (!confirm("Yakin ingin menghapus data ini?")) return;
 
     try {
-      const response = await fetch(`/api/emergency-lamp/delete?id=${recordId}`, {
+      const response = await fetch(`/e-checksheet-ga/api/emergency-lamp/delete?id=${recordId}`, {
         method: 'DELETE',
       });
 
@@ -205,7 +205,7 @@ export default function RiwayatEmergency() {
   // Edit Functions
   const openEditModal = async (record: EmergencyRecord) => {
     try {
-      const response = await fetch(`/api/emergency-lamp/history?area=${area}&record_id=${record.id}`);
+      const response = await fetch(`/e-checksheet-ga/api/emergency-lamp/history?area=${area}&record_id=${record.id}`);
       if (response.ok) {
         const data = await response.json();
         if (data.success && data.data?.[0]) {
@@ -336,7 +336,7 @@ export default function RiwayatEmergency() {
 
     setIsSubmitting(true);
     try {
-      const response = await fetch('/api/emergency-lamp/edit', {
+      const response = await fetch('/e-checksheet-ga/api/emergency-lamp/edit', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

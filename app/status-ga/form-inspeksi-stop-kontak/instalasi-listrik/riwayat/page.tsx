@@ -104,7 +104,7 @@ export default function RiwayatStopKontak() {
   const loadHistory = async () => {
     try {
       setIsLoading(true);
-      const response = await fetch(`/api/electrical_inspections?type=instalasi-listrik&t=${Date.now()}`);
+      const response = await fetch(`/e-checksheet-ga/api/electrical_inspections?type=instalasi-listrik&t=${Date.now()}`);
       
       if (!response.ok) {
         const errorText = await response.text();
@@ -255,7 +255,7 @@ export default function RiwayatStopKontak() {
 
     setIsSubmitting(true);
     try {
-      const response = await fetch('/api/electrical_inspections/edit', {
+      const response = await fetch('/e-checksheet-ga/api/electrical_inspections/edit', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

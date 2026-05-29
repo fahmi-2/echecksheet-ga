@@ -136,7 +136,7 @@ export default function RiwayatApar() {
     queryParams.append('limit', '100');
     queryParams.append('offset', '0');
     
-    const response = await fetch(`/api/apar/history?${queryParams.toString()}`);
+    const response = await fetch(`/e-checksheet-ga/api/apar/history?${queryParams.toString()}`);
     if (response.ok) {
       const data = await response.json();
       if (data.success) {
@@ -234,7 +234,7 @@ export default function RiwayatApar() {
   const handleDelete = async (recordId: string) => {
     if (!confirm("Yakin ingin menghapus data ini?")) return;
     try {
-      const response = await fetch(`/api/apar/delete?id=${recordId}`, { method: 'DELETE' });
+      const response = await fetch(`/e-checksheet-ga/api/apar/delete?id=${recordId}`, { method: 'DELETE' });
       if (response.ok) { await loadData(); alert('Data berhasil dihapus!'); }
       else { const error = await response.json(); alert('Gagal menghapus data: ' + error.message); }
     } catch (error) {
@@ -319,7 +319,7 @@ export default function RiwayatApar() {
   // ─────────────────────────────────────────────────────────────
   const openEditModal = async (record: AparRecord) => {
     try {
-      const response = await fetch(`/api/apar/history?slug=${slug}&record_id=${record.id}`);
+      const response = await fetch(`/e-checksheet-ga/api/apar/history?slug=${slug}&record_id=${record.id}`);
       if (response.ok) {
         const data = await response.json();
         if (data.success && data.data?.[0]) {
@@ -421,7 +421,7 @@ export default function RiwayatApar() {
     if (itemsToSubmit.length === 0 && !confirm('Tidak ada item yang akan disimpan. Lanjutkan hanya update header?')) return;
     setIsSubmitting(true);
     try {
-      const response = await fetch('/api/apar/edit', {
+      const response = await fetch('/e-checksheet-ga/api/apar/edit', {
         method: 'PUT', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           recordId: editData.recordId, date: editData.date, slug: editData.slug,

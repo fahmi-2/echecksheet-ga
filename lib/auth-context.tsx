@@ -262,7 +262,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         
         console.log('📡 [fetchUsers] Fetching with headers:', headers);
 
-        const response = await fetch(`/api/auth/users?${searchParams}`, {
+        const response = await fetch(`/e-checksheet-ga/api/auth/users?${searchParams}`, {
           method: "GET",
           headers: headers,
         });
@@ -302,7 +302,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (!userStr) return { success: false, error: "Not authenticated" };
         const currentUser = JSON.parse(userStr);
 
-        const response = await fetch(`/api/auth/users/${id}`, {
+        const response = await fetch(`/e-checksheet-ga/api/auth/users/${id}`, {
           method: "PUT",
           headers: {
             "Content-Type": "application/json",
@@ -333,7 +333,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (!userStr) return { success: false, error: "Not authenticated" };
         const currentUser = JSON.parse(userStr);
 
-        const response = await fetch(`/api/auth/users/${id}`, {
+        const response = await fetch(`/e-checksheet-ga/api/auth/users/${id}`, {
           method: "DELETE",
           headers: {
             "x-user-id": currentUser.id,
@@ -415,7 +415,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       try {
         console.log('📤 Sending signup request to API...');
         
-        const response = await fetch('/api/auth/signup', {
+        const response = await fetch('/e-checksheet-ga/api/auth/signup', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -463,7 +463,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       try {
         console.log('📤 Sending login request to API...');
         
-        const response = await fetch('/api/auth/login', {
+        const response = await fetch('/e-checksheet-ga/api/auth/login', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({

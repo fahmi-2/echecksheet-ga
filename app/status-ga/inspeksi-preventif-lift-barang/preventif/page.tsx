@@ -138,7 +138,7 @@ export default function PreventiveLiftBarangPage() {
       formDataUpload.append('itemId', 'preventive');
       formDataUpload.append('subItemId', String(id));
 
-      const response = await fetch('/api/lift-barang/upload', {
+      const response = await fetch('/e-checksheet-ga/api/lift-barang/upload', {
         method: 'POST',
         body: formDataUpload,
       });
@@ -227,7 +227,7 @@ export default function PreventiveLiftBarangPage() {
 
     console.log('Data yang akan dikirim:', submitData);
 
-    const response = await fetch('/api/lift-barang/preventive', {
+    const response = await fetch('/e-checksheet-ga/api/lift-barang/preventive', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(submitData),

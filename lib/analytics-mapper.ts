@@ -95,7 +95,7 @@ export async function fetchAnalytics(
   params: Record<string, string | undefined>
 ): Promise<AnalyticsResponse | null> {
   try {
-    const url = `/api${endpoint}?${new URLSearchParams(clean(params)).toString()}`;
+    const url = `/e-checksheet-ga/api${endpoint}?${new URLSearchParams(clean(params)).toString()}`;
     console.log('📊 [Analytics] GET', url);
 
     const res = await fetch(url, {
@@ -154,11 +154,11 @@ export async function fetchAnalytics(
 // ============================================
 
 export async function fetchTopUsers(
-  endpoint: string = '/analytics/top-users',
+  endpoint: string = '/e-checksheet-ga/analytics/top-users',
   params: Record<string, string | undefined>
 ): Promise<TopUsersResponse['data']> {
   try {
-    const url = `/api${endpoint}?${new URLSearchParams(clean(params)).toString()}`;
+    const url = `/e-checksheet-ga/api${endpoint}?${new URLSearchParams(clean(params)).toString()}`;
     console.log('👥 [TopUsers] GET', url);
 
     const res = await fetch(url, {
