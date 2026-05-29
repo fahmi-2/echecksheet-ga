@@ -337,7 +337,7 @@ export function GaLiftBarangContent() {
       const newName = `${addFormData.namaLift} \x07 ${addFormData.area} \x07 ${addFormData.lokasiDetail}`;
       
       // Call API
-      const response = await fetch(`/api/ga/checksheet/${TYPE_SLUG}/areas`, {
+      const response = await fetch(`/e-checksheet-ga/api/ga/checksheet/${TYPE_SLUG}/areas`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -387,7 +387,7 @@ export function GaLiftBarangContent() {
     try {
       setIsDeleting(true);
       
-      const response = await fetch(`/api/ga/checksheet/${TYPE_SLUG}/areas/${deleteTarget.id}`, {
+      const response = await fetch(`/e-checksheet-ga/api/ga/checksheet/${TYPE_SLUG}/areas/${deleteTarget.id}`, {
         method: 'DELETE',
       });
 

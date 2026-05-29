@@ -92,7 +92,7 @@ export default function DownloadLaporanPage() {
       queryParams.append("limit", "1000")
       queryParams.append("offset", "0")
 
-      const response = await fetch(`/api/apd/history?${queryParams.toString()}`)
+      const response = await fetch(`/e-checksheet-ga/api/apd/history?${queryParams.toString()}`)
       if (response.ok) {
         const data = await response.json()
         if (data.success) setRecords(data.data || [])
@@ -128,7 +128,7 @@ export default function DownloadLaporanPage() {
     try {
       setDownloading(true)
       const selectedColumns = columns.filter((c) => c.selected).map((c) => c.key)
-      const response = await fetch("/api/apd/download", {
+      const response = await fetch("/e-checksheet-ga/api/apd/download", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

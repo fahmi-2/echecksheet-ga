@@ -215,7 +215,7 @@ export default function TitikKumpulChecklist() {
         return;
       }
 
-      const response = await fetch('/api/titik-kumpul/submit', {
+      const response = await fetch('/e-checksheet-ga/api/titik-kumpul/submit', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

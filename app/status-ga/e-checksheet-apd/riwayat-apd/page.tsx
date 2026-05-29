@@ -111,7 +111,7 @@ export default function RiwayatApdPage() {
       queryParams.append('limit', '100')
       queryParams.append('offset', '0')
 
-      const response = await fetch(`/api/apd/history?${queryParams.toString()}`)
+      const response = await fetch(`/e-checksheet-ga/api/apd/history?${queryParams.toString()}`)
       
       if (response.ok) {
         const data = await response.json()
@@ -174,7 +174,7 @@ export default function RiwayatApdPage() {
         idx === editMode.itemIndex ? editItem : item
       )
 
-      const response = await fetch('/api/apd/edit', {
+      const response = await fetch('/e-checksheet-ga/api/apd/edit', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -207,7 +207,7 @@ export default function RiwayatApdPage() {
     if (!confirm("Yakin ingin menghapus data ini?")) return
     
     try {
-      const response = await fetch(`/api/apd/delete?id=${recordId}`, {
+      const response = await fetch(`/e-checksheet-ga/api/apd/delete?id=${recordId}`, {
         method: 'DELETE'
       })
       

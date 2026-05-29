@@ -18,7 +18,7 @@ export function OnlineUsersPanel() {
   useEffect(() => {
     const fetchOnlineUsers = async () => {
       try {
-        const response = await fetch('/api/users/online');
+        const response = await fetch('/e-checksheet-ga/api/users/online');
         const data = await response.json();
         if (data.success) {
           setOnlineUsers(data.data.users);

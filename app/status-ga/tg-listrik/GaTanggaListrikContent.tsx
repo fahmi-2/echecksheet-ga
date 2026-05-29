@@ -210,7 +210,7 @@ export function GaTanggaListrikContent({ openArea = '' }: Props) {
     try {
       setIsAdding(true);
       const maxNo = areas.reduce((max, a) => Math.max(max, a.no), 0);
-      const response = await fetch(`/api/ga/checksheet/${TYPE_SLUG}/areas`, {
+      const response = await fetch(`/e-checksheet-ga/api/ga/checksheet/${TYPE_SLUG}/areas`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -240,7 +240,7 @@ export function GaTanggaListrikContent({ openArea = '' }: Props) {
     if (!deleteTarget) return;
     try {
       setIsDeleting(true);
-      const response = await fetch(`/api/ga/checksheet/${TYPE_SLUG}/areas/${deleteTarget.id}`, { method: 'DELETE' });
+      const response = await fetch(`/e-checksheet-ga/api/ga/checksheet/${TYPE_SLUG}/areas/${deleteTarget.id}`, { method: 'DELETE' });
       const result = await response.json();
       if (!result.success) throw new Error(result.message || 'Gagal menghapus');
       setAreas(prev => prev.filter(a => a.id !== deleteTarget.id));

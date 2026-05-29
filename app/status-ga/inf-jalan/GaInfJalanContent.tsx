@@ -289,7 +289,7 @@ export function GaInfJalanContent() {
       const newNo = maxNo + 1;
       const newName = `${addFormData.namaArea} \u0007 ${addFormData.kategori} \u0007 ${addFormData.lokasi}`;
       
-      const response = await fetch(`/api/ga/checksheet/${TYPE_SLUG}/areas`, {
+      const response = await fetch(`/e-checksheet-ga/api/ga/checksheet/${TYPE_SLUG}/areas`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -339,7 +339,7 @@ export function GaInfJalanContent() {
     try {
       setIsDeleting(true);
       
-      const response = await fetch(`/api/ga/checksheet/${TYPE_SLUG}/areas/${deleteTarget.id}`, {
+      const response = await fetch(`/e-checksheet-ga/api/ga/checksheet/${TYPE_SLUG}/areas/${deleteTarget.id}`, {
         method: 'DELETE',
       });
 

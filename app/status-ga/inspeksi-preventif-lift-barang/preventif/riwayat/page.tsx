@@ -43,7 +43,7 @@ export default function RiwayatPreventivePage() {
   const loadHistory = async () => {
     try {
       setLoading(true);
-      const response = await fetch('/api/lift-barang/preventive');
+      const response = await fetch('/e-checksheet-ga/api/lift-barang/preventive');
       const result = await response.json();
 
       if (response.ok && result.success) {
@@ -138,7 +138,7 @@ const handleEditStart = (entry: PreventiveHistoryEntry) => {
         additional_notes: editAdditionalNotes.trim()
       };
 
-      const response = await fetch(`/api/lift-barang/preventive/${editingId}`, {
+      const response = await fetch(`/e-checksheet-ga/api/lift-barang/preventive/${editingId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(updateData),
@@ -168,7 +168,7 @@ const handleEditStart = (entry: PreventiveHistoryEntry) => {
     try {
       setLoading(true);
 
-      const response = await fetch(`/api/lift-barang/preventive/${id}`, {
+      const response = await fetch(`/e-checksheet-ga/api/lift-barang/preventive/${id}`, {
         method: 'DELETE',
       });
 

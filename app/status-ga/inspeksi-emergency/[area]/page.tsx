@@ -193,7 +193,7 @@ export default function EmergencyLampChecklist({ params }: { params: Promise<{ a
       formData.append('area', area);
       formData.append('lokasi', items[index].lokasi);
 
-      const response = await fetch('/api/emergency-lamp/upload', {
+      const response = await fetch('/e-checksheet-ga/api/emergency-lamp/upload', {
         method: 'POST',
         body: formData,
       });
@@ -332,7 +332,7 @@ export default function EmergencyLampChecklist({ params }: { params: Promise<{ a
         }))
       };
 
-      const response = await fetch('/api/emergency-lamp/submit', {
+      const response = await fetch('/e-checksheet-ga/api/emergency-lamp/submit', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
         body: JSON.stringify(submitData),

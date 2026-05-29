@@ -158,7 +158,7 @@ export default function ChecksheetToiletForm({ params }: { params: Promise<{ are
 
     try {
       const response = await fetch(
-        `/api/toilet-inspections/check-status?area_code=${areaId}&inspection_date=${selectedDate}&toilet_type=${isWanitaOnly ? 'wanita_only' : 'laki_perempuan'}`
+        `/e-checksheet-ga/api/toilet-inspections/check-status?area_code=${areaId}&inspection_date=${selectedDate}&toilet_type=${isWanitaOnly ? 'wanita_only' : 'laki_perempuan'}`
       );
 
       if (!response.ok) throw new Error(`API error: ${response.status}`);
@@ -379,7 +379,7 @@ export default function ChecksheetToiletForm({ params }: { params: Promise<{ are
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 30000);
 
-      const response = await fetch("/api/toilet-inspections/submit", {
+      const response = await fetch("/e-checksheet-ga/api/toilet-inspections/submit", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(apiPayload),

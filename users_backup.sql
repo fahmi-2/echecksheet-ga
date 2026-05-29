@@ -2,10 +2,10 @@
 -- PostgreSQL database dump
 --
 
-\restrict Dbx28RXlnAc6cgdXHEeCdfLhzWiOAJvuRm3Iw6jMpItAiIjEr2pfZkZyVcZJTaI
+\restrict mCVYGMlMbTLBcG4glbk4alJc8tMdhy8qMJQf5HLo7bWIk0Cn1j8DiOcVAUmw7Fn
 
--- Dumped from database version 16.11
--- Dumped by pg_dump version 16.11
+-- Dumped from database version 16.12
+-- Dumped by pg_dump version 16.12
 
 SET statement_timeout = 0;
 SET lock_timeout = 0;
@@ -36,11 +36,7 @@ CREATE TABLE public.users (
     password_hash character varying(255) NOT NULL,
     is_active boolean DEFAULT true,
     created_at timestamp without time zone DEFAULT CURRENT_TIMESTAMP,
-    last_seen_at timestamp without time zone,
-    is_online boolean DEFAULT false,
-    total_logins integer DEFAULT 0,
-    last_login_at timestamp without time zone,
-    last_login_ip character varying(45)
+    updated_at timestamp without time zone DEFAULT CURRENT_TIMESTAMP
 );
 
 
@@ -50,26 +46,18 @@ ALTER TABLE public.users OWNER TO postgres;
 -- Data for Name: users; Type: TABLE DATA; Schema: public; Owner: postgres
 --
 
-COPY public.users (id, username, full_name, nik, department, role, password_hash, is_active, created_at, last_seen_at, is_online, total_logins, last_login_at, last_login_ip) FROM stdin;
-user_1770691355267_7372v0o	fah123	Zulfahmi Nafiis Suffi	3501043005050001	general-affairs	inspector-ga	$2b$10$TzGos11S/ZyUHXzOY8JVbuSKfO68eVGAnDsa7.AMvmszupXQ8ktLS	t	2026-02-10 09:42:35.269419	\N	f	0	\N	\N
-user_1771917203618_jxdi76l	inspector-fahmi	Fahmi	21331451351	general-affairs	inspector-ga	$2b$10$xdn82fpk0qP1rZzIHG2/Y.DtQRdXzo1.vncp13QiEfzLDY7ua4li6	t	2026-02-24 14:13:23.619271	\N	f	0	\N	\N
-user_1773196167864_p6pyi1k	Dahana	Dahana Pratama	17530	general-affairs	inspector-ga	$2b$10$58gDdP4vh9LFa.4AcaLPF.D.IghzJbcyEq3HCNpxN01ZLt.wGbIF2	t	2026-03-11 09:29:27.865223	\N	f	0	\N	\N
-admin-123451	admin	Admin	123451	general-affairs	admin	$2b$10$inNZYJ8qYAIx4L/fdVmju.IWuAefOVsW.8dSAk7fiAYOCIkv6Zbcu	t	2026-03-12 08:27:33.273039	\N	f	0	\N	\N
-user_1777349498162_mgi9oen	test	Zulfahmi Nafiis Suffi	123123	general-affairs	inspector-ga	$2b$10$dE4XRf9FGBKXh45Cztz/cONF5c.J8I6W0KTv7BAIbX.pVIQmCJq5O	t	2026-04-28 11:11:38.165032	\N	f	0	\N	\N
-user_1777439939300_4b05zl2	user1	us	123213	general-affairs	inspector-ga-fire	$2b$10$.EdVjFz/zfRc50pz0lZnf.Bmdtg8zxHhmaHWUJsP0FZDvC.5HcwcC	t	2026-04-29 12:18:59.306892	\N	f	0	\N	\N
-user_1777525567748_ujao0f9	usertoilet	agung	1232131	general-affairs	inspector-ga-facility	$2b$10$BFueNzoXOZGXGv3cg2FIbuCyKjM2msi.gTvKU.TlC.LHNKxegaBs2	t	2026-04-30 12:06:07.749926	\N	f	0	\N	\N
-user_1777526239953_5myftgp	userperalatan	agus	12312351	general-affairs	inspector-ga-equipment	$2b$10$bZwTBvboUOvBP/DIQowr1eTV7kvYt9xUBKz0tEq81ekjRzAY3pzfe	t	2026-04-30 12:17:19.954761	\N	f	0	\N	\N
-user_1777526291314_yekx2hj	userlistrik	agung hapsah	1231123123	general-affairs	inspector-ga-electrical	$2b$10$I0HKCm416CpxEBOhWjj7M.XfhIAoWlwhImWWekK8FU/qkNlshPjH6	t	2026-04-30 12:18:11.316819	\N	f	0	\N	\N
-user_1777526329720_3zldg1m	userapd	syahirini	1441241312	general-affairs	inspector-ga-personal	$2b$10$z6cXWf0Q/IpYFIUmgOCPfuHLhUcJfb3jXIyU6qqnZOI5PoX5YQnZK	t	2026-04-30 12:18:49.721577	\N	f	0	\N	\N
+COPY public.users (id, username, full_name, nik, department, role, password_hash, is_active, created_at, updated_at) FROM stdin;
+user_1774596390430_bxl1b24	fah123	Zulfahmi Nafiis	0019	general-affairs	inspector-ga	$2b$10$G5zLkQcLSffqCgtneiEW1ea4kuyCPD.lYHP9VHr1AwKTyyAOnDN1.	t	2026-03-27 14:26:30.432247	2026-03-27 14:26:30.432247
+admin-123451	admin	Admin	123451	general-affairs	admin	$2b$10$cEjbLBqL8uPkO1W5Qn0uvurUe2Z0nWcbydGIDEhG.YIsqGwxK2neO	t	2026-03-27 15:03:56.086515	2026-03-27 15:03:56.086515
 \.
 
 
 --
--- Name: users users_nik_unique; Type: CONSTRAINT; Schema: public; Owner: postgres
+-- Name: users users_nik_key; Type: CONSTRAINT; Schema: public; Owner: postgres
 --
 
 ALTER TABLE ONLY public.users
-    ADD CONSTRAINT users_nik_unique UNIQUE (nik);
+    ADD CONSTRAINT users_nik_key UNIQUE (nik);
 
 
 --
@@ -81,11 +69,11 @@ ALTER TABLE ONLY public.users
 
 
 --
--- Name: users users_username_unique; Type: CONSTRAINT; Schema: public; Owner: postgres
+-- Name: users users_username_key; Type: CONSTRAINT; Schema: public; Owner: postgres
 --
 
 ALTER TABLE ONLY public.users
-    ADD CONSTRAINT users_username_unique UNIQUE (username);
+    ADD CONSTRAINT users_username_key UNIQUE (username);
 
 
 --
@@ -120,5 +108,5 @@ CREATE INDEX idx_users_username ON public.users USING btree (username);
 -- PostgreSQL database dump complete
 --
 
-\unrestrict Dbx28RXlnAc6cgdXHEeCdfLhzWiOAJvuRm3Iw6jMpItAiIjEr2pfZkZyVcZJTaI
+\unrestrict mCVYGMlMbTLBcG4glbk4alJc8tMdhy8qMJQf5HLo7bWIk0Cn1j8DiOcVAUmw7Fn
 

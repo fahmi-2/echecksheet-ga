@@ -75,7 +75,7 @@ const loadRecords = async () => {
   try {
     setLoading(true);
     // ✅ Tambahkan timestamp untuk force refresh (bypass browser cache)
-    const response = await fetch(`/api/exit-lamp/history?t=${Date.now()}`);
+    const response = await fetch(`/e-checksheet-ga/api/exit-lamp/history?t=${Date.now()}`);
     if (!response.ok) {
       const errorText = await response.text();
       console.error('API Error:', errorText);
@@ -313,7 +313,7 @@ useEffect(() => {
 
   setIsSubmitting(true);
   try {
-    const response = await fetch('/api/exit-lamp/edit', {
+    const response = await fetch('/e-checksheet-ga/api/exit-lamp/edit', {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({

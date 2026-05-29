@@ -36,7 +36,7 @@ export interface Area {
  * Get area by ID
  */
 export async function getAreaById(typeSlug: string, areaId: number): Promise<Area | null> {
-  const response = await fetch(`/api/ga/checksheet/${typeSlug}/areas`);
+  const response = await fetch(`/e-checksheet-ga/api/ga/checksheet/${typeSlug}/areas`);
   const data = await response.json();
   
   if (!data.success) {
@@ -52,7 +52,7 @@ export async function getAreaById(typeSlug: string, areaId: number): Promise<Are
  * Get all areas by type slug
  */
 export async function getAreasByType(typeSlug: string) {
-  const response = await fetch(`/api/ga/checksheet/${typeSlug}/areas`);
+  const response = await fetch(`/e-checksheet-ga/api/ga/checksheet/${typeSlug}/areas`);
   const data = await response.json();
   
   if (!data.success) {
@@ -66,7 +66,7 @@ export async function getAreasByType(typeSlug: string) {
  * Get all available dates for a specific area
  */
 export async function getAvailableDates(typeSlug: string, areaId: number): Promise<string[]> {
-  const response = await fetch(`/api/ga/checksheet/${typeSlug}/by-area/${areaId}/dates`);
+  const response = await fetch(`/e-checksheet-ga/api/ga/checksheet/${typeSlug}/by-area/${areaId}/dates`);
   const data = await response.json();
   
   if (!data.success) {
@@ -84,7 +84,7 @@ export async function getChecklistByDate(
   areaId: number,
   date: string
 ): Promise<ChecklistData | null> {
-  const response = await fetch(`/api/ga/checksheet/${typeSlug}/by-area/${areaId}/${date}`);
+  const response = await fetch(`/e-checksheet-ga/api/ga/checksheet/${typeSlug}/by-area/${areaId}/${date}`);
   const data = await response.json();
   
   if (!data.success) {
@@ -101,7 +101,7 @@ export async function getChecklistByDate(
  * Get all checklist items for a type
  */
 export async function getItemsByType(typeSlug: string): Promise<ChecklistItem[]> {
-  const response = await fetch(`/api/ga/checksheet/${typeSlug}/items`);
+  const response = await fetch(`/e-checksheet-ga/api/ga/checksheet/${typeSlug}/items`);
   const data = await response.json();
   
   if (!data.success) {
@@ -123,7 +123,7 @@ export async function saveChecklist(
   inspectorName: string,
   status: string = 'submitted'
 ) {
-  const response = await fetch(`/api/ga/checksheet/${typeSlug}/by-area/${areaId}/${date}`, {
+  const response = await fetch(`/e-checksheet-ga/api/ga/checksheet/${typeSlug}/by-area/${areaId}/${date}`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',

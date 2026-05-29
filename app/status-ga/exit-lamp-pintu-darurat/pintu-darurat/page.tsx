@@ -157,7 +157,7 @@ export default function PintuDaruratChecklist() {
         return;
       }
 
-      const response = await fetch('/api/pintu-darurat/submit', {
+      const response = await fetch('/e-checksheet-ga/api/pintu-darurat/submit', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

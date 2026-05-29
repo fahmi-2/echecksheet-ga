@@ -131,7 +131,7 @@ export default function InspeksiAparForm({ params }: { params: Promise<{ slug: s
     
     const autoLoadMasterData = async () => {
       try {
-        const response = await fetch(`/api/apar/master?slug=${slug}`);
+        const response = await fetch(`/e-checksheet-ga/api/apar/master?slug=${slug}`);
         const result = await response.json();
         
         if (response.ok && result.success && result.data && result.data.length > 0) {
@@ -186,7 +186,7 @@ export default function InspeksiAparForm({ params }: { params: Promise<{ slug: s
   const loadMasterData = async () => {
     try {
       setLoadingMaster(true);
-      const response = await fetch(`/api/apar/master?slug=${slug}`);
+      const response = await fetch(`/e-checksheet-ga/api/apar/master?slug=${slug}`);
       const result = await response.json();
 
       if (response.ok && result.success) {
@@ -273,7 +273,7 @@ export default function InspeksiAparForm({ params }: { params: Promise<{ slug: s
       formData.append('slug', slug);
       formData.append('lokasi', items[index].lokasi);
 
-      const response = await fetch('/api/apar/upload', { method: 'POST', body: formData });
+      const response = await fetch('/e-checksheet-ga/api/apar/upload', { method: 'POST', body: formData });
       const result = await response.json();
 
       if (response.ok && result.success) {
@@ -404,7 +404,7 @@ export default function InspeksiAparForm({ params }: { params: Promise<{ slug: s
         }))
       };
       
-      const response = await fetch('/api/apar/submit', {
+      const response = await fetch('/e-checksheet-ga/api/apar/submit', {
         method: 'POST',
         headers: { 
           'Content-Type': 'application/json', 

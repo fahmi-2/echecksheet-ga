@@ -81,7 +81,7 @@ export default function RiwayatPintuDarurat() {
 const loadRecords = async () => {
   try {
     setLoading(true);
-    const response = await fetch(`/api/pintu-darurat/history?t=${Date.now()}`);
+    const response = await fetch(`/e-checksheet-ga/api/pintu-darurat/history?t=${Date.now()}`);
     if (!response.ok) {
       const errorText = await response.text();
       console.error('API Error:', errorText);
@@ -341,7 +341,7 @@ const loadRecords = async () => {
 
     setIsSubmitting(true);
     try {
-      const response = await fetch('/api/pintu-darurat/edit', {
+      const response = await fetch('/e-checksheet-ga/api/pintu-darurat/edit', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

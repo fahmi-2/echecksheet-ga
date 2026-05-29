@@ -396,7 +396,7 @@ export function GaSmokeDetectorContent() {
       const newNo = maxNo + 1;
       const newName = `${addFormData.name} \\x07 ${addFormData.location}`;
       
-      const response = await fetch(`/api/ga/checksheet/${TYPE_SLUG}/areas`, {
+      const response = await fetch(`/e-checksheet-ga/api/ga/checksheet/${TYPE_SLUG}/areas`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -446,7 +446,7 @@ export function GaSmokeDetectorContent() {
     try {
       setIsDeleting(true);
       
-      const response = await fetch(`/api/ga/checksheet/${TYPE_SLUG}/areas/${deleteTarget.id}`, {
+      const response = await fetch(`/e-checksheet-ga/api/ga/checksheet/${TYPE_SLUG}/areas/${deleteTarget.id}`, {
         method: 'DELETE',
       });
 

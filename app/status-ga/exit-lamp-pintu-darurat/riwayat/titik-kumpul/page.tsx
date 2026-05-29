@@ -95,7 +95,7 @@ const loadRecords = async () => {
   try {
     setLoading(true);
     // ✅ TAMBAH CACHE-BUSTING
-    const response = await fetch(`/api/titik-kumpul/history?t=${Date.now()}`);
+    const response = await fetch(`/e-checksheet-ga/api/titik-kumpul/history?t=${Date.now()}`);
     if (!response.ok) {
       const errorText = await response.text();
       console.error('API Error:', errorText);
@@ -448,7 +448,7 @@ const handleSubmitEdit = async () => {
 
   setIsSubmitting(true);
   try {
-    const response = await fetch('/api/titik-kumpul/edit', {
+    const response = await fetch('/e-checksheet-ga/api/titik-kumpul/edit', {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({

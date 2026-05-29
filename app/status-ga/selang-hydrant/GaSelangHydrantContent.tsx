@@ -37,7 +37,7 @@ export function GaSelangHydrantContent({
 
   useEffect(() => {
     if (loading) return;
-    if (!user || (user.role !== "inspector-ga")) {
+    if (!user || (user.role !== "inspector-ga-fire")) {
       router.push("/login-page");
     }
   }, [user, loading, router]);
@@ -230,7 +230,7 @@ export function GaSelangHydrantContent({
       </div>
     );
   }
-  if (!user || (user.role !== "inspector-ga")) {
+  if (!user || (user.role !== "inspector-ga-fire")) {
     return null;
   }
 
