@@ -374,6 +374,7 @@ export default function ChecksheetToiletForm({ params }: { params: Promise<{ are
 
       const toiletType = formType === "wanita" ? "wanita_only" : formType === "general" ? "general" : "laki_perempuan";
 
+      // ✅ BUILD PAYLOAD DENGAN LOG YANG JELAS
       const apiPayload: Record<string, any> = {
         area_code: areaId,
         area_name: currentArea.title,
@@ -385,24 +386,51 @@ export default function ChecksheetToiletForm({ params }: { params: Promise<{ are
         toilet_type: toiletType,
       };
 
+      console.log('💾 [Save] Form Type:', formType, '| Toilet Type:', toiletType, '| Is Single:', isSingleForm);
+
       if (isSingleForm) {
-        const suffix = formType === "wanita" ? "p" : "g";
+        // ✅ UNTUK GENERAL & WANITA - Gunakan suffix 'p'
+        const suffix = "p"; // Selalu gunakan _p untuk single form
+        console.log(`📝 [Save] Building payload for ${formType} with suffix: _${suffix}`);
+        
         INSPECTION_ITEMS.forEach((item) => {
           const itemNum = item.no;
-          apiPayload[`item_${itemNum}_hasil_${suffix}`] = answers[`${item.key}_hasil`] || "OK";
-          apiPayload[`item_${itemNum}_keterangan_${suffix}`] = answers[`${item.key}_keterangan`] || "";
-          apiPayload[`item_${itemNum}_foto_${suffix}`] = answers[`${item.key}_foto`] || "";
-          apiPayload[`item_${itemNum}_tindakan_${suffix}`] = answers[`${item.key}_tindakan`] || "";
-          apiPayload[`item_${itemNum}_pic_${suffix}`] = answers[`${item.key}_pic`] || user.fullName || "";
+          const hasilKey = `item_${itemNum}_hasil_${suffix}`;
+          const ketKey = `item_${itemNum}_keterangan_${suffix}`;
+          const fotoKey = `item_${itemNum}_foto_${suffix}`;
+          const tindakanKey = `item_${itemNum}_tindakan_${suffix}`;
+          const picKey = `item_${itemNum}_pic_${suffix}`;
+
+          apiPayload[hasilKey] = answers[`${item.key}_hasil`] || "OK";
+          apiPayload[ketKey] = answers[`${item.key}_keterangan`] || "";
+          apiPayload[fotoKey] = answers[`${item.key}_foto`] || "";
+          apiPayload[tindakanKey] = answers[`${item.key}_tindakan`] || "";
+          apiPayload[picKey] = answers[`${item.key}_pic`] || user.fullName || "";
+
+          // Log untuk debugging (hanya item pertama)
+          if (itemNum === 1) {
+            console.log(`🔍 [Save] Sample payload:`, {
+              [hasilKey]: apiPayload[hasilKey],
+              [ketKey]: apiPayload[ketKey].substring(0, 50) + '...',
+              hasFoto: !!apiPayload[fotoKey],
+            });
+          }
         });
       } else {
+        // ✅ UNTUK MIXED (LAKI & PEREMPUAN)
+        console.log('📝 [Save] Building payload for mixed (L & P)');
+        
         INSPECTION_ITEMS.forEach((item) => {
           const itemNum = item.no;
+          
+          // Laki-laki
           apiPayload[`item_${itemNum}_hasil_l`] = answers[`${item.key}_L_hasil`] || "OK";
           apiPayload[`item_${itemNum}_keterangan_l`] = answers[`${item.key}_L_keterangan`] || "";
           apiPayload[`item_${itemNum}_foto_l`] = answers[`${item.key}_L_foto`] || "";
           apiPayload[`item_${itemNum}_tindakan_l`] = answers[`${item.key}_L_tindakan`] || "";
           apiPayload[`item_${itemNum}_pic_l`] = answers[`${item.key}_L_pic`] || user.fullName || "";
+          
+          // Perempuan
           apiPayload[`item_${itemNum}_hasil_p`] = answers[`${item.key}_P_hasil`] || "OK";
           apiPayload[`item_${itemNum}_keterangan_p`] = answers[`${item.key}_P_keterangan`] || "";
           apiPayload[`item_${itemNum}_foto_p`] = answers[`${item.key}_P_foto`] || "";
@@ -411,21 +439,52 @@ export default function ChecksheetToiletForm({ params }: { params: Promise<{ are
         });
       }
 
-      // ✅ GANTI fetch biasa dengan smartFetch
+      // Hitung jumlah field item yang dikirim
+      const itemCount = Object.keys(apiPayload).filter(k => k.startsWith('item_')).length;
+      console.log(`📊 [Save] Total item fields: ${itemCount}`);
+
+      // ✅ GUNAKAN smartFetch DENGAN METADATA
       const response = await smartFetch(
-        '/e-checksheet-ga/api/toilet-inspections/submit',
+        "/e-checksheet-ga/api/toilet-inspections/submit",
         {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
           body: JSON.stringify(apiPayload),
-          queueType: 'toilet', // ← Penting! Tandai sebagai data toilet
+          queueType: 'toilet',
+          metadata: {
+            areaType: formType,
+            areaCode: areaId,
+          },
         }
       );
 
-      // Handle response
       const result = await response.json();
 
-      // Backup ke localStorage
+      // Handle response
+      if ((response as any).offline || result.offline) {
+        // Mode offline
+        const pendingCount = await refreshPendingCount();
+        alert(`📴 Data tersimpan offline!\n\n` +
+              `📋 Detail:\n` +
+              `- Area: ${currentArea.title}\n` +
+              `- Tanggal: ${new Date(selectedDate).toLocaleDateString("id-ID")}\n` +
+              `- Items: ${INSPECTION_ITEMS.length} inspection points\n` +
+              `- Antrian: ${pendingCount} data\n\n` +
+              `Data akan otomatis terkirim saat online kembali.`);
+      } else {
+        // Mode online - sukses
+        if (!result.success) {
+          throw new Error(result.message || "Gagal menyimpan data");
+        }
+        
+        alert(`✅ Data berhasil disimpan!\n\n` +
+              `📋 Detail:\n` +
+              `- Area: ${currentArea.title}\n` +
+              `- Tanggal: ${new Date(selectedDate).toLocaleDateString("id-ID")}\n` +
+              `- Items: ${INSPECTION_ITEMS.length} inspection points`);
+      }
+
+      // Backup ke localStorage (tetap jalankan)
       const newData: SavedData = { ...savedData };
       const storageKey = `e-checksheet-toilet-${areaId}`;
       const inspectorName = user.fullName || "Unknown User";
@@ -486,6 +545,7 @@ export default function ChecksheetToiletForm({ params }: { params: Promise<{ are
 
       localStorage.setItem(storageKey, JSON.stringify(newData));
 
+      // Update global history
       const hasNG = INSPECTION_ITEMS.some((item) => {
         if (isSingleForm) return answers[`${item.key}_hasil`] === "NG";
         return answers[`${item.key}_L_hasil`] === "NG" || answers[`${item.key}_P_hasil`] === "NG";
@@ -505,20 +565,19 @@ export default function ChecksheetToiletForm({ params }: { params: Promise<{ are
       globalHistory.push(globalEntry);
       localStorage.setItem("checksheet_history", JSON.stringify(globalHistory));
 
-      // ✅ Cek apakah offline mode
-      if ((response as any).offline) {
-        // Mode offline - data tersimpan di queue
-        alert(`📴 Data tersimpan offline. Akan otomatis sync saat online.`);
-      } else {
-        alert(`✓ Data berhasil disimpan untuk tanggal: ${new Date(selectedDate).toLocaleDateString("id-ID")}`);
-      }
-
       await refreshPendingCount();
       router.push(`/status-ga/checksheet-toilet`);
 
     } catch (err) {
-      if (err instanceof Error && err.name === "AbortError") { alert("Request timeout. Silakan coba lagi."); return; }
-      if (err instanceof Error && err.message.includes("Failed to fetch")) { alert("Gagal terhubung ke server. Periksa koneksi internet Anda."); return; }
+      console.error('❌ [Save] Error:', err);
+      if (err instanceof Error && err.name === "AbortError") { 
+        alert("⏰ Request timeout. Silakan coba lagi."); 
+        return; 
+      }
+      if (err instanceof Error && err.message.includes("Failed to fetch")) { 
+        alert("📴 Gagal terhubung ke server. Data akan disimpan offline."); 
+        return; 
+      }
       alert(`❌ Gagal menyimpan: ${err instanceof Error ? err.message : "Terjadi kesalahan"}`);
     } finally {
       setIsSubmitting(false);

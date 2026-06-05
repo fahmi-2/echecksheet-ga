@@ -1,12 +1,6 @@
 // lib/smart-fetch.ts
 import { addToSyncQueue } from './offline-db';
-
-function generateQueueId(): string {
-  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
-    return crypto.randomUUID();
-  }
-  return `queue-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
-}
+import { generateQueueId } from './sync-manager';
 
 function buildPayload(body: BodyInit | null | undefined): any {
   if (!body) return {};
@@ -17,25 +11,43 @@ function buildPayload(body: BodyInit | null | undefined): any {
 }
 
 interface SmartFetchOptions extends RequestInit {
-  /** Jika offline, simpan ke queue dengan tipe ini */
   queueType?: string;
-  /** Skip queue (selalu coba fetch langsung) */
   skipQueue?: boolean;
+  metadata?: {
+    areaType?: 'wanita' | 'general' | 'mixed';
+    areaCode?: string;
+  };
 }
 
-/**
- * Smart fetch: otomatis queue ke IndexedDB jika offline
- */
 export async function smartFetch(url: string, options: SmartFetchOptions = {}) {
-  const { queueType, skipQueue, ...fetchOptions } = options;
+  const { queueType, skipQueue, metadata, ...fetchOptions } = options;
   const isOnline = navigator.onLine;
 
-  // Jika online → fetch langsung
+  const payload = buildPayload(fetchOptions.body);
+
+  console.log('📤 [SmartFetch]', {
+    url,
+    method: fetchOptions.method,
+    isOnline,
+    queueType,
+    areaType: metadata?.areaType,
+    payloadKeys: Object.keys(payload).filter(k => k.startsWith('item_')).length,
+    sampleKeys: Object.keys(payload).filter(k => k.startsWith('item_')).slice(0, 5),
+  });
+
   if (isOnline) {
     try {
       const response = await fetch(url, fetchOptions);
 
-      // Jika gagal dan ada queueType, queue untuk retry
+      const responseClone = response.clone();
+      const responseData = await responseClone.json().catch(() => ({}));
+
+      console.log('📥 [SmartFetch Response]', {
+        status: response.status,
+        ok: response.ok,
+        success: responseData.success,
+      });
+
       if (!response.ok && queueType && !skipQueue) {
         console.warn(`⚠️ [SmartFetch] HTTP ${response.status}, queue untuk retry`);
         await addToSyncQueue({
@@ -43,43 +55,45 @@ export async function smartFetch(url: string, options: SmartFetchOptions = {}) {
           type: queueType,
           endpoint: url,
           method: (fetchOptions.method as any) || 'POST',
-          payload: buildPayload(fetchOptions.body),
+          payload,
         });
       }
 
       return response;
-    } catch (err) {
-      // Network error → queue
+    } catch (err: any) {
       if (queueType && !skipQueue) {
-        console.warn(`⚠️ [SmartFetch] Network error, queue untuk retry`);
+        console.warn(`⚠️ [SmartFetch] Network error, queue untuk retry`, err.message);
         await addToSyncQueue({
           queueId: generateQueueId(),
           type: queueType,
           endpoint: url,
           method: (fetchOptions.method as any) || 'POST',
-          payload: buildPayload(fetchOptions.body),
+          payload,
         });
       }
       throw err;
     }
   }
 
-  // Jika offline → langsung queue
   if (queueType && !skipQueue) {
-    console.log(`📴 [SmartFetch] Offline, queue: ${queueType}`);
+    console.log(`📴 [SmartFetch] Offline, queue: ${queueType}`, {
+      areaType: metadata?.areaType,
+      payloadItems: Object.keys(payload).filter(k => k.startsWith('item_')).length,
+    });
+
     await addToSyncQueue({
       queueId: generateQueueId(),
       type: queueType,
       endpoint: url,
       method: (fetchOptions.method as any) || 'POST',
-      payload: buildPayload(fetchOptions.body),
+      payload,
     });
 
-    // Return response tiruan agar kode tidak crash
     return new Response(JSON.stringify({
       success: true,
       offline: true,
       message: 'Data disimpan untuk sync saat online',
+      queuedAt: Date.now(),
     }), {
       status: 202,
       headers: { 'Content-Type': 'application/json' },
