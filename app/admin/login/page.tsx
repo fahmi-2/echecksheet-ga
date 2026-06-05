@@ -1,8 +1,7 @@
-// app/admin/worker-registration/page.tsx
 "use client";
 
 import type React from "react";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
 import { Sidebar } from "@/components/Sidebar";
@@ -57,14 +56,28 @@ function useSidebarWidth() {
 }
 
 // ──────────────────────────────────────────────────────────────────────────────
-// TYPE DEFINITIONS - 5 ROLE BARU UNTUK INSPECTOR GA
+// TYPE DEFINITIONS
 // ──────────────────────────────────────────────────────────────────────────────
-type GARole = 
-  | "inspector-ga-fire"        // Kategori 1: Proteksi Kebakaran & Evakuasi
-  | "inspector-ga-equipment"   // Kategori 2: Pemeliharaan Peralatan
-  | "inspector-ga-electrical"  // Kategori 3: Instalasi Listrik
-  | "inspector-ga-personal"    // Kategori 4: Keselamatan Personal & Prasarana
-  | "inspector-ga-facility";   // Kategori 5: Kebersihan Fasilitas
+type GARole =
+  | "inspector-ga-fire"
+  | "inspector-ga-equipment"
+  | "inspector-ga-electrical"
+  | "inspector-ga-personal"
+  | "inspector-ga-facility";
+
+type ChecksheetKey = string;
+
+interface ChecksheetOption {
+  key: ChecksheetKey;
+  label: string;
+  path: string;
+  description: string;
+  icon?: string;
+}
+
+type RoleChecksheetMap = {
+  [K in GARole]: ChecksheetOption[];
+};
 
 interface WorkerFormData {
   username: string;
@@ -74,6 +87,7 @@ interface WorkerFormData {
   confirmPassword: string;
   department: "general-affairs" | "ga";
   role: GARole | "";
+  checksheets: ChecksheetKey[];
 }
 
 interface FormErrors {
@@ -84,11 +98,12 @@ interface FormErrors {
   confirmPassword?: string;
   department?: string;
   role?: string;
+  checksheets?: string;
   general?: string;
 }
 
 // ──────────────────────────────────────────────────────────────────────────────
-// ROLE CONFIGURATION - 5 KATEGORI CHECKSHEET
+// ROLE CONFIGURATION
 // ──────────────────────────────────────────────────────────────────────────────
 const GA_ROLES: { value: GARole; label: string; category: string; icon: string; desc: string }[] = [
   {
@@ -128,6 +143,36 @@ const GA_ROLES: { value: GARole; label: string; category: string; icon: string; 
   },
 ];
 
+// ✅ MAPPING: Role → Available Checksheets
+const ROLE_CHECKSHEETS: RoleChecksheetMap = {
+  "inspector-ga-fire": [
+    { key: "hydrant", label: "🚒 Hydrant", path: "/status-ga/hydrant", description: "Inspeksi rutin sistem hydrant", icon: "🚒" },
+    { key: "selang-hydrant", label: "💧 Selang Hydrant", path: "/status-ga/selang-hydrant", description: "Cek tekanan air, coupling, nozzle", icon: "💧" },
+    { key: "fire-alarm", label: "🔔 Fire Alarm", path: "/status-ga/inspeksi-fire-alarm", description: "Cek fungsi alarm & detector", icon: "🔔" },
+    { key: "smoke-detector", label: "💨 Smoke Detector", path: "/status-ga/smoke-detector", description: "Testing sensor asap", icon: "💨" },
+    { key: "apar", label: "🧯 APAR", path: "/status-ga/inspeksi-apar", description: "Pemeriksaan alat pemadam api ringan", icon: "🧯" },
+    { key: "emergency-lamp", label: "🚨 Emergency Lamp", path: "/status-ga/inspeksi-emergency", description: "Lampu darurat & exit lamp", icon: "🚨" },
+    { key: "exit-lamp-pintu-darurat", label: "🚶 Jalur Evakuasi", path: "/status-ga/exit-lamp-pintu-darurat", description: "Pemeriksaan jalur & titik kumpul", icon: "🚶" },
+  ],
+  "inspector-ga-equipment": [
+    { key: "lift-barang", label: "🛗 Lift Barang (Daily)", path: "/status-ga/lift-barang", description: "Checklist harian operasional lift", icon: "🛗" },
+    { key: "inspeksi-preventif-lift-barang", label: "🔧 Preventif Lift", path: "/status-ga/inspeksi-preventif-lift-barang", description: "Maintenance berkala lift barang", icon: "🔧" },
+    { key: "tg-listrik", label: "🪜 Tangga Listrik (AWP)", path: "/status-ga/tg-listrik", description: "Inspeksi alat kerja tinggi", icon: "🪜" },
+  ],
+  "inspector-ga-electrical": [
+    { key: "panel", label: "⚡ Panel Listrik", path: "/status-ga/panel", description: "Cek kondisi panel distribusi", icon: "⚡" },
+    { key: "form-inspeksi-stop-kontak", label: "🔌 Stop Kontak", path: "/status-ga/form-inspeksi-stop-kontak", description: "Pemeriksaan outlet area kerja", icon: "🔌" },
+  ],
+  "inspector-ga-personal": [
+    { key: "e-checksheet-apd", label: "🦺 Form APD", path: "/status-ga/e-checksheet-apd/riwayat-apd", description: "Pencatatan pengambilan APD", icon: "🦺" },
+    { key: "inf-jalan", label: "🛣️ Infrastruktur Jalan", path: "/status-ga/inf-jalan", description: "Pemeriksaan kondisi jalan internal", icon: "🛣️" },
+    { key: "inspeksi-apd", label: "🔍 Inspeksi APD", path: "/status-ga/inspeksi-apd", description: "Cek kelayakan alat pelindung", icon: "🔍" },
+  ],
+  "inspector-ga-facility": [
+    { key: "checksheet-toilet", label: "🚽 Checksheet Toilet", path: "/status-ga/checksheet-toilet", description: "Inspeksi kebersihan toilet", icon: "🚽" },
+  ],
+};
+
 // ──────────────────────────────────────────────────────────────────────────────
 // VALIDATION HELPERS
 // ──────────────────────────────────────────────────────────────────────────────
@@ -151,9 +196,12 @@ const validateForm = (data: WorkerFormData): FormErrors => {
 
   if (!data.role) errors.role = "Pilih role/kategori checksheet terlebih dahulu";
 
+  if (data.role && (!data.checksheets || data.checksheets.length === 0)) {
+    errors.checksheets = "Pilih minimal 1 checksheet yang boleh diakses";
+  }
+
   if (!data.department) errors.department = "Pilih departemen terlebih dahulu";
 
-  // Validasi department hanya GA
   if (data.department && !["general-affairs", "ga"].includes(data.department)) {
     errors.department = "Departemen harus General Affairs (GA)";
   }
@@ -175,8 +223,9 @@ export default function WorkerRegistrationPage() {
     nik: "",
     password: "",
     confirmPassword: "",
-    department: "general-affairs", // Default GA
+    department: "general-affairs",
     role: "",
+    checksheets: [],
   });
 
   const [errors, setErrors] = useState<FormErrors>({});
@@ -185,7 +234,8 @@ export default function WorkerRegistrationPage() {
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [successMessage, setSuccessMessage] = useState("");
 
-  // 🔹 Redirect jika tidak authorized
+  const [expandedChecksheet, setExpandedChecksheet] = useState<ChecksheetKey | null>(null);
+
   useEffect(() => {
     if (!isInitialized || authLoading) return;
     if (!user) {
@@ -197,27 +247,73 @@ export default function WorkerRegistrationPage() {
     }
   }, [user, authLoading, isInitialized, router]);
 
+  const availableChecksheets = useMemo(() => {
+    if (!formData.role) return [];
+    return ROLE_CHECKSHEETS[formData.role as GARole] || [];
+  }, [formData.role]);
+
+  const totalChecksheets = useMemo(
+    () => Object.values(ROLE_CHECKSHEETS).flat().length,
+    []
+  );
+
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
     setFormData(prev => ({ ...prev, [name]: value }));
-    
-    // Clear error saat user mulai mengetik
+
     if (errors[name as keyof FormErrors]) {
       setErrors(prev => ({ ...prev, [name]: undefined }));
     }
     if (errors.general) {
       setErrors(prev => ({ ...prev, general: undefined }));
     }
+
+    if (name === "role") {
+      setFormData(prev => ({ ...prev, checksheets: [] }));
+      setErrors(prev => ({ ...prev, checksheets: undefined }));
+    }
+  };
+
+  const handleChecksheetToggle = (checksheetKey: ChecksheetKey) => {
+    setFormData(prev => {
+      const current = prev.checksheets || [];
+      const isSelected = current.includes(checksheetKey);
+      const updated = isSelected
+        ? current.filter(k => k !== checksheetKey)
+        : [...current, checksheetKey];
+      return { ...prev, checksheets: updated };
+    });
+
+    if (errors.checksheets) {
+      setErrors(prev => ({ ...prev, checksheets: undefined }));
+    }
+  };
+
+  const handleSelectAllChecksheets = (selectAll: boolean) => {
+    if (selectAll) {
+      setFormData(prev => ({
+        ...prev,
+        checksheets: availableChecksheets.map(cs => cs.key)
+      }));
+    } else {
+      setFormData(prev => ({ ...prev, checksheets: [] }));
+    }
+    if (errors.checksheets) {
+      setErrors(prev => ({ ...prev, checksheets: undefined }));
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setSuccessMessage("");
-    
-    // Validasi form
+
     const validationErrors = validateForm(formData);
     if (Object.keys(validationErrors).length > 0) {
       setErrors(validationErrors);
+      const firstError = Object.keys(validationErrors)[0];
+      if (firstError === "checksheets") {
+        document.getElementById("checksheet-section")?.scrollIntoView({ behavior: "smooth", block: "center" });
+      }
       return;
     }
 
@@ -233,11 +329,18 @@ export default function WorkerRegistrationPage() {
         role: formData.role as GARole,
         password: formData.password,
         confirmPassword: formData.confirmPassword,
+        checksheets: formData.checksheets,
       });
 
       if (result.success) {
-        setSuccessMessage(`✅ "${formData.fullName}" berhasil didaftarkan sebagai ${GA_ROLES.find(r => r.value === formData.role)?.label}!`);
-        // Reset form setelah sukses
+        const selectedRole = GA_ROLES.find(r => r.value === formData.role);
+        const selectedChecks = formData.checksheets
+          .map(key => availableChecksheets.find(cs => cs.key === key)?.label)
+          .filter(Boolean)
+          .join(", ");
+
+        setSuccessMessage(`✅ "${formData.fullName}" berhasil didaftarkan!\n📋 Akses: ${selectedRole?.label} → ${selectedChecks || "Semua checksheet"}`);
+
         setFormData({
           username: "",
           fullName: "",
@@ -246,11 +349,13 @@ export default function WorkerRegistrationPage() {
           confirmPassword: "",
           department: "general-affairs",
           role: "",
+          checksheets: [],
         });
       } else {
         setErrors({ general: result.error || "Pendaftaran gagal!" });
       }
     } catch (err) {
+      console.error("Registration error:", err);
       setErrors({ general: "Terjadi kesalahan sistem. Silakan coba lagi." });
     } finally {
       setLoading(false);
@@ -271,7 +376,6 @@ export default function WorkerRegistrationPage() {
 
   if (!user) return null;
 
-  // ✅ Inline style yang reaktif terhadap sidebarW
   const mainStyle: React.CSSProperties = {
     marginLeft: sidebarW,
     padding: 24,
@@ -281,63 +385,104 @@ export default function WorkerRegistrationPage() {
   };
 
   const selectedRole = GA_ROLES.find(r => r.value === formData.role);
+  const selectedChecksheetDetails = formData.checksheets
+    .map(key => availableChecksheets.find(cs => cs.key === key))
+    .filter(Boolean) as ChecksheetOption[];
+
+  // Step states
+  const step1Done = !!formData.role;
+  const step2Done = formData.checksheets.length > 0;
+  const step2Active = step1Done && !step2Done;
 
   return (
     <>
       <Sidebar userName={user.fullName || user.username} />
       <main className="wr-main" style={mainStyle}>
-        {/* Header */}
+
+        {/* ── HEADER BANNER ── */}
         <div className="wr-header">
-          <div>
-            <h1 className="wr-title">👥 Registrasi Inspector GA</h1>
-            <p className="wr-subtitle">Daftarkan pekerja dengan pembagian 5 kategori checksheet</p>
+          <div className="wr-header-banner">
+            <div className="wr-header-banner-bg" />
+            <div className="wr-header-content">
+              <div className="wr-header-left">
+                <div className="wr-header-icon-wrap">
+                  <span style={{ fontSize: 30, lineHeight: 1 }}>👥</span>
+                </div>
+                <div>
+                  <h1 className="wr-title">Registrasi Inspector GA</h1>
+                  <p className="wr-subtitle">Atur akses granular: Role + Checksheet spesifik per worker</p>
+                </div>
+              </div>
+              <div className="wr-header-right">
+                <div className="wr-stat-badge">
+                  <span className="wr-stat-number">{GA_ROLES.length}</span>
+                  <span className="wr-stat-label">Kategori Role</span>
+                </div>
+                <div className="wr-stat-badge">
+                  <span className="wr-stat-number">{totalChecksheets}</span>
+                  <span className="wr-stat-label">Total Checksheet</span>
+                </div>
+                <button className="wr-back-btn" onClick={() => router.back()} title="Kembali">
+                  ← Kembali
+                </button>
+              </div>
+            </div>
           </div>
-          <button 
-            className="wr-back-btn"
-            onClick={() => router.back()}
-            title="Kembali"
-          >
-            ← Kembali
-          </button>
         </div>
 
-        {/* Success Message */}
+        {/* ── SUCCESS MESSAGE ── */}
         {successMessage && (
           <div className="wr-success">
             <span>✨</span>
-            <p>{successMessage}</p>
+            <pre style={{ margin: 0, whiteSpace: "pre-wrap", fontFamily: "inherit" }}>{successMessage}</pre>
             <button onClick={() => setSuccessMessage("")}>✕</button>
           </div>
         )}
 
-        {/* Form Card */}
+        {/* ── FORM CARD ── */}
         <div className="wr-card">
           <div className="wr-card-header">
             <h2>📝 Form Pendaftaran Inspector GA</h2>
-            <p className="wr-card-desc">Pilih kategori checksheet yang akan menjadi tanggung jawab pekerja</p>
+            <p className="wr-card-desc">Ikuti 2 langkah berikut untuk mengatur akses worker</p>
           </div>
 
           <form className="wr-form" onSubmit={handleSubmit}>
             {/* General Error */}
-            {errors.general && (
-              <div className="wr-error-global">
-                ⚠️ {errors.general}
-              </div>
-            )}
+            {errors.general && <div className="wr-error-global">⚠️ {errors.general}</div>}
 
+            {/* ── STEP INDICATOR ── */}
+            <div className="step-indicator">
+              {/* Step 1 */}
+              <div className={`step-item ${step1Done ? "completed" : "active"}`}>
+                <div className="step-number">
+                  {step1Done ? "✓" : "1"}
+                </div>
+                <div className="step-label">Pilih Role</div>
+              </div>
+
+              {/* Connector */}
+              <div className={`step-connector ${step1Done ? "done" : ""}`} />
+
+              {/* Step 2 */}
+              <div className={`step-item ${step2Done ? "completed" : step2Active ? "active" : ""}`}>
+                <div className="step-number">
+                  {step2Done ? "✓" : "2"}
+                </div>
+                <div className="step-label">Pilih Checksheet</div>
+              </div>
+            </div>
+
+            {/* ── FORM GRID ── */}
             <div className="wr-form-grid">
+
               {/* Username */}
               <div className="wr-form-group">
                 <label htmlFor="username">Username <span className="required">*</span></label>
                 <input
-                  id="username"
-                  type="text"
-                  name="username"
+                  id="username" type="text" name="username"
                   placeholder="contoh: ga_fire01"
-                  value={formData.username}
-                  onChange={handleChange}
-                  disabled={loading}
-                  className={errors.username ? "error" : ""}
+                  value={formData.username} onChange={handleChange}
+                  disabled={loading} className={errors.username ? "error" : ""}
                 />
                 {errors.username && <span className="error-text">{errors.username}</span>}
               </div>
@@ -346,14 +491,10 @@ export default function WorkerRegistrationPage() {
               <div className="wr-form-group">
                 <label htmlFor="fullName">Nama Lengkap <span className="required">*</span></label>
                 <input
-                  id="fullName"
-                  type="text"
-                  name="fullName"
+                  id="fullName" type="text" name="fullName"
                   placeholder="Nama lengkap pekerja"
-                  value={formData.fullName}
-                  onChange={handleChange}
-                  disabled={loading}
-                  className={errors.fullName ? "error" : ""}
+                  value={formData.fullName} onChange={handleChange}
+                  disabled={loading} className={errors.fullName ? "error" : ""}
                 />
                 {errors.fullName && <span className="error-text">{errors.fullName}</span>}
               </div>
@@ -362,49 +503,48 @@ export default function WorkerRegistrationPage() {
               <div className="wr-form-group">
                 <label htmlFor="nik">NIK <span className="required">*</span></label>
                 <input
-                  id="nik"
-                  type="text"
-                  name="nik"
+                  id="nik" type="text" name="nik"
                   placeholder="Nomor Induk Karyawan"
-                  value={formData.nik}
-                  onChange={handleChange}
-                  disabled={loading}
-                  className={errors.nik ? "error" : ""}
+                  value={formData.nik} onChange={handleChange}
+                  disabled={loading} className={errors.nik ? "error" : ""}
                 />
                 {errors.nik && <span className="error-text">{errors.nik}</span>}
               </div>
 
-              {/* Department - Fixed to GA */}
+              {/* Department */}
               <div className="wr-form-group">
                 <label>Departemen <span className="required">*</span></label>
                 <div className="fixed-field">
                   <span className="fixed-value">🏢 General Affairs (GA)</span>
                   <input type="hidden" name="department" value={formData.department} />
                 </div>
-                <p className="hint-text">Semua Inspector GA berada di departemen General Affairs</p>
               </div>
 
-              {/* Role - 5 Categories */}
-              <div className="wr-form-group full-width">
-                <label htmlFor="role">Kategori Checksheet <span className="required">*</span></label>
+              {/* ══════════════════════════════════════════════════ */}
+              {/* STEP 1: ROLE SELECTION                            */}
+              {/* ══════════════════════════════════════════════════ */}
+              <div className="wr-form-group full-width step-section">
+                <div className="step-section-header">
+                  <div className="step-badge step-badge-1">STEP 1</div>
+                  <label>Pilih Kategori Role <span className="required">*</span></label>
+                </div>
+                <p className="step-description">Pilih salah satu kategori role yang sesuai dengan tugas worker</p>
+
                 <div className="role-grid">
                   {GA_ROLES.map(role => (
-                    <label 
-                      key={role.value} 
-                      className={`role-card ${formData.role === role.value ? 'selected' : ''}`}
+                    <label
+                      key={role.value}
+                      className={`role-card ${formData.role === role.value ? "selected" : ""}`}
                     >
                       <input
-                        type="radio"
-                        name="role"
-                        value={role.value}
+                        type="radio" name="role" value={role.value}
                         checked={formData.role === role.value}
-                        onChange={handleChange}
-                        disabled={loading}
+                        onChange={handleChange} disabled={loading}
                         className="role-radio"
                       />
                       <div className="role-card-content">
                         <span className="role-icon">{role.icon}</span>
-                        <span className="role-name">{role.label.split(' - ')[1]}</span>
+                        <span className="role-name">{role.label.split(" - ")[1]}</span>
                         <span className="role-category">{role.category}</span>
                         <span className="role-desc">{role.desc}</span>
                       </div>
@@ -414,26 +554,111 @@ export default function WorkerRegistrationPage() {
                 {errors.role && <span className="error-text">{errors.role}</span>}
               </div>
 
+              {/* ══════════════════════════════════════════════════ */}
+              {/* STEP 2: CHECKSHEET SELECTION                      */}
+              {/* ══════════════════════════════════════════════════ */}
+              {formData.role && (
+                <div
+                  className="wr-form-group full-width step-section checksheet-step"
+                  id="checksheet-section"
+                >
+                  <div className="step-section-header">
+                    <div className="step-badge step-badge-2">STEP 2</div>
+                    <label>Pilih Checksheet yang Diizinkan <span className="required">*</span></label>
+                  </div>
+
+                  <div className="checksheet-info-banner">
+                    <div className="banner-icon">🎯</div>
+                    <div className="banner-content">
+                      <strong>Role Terpilih: {selectedRole?.label}</strong>
+                      <p>Tersedia <strong>{availableChecksheets.length} checksheet</strong>. Klik card untuk memilih checksheet yang boleh diakses worker ini.</p>
+                    </div>
+                  </div>
+
+                  <div className="checksheet-header">
+                    <div className="checksheet-counter">
+                      <span className={`counter-badge ${formData.checksheets.length > 0 ? "has-selection" : ""}`}>
+                        {formData.checksheets.length}
+                      </span>
+                      <span className="counter-text">dari {availableChecksheets.length} checksheet dipilih</span>
+                    </div>
+                    <div className="checksheet-actions">
+                      <button type="button" className="btn-sm btn-outline" onClick={() => handleSelectAllChecksheets(true)}>✓ Pilih Semua</button>
+                      <button type="button" className="btn-sm btn-outline" onClick={() => handleSelectAllChecksheets(false)}>✗ Kosongkan</button>
+                    </div>
+                  </div>
+
+                  <div className="checksheet-grid">
+                    {availableChecksheets.map(cs => {
+                      const isSelected = formData.checksheets.includes(cs.key);
+                      const isExpanded = expandedChecksheet === cs.key;
+                      return (
+                        <label key={cs.key} className={`checksheet-card ${isSelected ? "selected" : ""}`}>
+                          <input
+                            type="checkbox"
+                            checked={isSelected}
+                            onChange={() => handleChecksheetToggle(cs.key)}
+                            disabled={loading}
+                            className="checksheet-checkbox"
+                          />
+                          <div className="checksheet-card-content">
+                            <div className="checksheet-main">
+                              <span className="checksheet-icon">{cs.icon}</span>
+                              <span className="checksheet-label">{cs.label}</span>
+                              <div className={`custom-checkbox ${isSelected ? "checked" : ""}`}>
+                                {isSelected && <span>✓</span>}
+                              </div>
+                            </div>
+                            <p className="checksheet-desc">{cs.description}</p>
+
+                            <button
+                              type="button"
+                              className="checksheet-expand-btn"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setExpandedChecksheet(isExpanded ? null : cs.key);
+                              }}
+                            >
+                              {isExpanded ? "▲ Sembunyikan detail" : "▼ Lihat detail"}
+                            </button>
+
+                            {isExpanded && (
+                              <div className="checksheet-details">
+                                <div className="detail-row">
+                                  <strong>Path:</strong>
+                                  <code>{cs.path}</code>
+                                </div>
+                                <div className="detail-row">
+                                  <strong>Key:</strong>
+                                  <code>{cs.key}</code>
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        </label>
+                      );
+                    })}
+                  </div>
+
+                  {errors.checksheets && <span className="error-text">{errors.checksheets}</span>}
+
+                  <div className="checksheet-hint">
+                    💡 <strong>Tips:</strong> Worker hanya akan melihat dan dapat mengisi checksheet yang Anda pilih di atas.
+                  </div>
+                </div>
+              )}
+
               {/* Password */}
               <div className="wr-form-group">
                 <label htmlFor="password">Password <span className="required">*</span></label>
                 <div className="password-wrapper">
                   <input
-                    id="password"
-                    type={showPassword ? "text" : "password"}
-                    name="password"
+                    id="password" type={showPassword ? "text" : "password"} name="password"
                     placeholder="Minimal 6 karakter"
-                    value={formData.password}
-                    onChange={handleChange}
-                    disabled={loading}
-                    className={errors.password ? "error" : ""}
+                    value={formData.password} onChange={handleChange}
+                    disabled={loading} className={errors.password ? "error" : ""}
                   />
-                  <button
-                    type="button"
-                    className="toggle-password"
-                    onClick={() => setShowPassword(!showPassword)}
-                    disabled={loading}
-                  >
+                  <button type="button" className="toggle-password" onClick={() => setShowPassword(!showPassword)} disabled={loading}>
                     {showPassword ? "🙈" : "👁️"}
                   </button>
                 </div>
@@ -445,21 +670,12 @@ export default function WorkerRegistrationPage() {
                 <label htmlFor="confirmPassword">Konfirmasi Password <span className="required">*</span></label>
                 <div className="password-wrapper">
                   <input
-                    id="confirmPassword"
-                    type={showConfirmPassword ? "text" : "password"}
-                    name="confirmPassword"
+                    id="confirmPassword" type={showConfirmPassword ? "text" : "password"} name="confirmPassword"
                     placeholder="Ulangi password"
-                    value={formData.confirmPassword}
-                    onChange={handleChange}
-                    disabled={loading}
-                    className={errors.confirmPassword ? "error" : ""}
+                    value={formData.confirmPassword} onChange={handleChange}
+                    disabled={loading} className={errors.confirmPassword ? "error" : ""}
                   />
-                  <button
-                    type="button"
-                    className="toggle-password"
-                    onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                    disabled={loading}
-                  >
+                  <button type="button" className="toggle-password" onClick={() => setShowConfirmPassword(!showConfirmPassword)} disabled={loading}>
                     {showConfirmPassword ? "🙈" : "👁️"}
                   </button>
                 </div>
@@ -467,35 +683,45 @@ export default function WorkerRegistrationPage() {
               </div>
             </div>
 
-            {/* Selected Role Preview */}
-            {selectedRole && (
+            {/* ── SELECTED PREVIEW ── */}
+            {(selectedRole || selectedChecksheetDetails.length > 0) && (
               <div className="role-preview">
-                <h4>✅ Kategori Terpilih:</h4>
-                <div className="preview-card">
-                  <span className="preview-icon">{selectedRole.icon}</span>
-                  <div>
-                    <strong>{selectedRole.label}</strong>
-                    <p>{selectedRole.desc}</p>
-                  </div>
+                <h4>✅ Ringkasan Konfigurasi Akses:</h4>
+                <div className="preview-grid">
+                  {selectedRole && (
+                    <div className="preview-item">
+                      <span className="preview-icon">{selectedRole.icon}</span>
+                      <div>
+                        <strong>Role:</strong> {selectedRole.label}
+                      </div>
+                    </div>
+                  )}
+                  {selectedChecksheetDetails.length > 0 && (
+                    <div className="preview-item full">
+                      <strong>📋 Checksheet Diizinkan ({selectedChecksheetDetails.length}):</strong>
+                      <div className="checksheet-tags">
+                        {selectedChecksheetDetails.map(cs => (
+                          <span key={cs.key} className="checksheet-tag">
+                            {cs.icon} {cs.label.split(" - ")[1] || cs.label}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
             )}
 
-            {/* Submit Button */}
+            {/* ── SUBMIT ACTIONS ── */}
             <div className="wr-form-actions">
-              <button 
-                type="button" 
+              <button
+                type="button"
                 className="btn-secondary"
                 onClick={() => {
                   if (confirm("Reset semua field?")) {
                     setFormData({
-                      username: "",
-                      fullName: "",
-                      nik: "",
-                      password: "",
-                      confirmPassword: "",
-                      department: "general-affairs",
-                      role: "",
+                      username: "", fullName: "", nik: "", password: "", confirmPassword: "",
+                      department: "general-affairs", role: "", checksheets: [],
                     });
                     setErrors({});
                   }
@@ -505,28 +731,26 @@ export default function WorkerRegistrationPage() {
                 🔄 Reset
               </button>
               <button type="submit" className="btn-primary" disabled={loading}>
-                {loading ? (
-                  <>
-                    <span className="spinner" />
-                    Memproses...
-                  </>
-                ) : (
-                  "✅ Daftarkan Inspector GA"
-                )}
+                {loading ? <><span className="spinner" /> Memproses...</> : "✅ Daftarkan Inspector GA"}
               </button>
             </div>
           </form>
         </div>
 
-        {/* Info Panel */}
+        {/* ── INFO PANEL ── */}
         <div className="wr-info-panel">
-          <h3>📋 Panduan Pembagian Role Inspector GA</h3>
+          <h3>📋 Panduan Granular Permission</h3>
           <div className="info-grid">
             {GA_ROLES.map((role, idx) => (
               <div key={role.value} className="info-item">
-                <strong>{role.icon} {idx + 1}. {role.label.split(' - ')[1]}</strong>
-                <p>{role.desc}</p>
-                <small>Role: <code>{role.value}</code></small>
+                <strong>{role.icon} {idx + 1}. {role.label.split(" - ")[1]}</strong>
+                <p><strong>Checksheet tersedia:</strong></p>
+                <ul className="checksheet-list">
+                  {ROLE_CHECKSHEETS[role.value].map(cs => (
+                    <li key={cs.key}><small>{cs.icon} {cs.label}</small></li>
+                  ))}
+                </ul>
+                <small>Role key: <code>{role.value}</code></small>
               </div>
             ))}
           </div>
@@ -534,7 +758,9 @@ export default function WorkerRegistrationPage() {
       </main>
 
       <style jsx>{`
-        /* ── Main Layout ── */
+        /* ════════════════════════════════════════════════════════════
+           MAIN LAYOUT
+        ════════════════════════════════════════════════════════════ */
         .wr-main {
           padding: 24px;
           min-height: 100vh;
@@ -542,31 +768,106 @@ export default function WorkerRegistrationPage() {
           transition: margin-left 0.3s cubic-bezier(0.4, 0, 0.2, 1);
         }
 
-        /* ── Header ── */
+        /* ════════════════════════════════════════════════════════════
+           HEADER BANNER
+        ════════════════════════════════════════════════════════════ */
         .wr-header {
+          margin-bottom: 24px;
+        }
+        .wr-header-banner {
+          position: relative;
+          overflow: hidden;
+          background: linear-gradient(135deg, #1e293b 0%, #1e3a5f 55%, #1565c0 100%);
+          border-radius: 16px;
+          box-shadow: 0 6px 28px rgba(21, 101, 192, 0.28);
+        }
+        .wr-header-banner-bg {
+          position: absolute;
+          inset: 0;
+          background-image:
+            radial-gradient(circle at 18% 60%, rgba(30, 136, 229, 0.18) 0%, transparent 55%),
+            radial-gradient(circle at 85% 15%, rgba(255, 255, 255, 0.06) 0%, transparent 40%),
+            radial-gradient(circle at 50% 100%, rgba(255, 255, 255, 0.03) 0%, transparent 50%);
+          pointer-events: none;
+        }
+        .wr-header-content {
+          position: relative;
           display: flex;
           align-items: center;
           justify-content: space-between;
+          padding: 22px 28px;
           gap: 16px;
-          margin-bottom: 24px;
           flex-wrap: wrap;
         }
+        .wr-header-left {
+          display: flex;
+          align-items: center;
+          gap: 18px;
+        }
+        .wr-header-icon-wrap {
+          width: 58px;
+          height: 58px;
+          background: rgba(255, 255, 255, 0.13);
+          border: 1.5px solid rgba(255, 255, 255, 0.22);
+          border-radius: 14px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          flex-shrink: 0;
+        }
         .wr-title {
-          margin: 0 0 4px;
-          font-size: 22px;
+          margin: 0 0 5px;
+          font-size: 20px;
           font-weight: 700;
-          color: #1e293b;
+          color: #ffffff;
+          letter-spacing: -0.3px;
         }
         .wr-subtitle {
           margin: 0;
-          font-size: 14px;
-          color: #64748b;
+          font-size: 13px;
+          color: rgba(255, 255, 255, 0.62);
+        }
+        .wr-header-right {
+          display: flex;
+          align-items: center;
+          gap: 10px;
+          flex-wrap: wrap;
+        }
+        .wr-stat-badge {
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          background: rgba(255, 255, 255, 0.1);
+          border: 1px solid rgba(255, 255, 255, 0.16);
+          border-radius: 10px;
+          padding: 10px 20px;
+          min-width: 76px;
+          transition: background 0.2s;
+        }
+        .wr-stat-badge:hover {
+          background: rgba(255, 255, 255, 0.16);
+        }
+        .wr-stat-number {
+          font-size: 24px;
+          font-weight: 800;
+          color: #ffffff;
+          line-height: 1;
+          letter-spacing: -1px;
+        }
+        .wr-stat-label {
+          font-size: 10px;
+          color: rgba(255, 255, 255, 0.58);
+          font-weight: 500;
+          margin-top: 3px;
+          white-space: nowrap;
+          text-transform: uppercase;
+          letter-spacing: 0.3px;
         }
         .wr-back-btn {
           padding: 10px 18px;
-          background: #f1f5f9;
-          color: #475569;
-          border: 2px solid #e2e8f0;
+          background: rgba(255, 255, 255, 0.12);
+          color: #ffffff;
+          border: 1px solid rgba(255, 255, 255, 0.2);
           border-radius: 10px;
           font-size: 13px;
           font-weight: 600;
@@ -575,14 +876,16 @@ export default function WorkerRegistrationPage() {
           white-space: nowrap;
         }
         .wr-back-btn:hover {
-          background: #e2e8f0;
-          border-color: #cbd5e1;
+          background: rgba(255, 255, 255, 0.22);
+          border-color: rgba(255, 255, 255, 0.35);
         }
 
-        /* ── Success Message ── */
+        /* ════════════════════════════════════════════════════════════
+           SUCCESS MESSAGE
+        ════════════════════════════════════════════════════════════ */
         .wr-success {
           display: flex;
-          align-items: center;
+          align-items: flex-start;
           gap: 12px;
           background: linear-gradient(135deg, #dcfce7, #bbf7d0);
           border-left: 4px solid #22c55e;
@@ -591,12 +894,13 @@ export default function WorkerRegistrationPage() {
           margin-bottom: 20px;
           animation: slideIn 0.3s ease;
         }
-        .wr-success p {
+        .wr-success pre {
           margin: 0;
-          font-size: 14px;
+          font-size: 13px;
           color: #166534;
           font-weight: 500;
           flex: 1;
+          line-height: 1.5;
         }
         .wr-success button {
           background: none;
@@ -610,15 +914,17 @@ export default function WorkerRegistrationPage() {
         .wr-success button:hover { opacity: 1; }
         @keyframes slideIn {
           from { opacity: 0; transform: translateY(-10px); }
-          to { opacity: 1; transform: translateY(0); }
+          to   { opacity: 1; transform: translateY(0); }
         }
 
-        /* ── Form Card ── */
+        /* ════════════════════════════════════════════════════════════
+           FORM CARD
+        ════════════════════════════════════════════════════════════ */
         .wr-card {
           background: white;
           border-radius: 16px;
           padding: 24px;
-          box-shadow: 0 2px 12px rgba(0,0,0,0.06);
+          box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
           margin-bottom: 24px;
           border: 2px solid #f1f5f9;
         }
@@ -639,7 +945,95 @@ export default function WorkerRegistrationPage() {
           color: #64748b;
         }
 
-        /* ── Form Grid ── */
+        /* ════════════════════════════════════════════════════════════
+           STEP INDICATOR  (fixed — no font-size:0 trick)
+        ════════════════════════════════════════════════════════════ */
+        .step-indicator {
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          gap: 0;
+          margin-bottom: 28px;
+          padding: 20px 32px;
+          background: linear-gradient(135deg, #f8fafc, #f1f5f9);
+          border-radius: 12px;
+          border: 2px solid #e2e8f0;
+        }
+
+        /* Default: dimmed / not yet reached */
+        .step-item {
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          gap: 6px;
+          opacity: 0.35;
+          transition: opacity 0.3s, transform 0.3s;
+        }
+        .step-item.active,
+        .step-item.completed {
+          opacity: 1;
+        }
+
+        /* The circle */
+        .step-number {
+          width: 38px;
+          height: 38px;
+          border-radius: 50%;
+          background: #e2e8f0;
+          color: #64748b;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          font-weight: 700;
+          font-size: 15px;       /* always visible — no font-size:0 */
+          transition: all 0.3s;
+          border: 2px solid transparent;
+        }
+
+        /* Active state: blue */
+        .step-item.active .step-number {
+          background: linear-gradient(135deg, #1e88e5, #1565c0);
+          color: white;
+          box-shadow: 0 4px 14px rgba(30, 136, 229, 0.35);
+          border-color: #1e88e5;
+        }
+
+        /* Completed state: green — checkmark rendered via JSX, NOT ::after */
+        .step-item.completed .step-number {
+          background: linear-gradient(135deg, #22c55e, #16a34a);
+          color: white;
+          box-shadow: 0 4px 14px rgba(34, 197, 94, 0.3);
+          border-color: #22c55e;
+          font-size: 16px;       /* keep font-size normal so ✓ is visible */
+        }
+
+        /* Labels */
+        .step-label {
+          font-size: 12px;
+          font-weight: 600;
+          color: #94a3b8;
+          transition: color 0.3s;
+        }
+        .step-item.active .step-label    { color: #1e88e5; }
+        .step-item.completed .step-label { color: #16a34a; }
+
+        /* Connector line */
+        .step-connector {
+          flex: 1;
+          max-width: 120px;
+          height: 3px;
+          background: #e2e8f0;
+          margin: 0 16px 20px;
+          border-radius: 2px;
+          transition: background 0.4s;
+        }
+        .step-connector.done {
+          background: linear-gradient(90deg, #22c55e, #86efac);
+        }
+
+        /* ════════════════════════════════════════════════════════════
+           FORM GRID
+        ════════════════════════════════════════════════════════════ */
         .wr-form-grid {
           display: grid;
           grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
@@ -651,9 +1045,7 @@ export default function WorkerRegistrationPage() {
           flex-direction: column;
           gap: 6px;
         }
-        .wr-form-group.full-width {
-          grid-column: 1 / -1;
-        }
+        .wr-form-group.full-width { grid-column: 1 / -1; }
         .wr-form-group label {
           font-size: 13px;
           font-weight: 600;
@@ -663,7 +1055,6 @@ export default function WorkerRegistrationPage() {
           gap: 4px;
         }
         .required { color: #ef4444; }
-        
         .wr-form-group input,
         .wr-form-group select {
           padding: 12px 14px;
@@ -677,15 +1068,14 @@ export default function WorkerRegistrationPage() {
         .wr-form-group input:focus,
         .wr-form-group select:focus {
           border-color: #1e88e5;
-          box-shadow: 0 0 0 3px rgba(30,136,229,0.15);
+          box-shadow: 0 0 0 3px rgba(30, 136, 229, 0.15);
         }
         .wr-form-group input.error,
         .wr-form-group select.error {
           border-color: #ef4444;
           background: #fef2f2;
         }
-        .wr-form-group input:disabled,
-        .wr-form-group select:disabled {
+        .wr-form-group input:disabled {
           background: #f8fafc;
           color: #94a3b8;
           cursor: not-allowed;
@@ -695,14 +1085,8 @@ export default function WorkerRegistrationPage() {
           color: #ef4444;
           font-weight: 500;
         }
-        .hint-text {
-          font-size: 11px;
-          color: #94a3b8;
-          margin: 4px 0 0;
-          font-style: italic;
-        }
 
-        /* ── Fixed Field ── */
+        /* ── Fixed Department Field ── */
         .fixed-field {
           padding: 12px 14px;
           border: 2px solid #e2e8f0;
@@ -718,7 +1102,62 @@ export default function WorkerRegistrationPage() {
           gap: 6px;
         }
 
-        /* ── Role Grid Cards ── */
+        /* ════════════════════════════════════════════════════════════
+           STEP SECTIONS
+        ════════════════════════════════════════════════════════════ */
+        .step-section {
+          background: #fafbfc;
+          border: 2px solid #e2e8f0;
+          border-radius: 12px;
+          padding: 20px;
+          margin-top: 8px;
+        }
+        .step-section-header {
+          display: flex;
+          align-items: center;
+          gap: 12px;
+          margin-bottom: 6px;
+        }
+        .step-badge {
+          padding: 4px 12px;
+          border-radius: 20px;
+          font-size: 11px;
+          font-weight: 700;
+          letter-spacing: 0.5px;
+        }
+        .step-badge-1 {
+          background: linear-gradient(135deg, #1e88e5, #1565c0);
+          color: white;
+        }
+        .step-badge-2 {
+          background: linear-gradient(135deg, #8b5cf6, #7c3aed);
+          color: white;
+        }
+        .step-section-header label {
+          font-size: 15px;
+          font-weight: 700;
+          color: #1e293b;
+          margin: 0;
+        }
+        .step-description {
+          margin: 0 0 16px;
+          font-size: 12px;
+          color: #64748b;
+          padding-left: 68px;
+        }
+        .checksheet-step {
+          animation: slideDown 0.35s ease;
+          border-color: #a78bfa;
+          background: linear-gradient(135deg, #faf5ff, #f3e8ff);
+        }
+        @keyframes slideDown {
+          from { opacity: 0; transform: translateY(-16px); }
+          to   { opacity: 1; transform: translateY(0); }
+        }
+
+        /* ════════════════════════════════════════════════════════════
+           ROLE CARDS
+        ════════════════════════════════════════════════════════════ */
         .role-grid {
           display: grid;
           grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
@@ -733,18 +1172,19 @@ export default function WorkerRegistrationPage() {
           background: white;
           transition: all 0.2s;
           display: flex;
-          align-items: center;
+          align-items: flex-start;
           gap: 10px;
         }
         .role-card:hover {
           border-color: #1e88e5;
           background: #eff6ff;
           transform: translateY(-2px);
+          box-shadow: 0 4px 12px rgba(30, 136, 229, 0.12);
         }
         .role-card.selected {
           border-color: #1e88e5;
           background: #dbeafe;
-          box-shadow: 0 4px 12px rgba(30,136,229,0.2);
+          box-shadow: 0 4px 14px rgba(30, 136, 229, 0.22);
         }
         .role-radio {
           position: absolute;
@@ -754,29 +1194,235 @@ export default function WorkerRegistrationPage() {
         .role-card-content {
           display: flex;
           flex-direction: column;
-          gap: 2px;
+          gap: 3px;
           min-width: 0;
         }
-        .role-icon {
-          font-size: 18px;
+        .role-icon  { font-size: 18px; }
+        .role-name  { font-size: 13px; font-weight: 700; color: #1e293b; }
+        .role-category { font-size: 11px; color: #64748b; font-weight: 500; }
+        .role-desc  { font-size: 10px; color: #94a3b8; line-height: 1.4; margin-top: 2px; }
+
+        /* ════════════════════════════════════════════════════════════
+           CHECKSHEET INFO BANNER
+        ════════════════════════════════════════════════════════════ */
+        .checksheet-info-banner {
+          display: flex;
+          align-items: center;
+          gap: 14px;
+          background: linear-gradient(135deg, #eff6ff, #dbeafe);
+          border: 2px solid #93c5fd;
+          border-radius: 10px;
+          padding: 14px 18px;
+          margin-bottom: 16px;
         }
-        .role-name {
+        .banner-icon { font-size: 26px; flex-shrink: 0; }
+        .banner-content strong {
+          display: block;
+          color: #1e40af;
           font-size: 13px;
-          font-weight: 700;
-          color: #1e293b;
+          margin-bottom: 4px;
         }
-        .role-category {
-          font-size: 11px;
+        .banner-content p {
+          margin: 0;
+          color: #3b82f6;
+          font-size: 12px;
+          line-height: 1.5;
+        }
+
+        /* ════════════════════════════════════════════════════════════
+           CHECKSHEET HEADER & COUNTER
+        ════════════════════════════════════════════════════════════ */
+        .checksheet-header {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 12px;
+          margin-bottom: 14px;
+          flex-wrap: wrap;
+        }
+        .checksheet-counter {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+        }
+        .counter-badge {
+          background: #e2e8f0;
+          color: #64748b;
+          font-size: 14px;
+          font-weight: 700;
+          width: 32px;
+          height: 32px;
+          border-radius: 50%;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          transition: all 0.3s;
+        }
+        .counter-badge.has-selection {
+          background: linear-gradient(135deg, #22c55e, #16a34a);
+          color: white;
+          box-shadow: 0 2px 8px rgba(34, 197, 94, 0.3);
+        }
+        .counter-text {
+          font-size: 12px;
           color: #64748b;
           font-weight: 500;
         }
-        .role-desc {
-          font-size: 10px;
-          color: #94a3b8;
-          line-height: 1.3;
+        .checksheet-actions { display: flex; gap: 8px; }
+        .btn-sm {
+          padding: 6px 12px;
+          border-radius: 6px;
+          font-size: 11px;
+          font-weight: 600;
+          cursor: pointer;
+          transition: all 0.2s;
+          border: 1px solid transparent;
+        }
+        .btn-sm.btn-outline {
+          background: white;
+          color: #475569;
+          border: 1px solid #e2e8f0;
+        }
+        .btn-sm.btn-outline:hover {
+          background: #f1f5f9;
+          border-color: #cbd5e1;
         }
 
-        /* ── Password Wrapper ── */
+        /* ════════════════════════════════════════════════════════════
+           CHECKSHEET CARDS
+        ════════════════════════════════════════════════════════════ */
+        .checksheet-grid {
+          display: grid;
+          grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+          gap: 12px;
+        }
+        .checksheet-card {
+          position: relative;
+          cursor: pointer;
+          border: 2px solid #e2e8f0;
+          border-radius: 12px;
+          padding: 14px;
+          background: white;
+          transition: all 0.25s;
+        }
+        .checksheet-card:hover {
+          border-color: #94a3b8;
+          transform: translateY(-2px);
+          box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+        }
+        .checksheet-card.selected {
+          border-color: #22c55e;
+          background: linear-gradient(135deg, #f0fdf4, #dcfce7);
+          box-shadow: 0 4px 14px rgba(34, 197, 94, 0.2);
+        }
+        .checksheet-checkbox {
+          position: absolute;
+          opacity: 0;
+          cursor: pointer;
+        }
+        .checksheet-card-content {
+          display: flex;
+          flex-direction: column;
+          gap: 8px;
+        }
+        .checksheet-main {
+          display: flex;
+          align-items: center;
+          gap: 10px;
+        }
+        .checksheet-icon  { font-size: 20px; }
+        .checksheet-label { font-size: 13px; font-weight: 600; color: #1e293b; flex: 1; }
+
+        /* Custom checkbox */
+        .custom-checkbox {
+          width: 24px;
+          height: 24px;
+          border: 2px solid #cbd5e1;
+          border-radius: 6px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          transition: all 0.2s;
+          background: white;
+          flex-shrink: 0;
+          font-size: 14px;
+          font-weight: 700;
+        }
+        .custom-checkbox.checked {
+          background: linear-gradient(135deg, #22c55e, #16a34a);
+          border-color: #22c55e;
+          color: white;
+          box-shadow: 0 2px 6px rgba(34, 197, 94, 0.3);
+        }
+
+        .checksheet-desc {
+          margin: 0;
+          font-size: 11px;
+          color: #64748b;
+          line-height: 1.4;
+        }
+
+        /* Expand button */
+        .checksheet-expand-btn {
+          margin-top: 4px;
+          padding: 4px 8px;
+          background: #f8fafc;
+          border: 1px solid #e2e8f0;
+          border-radius: 6px;
+          font-size: 10px;
+          color: #64748b;
+          cursor: pointer;
+          transition: all 0.2s;
+          width: 100%;
+        }
+        .checksheet-expand-btn:hover {
+          background: #e2e8f0;
+          color: #475569;
+        }
+        .checksheet-details {
+          margin-top: 8px;
+          padding: 10px;
+          background: #f8fafc;
+          border-radius: 8px;
+          border-left: 3px solid #3b82f6;
+          display: flex;
+          flex-direction: column;
+          gap: 4px;
+          animation: slideDown 0.2s ease;
+        }
+        .detail-row {
+          display: flex;
+          gap: 8px;
+          font-size: 11px;
+        }
+        .detail-row strong {
+          color: #64748b;
+          min-width: 40px;
+        }
+        .checksheet-details code {
+          background: white;
+          padding: 2px 6px;
+          border-radius: 4px;
+          font-size: 10px;
+          color: #0369a1;
+        }
+
+        /* Hint */
+        .checksheet-hint {
+          margin-top: 14px;
+          padding: 12px 16px;
+          background: linear-gradient(135deg, #fef3c7, #fde68a);
+          border: 1px solid #f59e0b;
+          border-radius: 8px;
+          font-size: 12px;
+          color: #92400e;
+          line-height: 1.5;
+        }
+        .checksheet-hint strong { color: #78350f; }
+
+        /* ════════════════════════════════════════════════════════════
+           PASSWORD FIELD
+        ════════════════════════════════════════════════════════════ */
         .password-wrapper {
           position: relative;
           display: flex;
@@ -800,7 +1446,9 @@ export default function WorkerRegistrationPage() {
         .toggle-password:hover { opacity: 1; }
         .toggle-password:disabled { opacity: 0.4; cursor: not-allowed; }
 
-        /* ── Role Preview ── */
+        /* ════════════════════════════════════════════════════════════
+           ROLE PREVIEW SUMMARY
+        ════════════════════════════════════════════════════════════ */
         .role-preview {
           background: #f0f9ff;
           border: 1px solid #bae6fd;
@@ -809,31 +1457,48 @@ export default function WorkerRegistrationPage() {
           margin-bottom: 24px;
         }
         .role-preview h4 {
-          margin: 0 0 10px;
+          margin: 0 0 12px;
           font-size: 13px;
           color: #0369a1;
           font-weight: 600;
         }
-        .preview-card {
+        .preview-grid {
+          display: flex;
+          flex-direction: column;
+          gap: 10px;
+        }
+        .preview-item {
           display: flex;
           align-items: center;
-          gap: 12px;
+          gap: 10px;
         }
-        .preview-icon {
-          font-size: 24px;
+        .preview-item.full {
+          flex-direction: column;
+          align-items: flex-start;
         }
-        .preview-card strong {
-          display: block;
-          font-size: 14px;
-          color: #0c4a6e;
+        .preview-icon { font-size: 20px; }
+        .preview-item strong { font-size: 13px; color: #0c4a6e; }
+        .checksheet-tags {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 6px;
+          margin-top: 6px;
         }
-        .preview-card p {
-          margin: 2px 0 0;
-          font-size: 12px;
-          color: #64748b;
+        .checksheet-tag {
+          background: #dbeafe;
+          color: #1e40af;
+          font-size: 11px;
+          font-weight: 500;
+          padding: 4px 8px;
+          border-radius: 6px;
+          display: flex;
+          align-items: center;
+          gap: 4px;
         }
 
-        /* ── Form Actions ── */
+        /* ════════════════════════════════════════════════════════════
+           FORM ACTIONS
+        ════════════════════════════════════════════════════════════ */
         .wr-form-actions {
           display: flex;
           gap: 12px;
@@ -857,7 +1522,7 @@ export default function WorkerRegistrationPage() {
         }
         .btn-primary:hover:not(:disabled) {
           transform: translateY(-2px);
-          box-shadow: 0 4px 12px rgba(30,136,229,0.3);
+          box-shadow: 0 4px 14px rgba(30, 136, 229, 0.35);
         }
         .btn-primary:disabled {
           opacity: 0.7;
@@ -875,24 +1540,21 @@ export default function WorkerRegistrationPage() {
           cursor: pointer;
           transition: all 0.2s;
         }
-        .btn-secondary:hover:not(:disabled) {
-          background: #e2e8f0;
-        }
-        .btn-secondary:disabled {
-          opacity: 0.6;
-          cursor: not-allowed;
-        }
+        .btn-secondary:hover:not(:disabled) { background: #e2e8f0; }
+        .btn-secondary:disabled { opacity: 0.6; cursor: not-allowed; }
         .spinner {
           width: 16px;
           height: 16px;
-          border: 2px solid rgba(255,255,255,0.3);
+          border: 2px solid rgba(255, 255, 255, 0.3);
           border-top-color: white;
           border-radius: 50%;
           animation: spin 0.8s linear infinite;
         }
         @keyframes spin { to { transform: rotate(360deg); } }
 
-        /* ── Error Global ── */
+        /* ════════════════════════════════════════════════════════════
+           GLOBAL ERROR
+        ════════════════════════════════════════════════════════════ */
         .wr-error-global {
           background: #fef2f2;
           border-left: 4px solid #ef4444;
@@ -904,12 +1566,14 @@ export default function WorkerRegistrationPage() {
           font-weight: 500;
         }
 
-        /* ── Info Panel ── */
+        /* ════════════════════════════════════════════════════════════
+           INFO PANEL
+        ════════════════════════════════════════════════════════════ */
         .wr-info-panel {
           background: white;
           border-radius: 16px;
           padding: 20px 24px;
-          box-shadow: 0 2px 12px rgba(0,0,0,0.06);
+          box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
           border: 2px solid #f1f5f9;
         }
         .wr-info-panel h3 {
@@ -939,7 +1603,15 @@ export default function WorkerRegistrationPage() {
           margin: 0 0 6px;
           font-size: 12px;
           color: #64748b;
-          line-height: 1.4;
+        }
+        .checksheet-list {
+          margin: 0 0 8px;
+          padding-left: 16px;
+        }
+        .checksheet-list li {
+          margin: 2px 0;
+          font-size: 11px;
+          color: #475569;
         }
         .info-item small {
           display: block;
@@ -951,35 +1623,25 @@ export default function WorkerRegistrationPage() {
           width: fit-content;
         }
 
-        /* ── Responsive ── */
+        /* ════════════════════════════════════════════════════════════
+           RESPONSIVE
+        ════════════════════════════════════════════════════════════ */
         @media (max-width: 768px) {
-          .wr-main {
-            margin-left: 0 !important;
-            padding: 12px;
-          }
-          .wr-header {
-            flex-direction: column;
-            align-items: flex-start;
-            gap: 12px;
-          }
-          .wr-title { font-size: 18px; }
+          .wr-main { margin-left: 0 !important; padding: 12px; }
+          .wr-header-content { padding: 16px 18px; flex-direction: column; align-items: flex-start; }
+          .wr-header-right { width: 100%; justify-content: space-between; }
+          .wr-stat-badge { flex: 1; min-width: unset; }
+          .wr-title { font-size: 17px; }
           .wr-subtitle { font-size: 12px; }
-          .wr-form-grid {
-            grid-template-columns: 1fr;
-          }
-          .role-grid {
-            grid-template-columns: 1fr;
-          }
-          .wr-form-actions {
-            flex-direction: column-reverse;
-          }
-          .btn-primary, .btn-secondary {
-            width: 100%;
-            justify-content: center;
-          }
-          .info-grid {
-            grid-template-columns: 1fr;
-          }
+          .wr-form-grid { grid-template-columns: 1fr; }
+          .role-grid, .checksheet-grid { grid-template-columns: 1fr; }
+          .wr-form-actions { flex-direction: column-reverse; }
+          .btn-primary, .btn-secondary { width: 100%; justify-content: center; }
+          .info-grid { grid-template-columns: 1fr; }
+          .checksheet-header { flex-direction: column; align-items: flex-start; }
+          .step-description { padding-left: 0; }
+          .step-indicator { padding: 16px 20px; }
+          .step-connector { max-width: 60px; margin: 0 8px 20px; }
         }
       `}</style>
     </>

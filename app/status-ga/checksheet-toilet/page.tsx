@@ -23,15 +23,17 @@ export default function ChecksheetToiletListPage() {
   }, [user, router, redirected]);
 
   const areas = [
-    { id: "toilet-driver", title: "TOILET - DRIVER", desc: "Toilet laki & perempuan" },
+    { id: "toilet-driver", title: "TOILET - DRIVER", desc: "Toilet umum" },
     { id: "toilet-bea-cukai", title: "TOILET - BEA CUKAI", desc: "Toilet laki & perempuan" },
-    { id: "toilet-parkir", title: "TOILET - PARKIR", desc: "Toilet laki & perempuan" },
+    { id: "toilet-parkir", title: "TOILET - PARKIR", desc: "Toilet umum" },
     { id: "toilet-c2", title: "TOILET - C2", desc: "Toilet wanita" },
     { id: "toilet-c1", title: "TOILET - C1", desc: "Toilet laki & perempuan" },
     { id: "toilet-d", title: "TOILET - D", desc: "Toilet laki & perempuan" },
     { id: "toilet-auditorium", title: "TOILET - AUDITORIUM", desc: "Toilet laki & perempuan" },
     { id: "toilet-whs", title: "TOILET - WHS", desc: "Toilet wanita" },
     { id: "toilet-b1", title: "TOILET - B1", desc: "Toilet laki & perempuan" },
+    { id: "toilet-b2", title: "TOILET - B2", desc: "Toilet wanita" },
+    { id: "toilet-genba-b", title: "TOILET - GENBA B", desc: "Toilet wanita" },
     { id: "toilet-a", title: "TOILET - A", desc: "Toilet laki & perempuan" },
     { id: "toilet-lobby", title: "TOILET - LOBBY", desc: "Toilet laki & perempuan" },
     { id: "toilet-office-main", title: "TOILET - OFFICE MAIN", desc: "Toilet laki & perempuan" },
@@ -397,4 +399,4 @@ export default function ChecksheetToiletListPage() {
       `}</style>
     </div>
   );
-} 
+}

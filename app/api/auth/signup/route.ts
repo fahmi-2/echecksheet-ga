@@ -1,124 +1,124 @@
-// app/api/auth/signup/route.ts
-import { NextRequest, NextResponse } from 'next/server';
-import pool from '@/lib/db';
-import bcrypt from 'bcryptjs';
+import { NextRequest, NextResponse } from "next/server";
+import { Pool } from "pg";
+import bcrypt from "bcrypt";
+import { v4 as uuidv4 } from "uuid";
 
-// 🔐 VALID ROLES - Sinkron dengan frontend
-export const VALID_ROLES = [
-  'group-leader-qa', 
-  'inspector-qa', 
-  'inspector-ga',           // ← Legacy
-  'inspector-ga-fire',      // 🔥 Proteksi Kebakaran & Evakuasi
-  'inspector-ga-equipment', // ⚙️ Pemeliharaan Peralatan
-  'inspector-ga-electrical',// ⚡ Instalasi Listrik
-  'inspector-ga-personal',  // 🦺 Keselamatan Personal & Prasarana
-  'inspector-ga-facility',  // 🧹 Kebersihan Fasilitas
-  'admin', 
-  'eso'
-] as const;
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+});
 
-export type ValidRole = typeof VALID_ROLES[number];
+const VALID_ROLES = [
+  "group-leader-qa",
+  "inspector-qa",
+  "inspector-ga",
+  "inspector-ga-fire",
+  "inspector-ga-equipment",
+  "inspector-ga-electrical",
+  "inspector-ga-personal",
+  "inspector-ga-facility",
+  "eso",
+  "admin",
+  "superadmin",
+];
 
-// 🔗 Mapping Role → Departemen yang Diizinkan
-export const ROLE_DEPARTMENT_MAP: Record<ValidRole, string[]> = {
-  'group-leader-qa': ['quality-assurance'],
-  'inspector-qa': ['quality-assurance'],
-  'inspector-ga': ['general-affairs'],
-  'inspector-ga-fire': ['general-affairs'],
-  'inspector-ga-equipment': ['general-affairs'],
-  'inspector-ga-electrical': ['general-affairs'],
-  'inspector-ga-personal': ['general-affairs'],
-  'inspector-ga-facility': ['general-affairs'],
-  'admin': ['admin'],
-  'eso': ['k3'],
-};
-
-// 🏷️ Label departemen untuk pesan error
-const DEPT_LABELS: Record<string, string> = {
-  'quality-assurance': 'Quality Assurance',
-  'general-affairs': 'General Affairs',
-  'admin': 'Admin',
-  'k3': 'K3/ESO',
-};
+const VALID_CHECKSHEET_KEYS = [
+  "hydrant", "selang-hydrant", "fire-alarm", "smoke-detector", "apar",
+  "emergency-lamp", "exit-lamp-pintu-darurat", "lift-barang",
+  "inspeksi-preventif-lift-barang", "tg-listrik", "panel",
+  "form-inspeksi-stop-kontak", "e-checksheet-apd", "inf-jalan",
+  "inspeksi-apd", "checksheet-toilet"
+];
 
 export async function POST(request: NextRequest) {
+  const client = await pool.connect();
+  
   try {
-    const { username, fullName, nik, department, role, password, confirmPassword } = await request.json();
+    const body = await request.json();
+    const { 
+      username, 
+      fullName, 
+      nik, 
+      department, 
+      role, 
+      password, 
+      confirmPassword,
+      checksheets = []
+    } = body;
 
-    console.log('📝 Signup attempt:', { username, role, department });
+    console.log('📥 [Signup] Request received:', {
+      username,
+      role,
+      checksheetsCount: checksheets?.length || 0
+    });
 
-    // ✅ Validasi required fields
-    if (!username || !fullName || !nik || !department || !role || !password || !confirmPassword) {
+    // Validasi
+    if (!username?.trim() || !fullName?.trim() || !nik?.trim() || !department || !role) {
       return NextResponse.json(
-        { error: 'Semua field wajib diisi!' },
+        { error: "Semua field wajib diisi!" },
         { status: 400 }
       );
     }
 
-    // ✅ Validasi role dengan constant terpusat
-    if (!VALID_ROLES.includes(role as ValidRole)) {
+    if (!VALID_ROLES.includes(role)) {
       return NextResponse.json(
-        { error: 'Role tidak valid!' },
+        { error: "Role tidak valid!" },
         { status: 400 }
       );
     }
 
-    // ✅ Validasi password
-    if (password.length < 6) {
+    if (!password || password.length < 6) {
       return NextResponse.json(
-        { error: 'Password minimal 6 karakter!' },
+        { error: "Password minimal 6 karakter!" },
         { status: 400 }
       );
     }
 
     if (password !== confirmPassword) {
       return NextResponse.json(
-        { error: 'Password dan konfirmasi tidak cocok!' },
+        { error: "Password dan konfirmasi tidak cocok!" },
         { status: 400 }
       );
     }
 
-    // ✅ Validasi role ↔ departemen dengan mapping terpusat
-    const allowedDepts = ROLE_DEPARTMENT_MAP[role as ValidRole];
-    if (!allowedDepts || !allowedDepts.includes(department)) {
-      const deptLabels = (allowedDepts || [])
-        .map(d => DEPT_LABELS[d] || d)
-        .join(', ');
-      
-      return NextResponse.json(
-        { error: `Role ${role} hanya boleh memilih departemen: ${deptLabels}` },
-        { status: 400 }
-      );
+    // Validasi checksheets
+    let validChecksheets: string[] = [];
+    if (Array.isArray(checksheets) && checksheets.length > 0) {
+      validChecksheets = checksheets.filter(key => VALID_CHECKSHEET_KEYS.includes(key));
+      console.log('✅ [Signup] Valid checksheets:', validChecksheets);
     }
 
-    // ✅ PostgreSQL: Cek duplikat username atau NIK
-    const duplicateCheck = await pool.query(
-      `SELECT id FROM users WHERE username = $1 OR nik = $2`,
+    const hashedPassword = await bcrypt.hash(password, 10);
+
+    // Cek duplicate
+    const existingUser = await client.query(
+      "SELECT id FROM users WHERE username = $1 OR nik = $2",
       [username.trim(), nik.trim()]
     );
 
-    if (duplicateCheck.rows.length > 0) {
-      console.log('⚠️ Duplicate user detected:', username.trim());
+    if (existingUser.rows.length > 0) {
       return NextResponse.json(
-        { error: 'Username atau NIK sudah terdaftar!' },
+        { error: "Username atau NIK sudah terdaftar!" },
         { status: 409 }
       );
     }
 
-    // ✅ Hash password
-    const hashedPassword = await bcrypt.hash(password, 10);
+    // ✅ Generate UUID untuk ID
+    const userId = uuidv4();
+    console.log('🆔 [Signup] Generated ID:', userId);
 
-    // ✅ Generate ID unik
-    const userId = `user_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
-
-    console.log('💾 Creating new user:', userId);
-
-    // ✅ PostgreSQL: Simpan ke database dengan RETURNING
-    const insertResult = await pool.query(
-      `INSERT INTO users 
-       (id, username, full_name, nik, department, role, password_hash, is_active, created_at)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, TRUE, CURRENT_TIMESTAMP)
-       RETURNING id, username, full_name, nik, department, role`,
+    // ✅ INSERT dengan ID yang di-generate
+    const result = await client.query(
+      `INSERT INTO users (
+        id,
+        username, 
+        full_name, 
+        nik, 
+        department, 
+        role, 
+        password_hash,
+        checksheets
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8::text[])
+      RETURNING id, username, full_name, nik, department, role, checksheets`,
       [
         userId,
         username.trim(),
@@ -126,57 +126,44 @@ export async function POST(request: NextRequest) {
         nik.trim(),
         department,
         role,
-        hashedPassword
+        hashedPassword,
+        validChecksheets, // ✅ Kirim sebagai array JavaScript langsung
       ]
     );
 
-    const newUser = insertResult.rows[0];
-    console.log('✅ User created successfully:', newUser);
-    
-    // ⚠️ SECURITY: Jangan return password hash
+    const newUser = result.rows[0];
+    console.log('✅ [Signup] User created:', {
+      id: newUser.id,
+      username: newUser.username,
+      role: newUser.role,
+      checksheets: newUser.checksheets
+    });
+
+    return NextResponse.json({
+      success: true,
+      userId: newUser.id,
+      message: "Pendaftaran berhasil!",
+      user: {
+        id: newUser.id,
+        username: newUser.username,
+        fullName: newUser.full_name,
+        nik: newUser.nik,
+        department: newUser.department,
+        role: newUser.role,
+        checksheets: newUser.checksheets || [],
+      }
+    }, { status: 201 });
+
+  } catch (error: any) {
+    console.error("❌ [Signup] Error:", error);
     return NextResponse.json(
       { 
-        success: true, 
-        message: 'Pendaftaran berhasil! Silakan login.',
-        user: {
-          id: newUser.id,
-          username: newUser.username,
-          fullName: newUser.full_name,
-          nik: newUser.nik,
-          department: newUser.department,
-          role: newUser.role,
-        }
+        error: "Terjadi kesalahan server. Silakan coba lagi.",
+        details: error.message 
       },
-      { status: 201 }
-    );
-  } catch (error: any) {
-    console.error('❌ Signup error:', error);
-    
-    // PostgreSQL specific error handling
-    if (error.code === '23505') { // Unique constraint violation
-      return NextResponse.json(
-        { error: 'Username atau NIK sudah terdaftar!' },
-        { status: 409 }
-      );
-    }
-    
-    if (error.code === '23502') { // NOT NULL violation
-      return NextResponse.json(
-        { error: 'Data wajib tidak boleh kosong!' },
-        { status: 400 }
-      );
-    }
-    
-    if (error.code === '28P01') { // Invalid password for PostgreSQL connection
-      return NextResponse.json(
-        { error: 'Kesalahan koneksi database. Hubungi administrator.' },
-        { status: 500 }
-      );
-    }
-    
-    return NextResponse.json(
-      { error: 'Terjadi kesalahan saat pendaftaran. Silakan coba lagi.' },
       { status: 500 }
     );
+  } finally {
+    client.release();
   }
 }

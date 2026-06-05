@@ -220,6 +220,17 @@ export default function ModernHomePage() {
   const currentRole = user.role;
 
   // ─────────────────────────────────────────────────────────────
+  // LOGIC SAPAAN BERDASARKAN ROLE
+  // ─────────────────────────────────────────────────────────────
+  const rolePrefix = isAdminRole(currentRole)
+    ? "Admin"
+    : currentRole?.toLowerCase().includes("inspector")
+    ? "Inspector"
+    : "";
+    
+  const greeting = rolePrefix ? `Halo, ${rolePrefix} ${userName}!` : `Halo, ${userName}!`;
+
+  // ─────────────────────────────────────────────────────────────
   // BUILD CARDS BERDASARKAN ROLE - Menggunakan Type Guards
   // ─────────────────────────────────────────────────────────────
   const getRoleCards = (): CardData[] => {
@@ -294,7 +305,7 @@ export default function ModernHomePage() {
         {/* Welcome Banner */}
         <div className="welcome-banner">
           <div className="welcome-content">
-            <h1 className="welcome-title">👋 Halo, {userName}!</h1>
+            <h1 className="welcome-title">👋 {greeting}</h1>
             <p className="welcome-text">
               {isInspectorGARole(currentRole) && GA_ROLE_CONFIG[currentRole]
                 ? `Anda ditugaskan untuk kategori: ${GA_ROLE_CONFIG[currentRole].title}`

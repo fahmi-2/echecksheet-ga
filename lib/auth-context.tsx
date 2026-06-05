@@ -32,6 +32,7 @@ export interface User {
   nik: string;
   department: string;
   role: Role;
+  checksheets?: string[]; // ✅ FEATURE UPDATE: Menyimpan daftar checksheet yang diizinkan
 }
 
 // 🔹 Interface untuk update user data
@@ -59,6 +60,7 @@ export interface AuthContextType {
       role: Role;
       password: string;
       confirmPassword: string;
+      checksheets?: string[]; // ✅ FEATURE UPDATE
     }
   ) => Promise<{ success: boolean; error?: string }>;
   login: (username: string, password: string) => Promise<{ success: boolean; error?: string }>;
@@ -158,6 +160,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
               nik: user.nik,
               department: user.department,
               role: user.role,
+              checksheets: user.checksheets || [], // ✅ FEATURE UPDATE: Restore checksheets
             };
             
             setCurrentUser(validUser);
@@ -210,6 +213,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             nik: currentUser.nik,
             department: currentUser.department,
             role: currentUser.role,
+            checksheets: currentUser.checksheets, // ✅ FEATURE UPDATE: Save checksheets
           })
         );
         console.log('💾 User data saved:', currentUser.username);
@@ -262,6 +266,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         
         console.log('📡 [fetchUsers] Fetching with headers:', headers);
 
+        // ✅ API UPDATE: Menggunakan prefix /e-checksheet-ga
         const response = await fetch(`/e-checksheet-ga/api/auth/users?${searchParams}`, {
           method: "GET",
           headers: headers,
@@ -302,6 +307,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (!userStr) return { success: false, error: "Not authenticated" };
         const currentUser = JSON.parse(userStr);
 
+        // ✅ API UPDATE: Menggunakan prefix /e-checksheet-ga
         const response = await fetch(`/e-checksheet-ga/api/auth/users/${id}`, {
           method: "PUT",
           headers: {
@@ -333,6 +339,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (!userStr) return { success: false, error: "Not authenticated" };
         const currentUser = JSON.parse(userStr);
 
+        // ✅ API UPDATE: Menggunakan prefix /e-checksheet-ga
         const response = await fetch(`/e-checksheet-ga/api/auth/users/${id}`, {
           method: "DELETE",
           headers: {
@@ -367,6 +374,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       role,
       password,
       confirmPassword,
+      checksheets, // ✅ FEATURE UPDATE
     }: {
       username: string;
       fullName: string;
@@ -375,6 +383,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       role: Role;
       password: string;
       confirmPassword: string;
+      checksheets?: string[];
     }) => {
       // Validasi sisi klien
       if (!username.trim() || !fullName.trim() || !nik.trim() || !department.trim()) {
@@ -415,6 +424,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       try {
         console.log('📤 Sending signup request to API...');
         
+        // ✅ API UPDATE: Menggunakan prefix /e-checksheet-ga
         const response = await fetch('/e-checksheet-ga/api/auth/signup', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -426,6 +436,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             role,
             password,
             confirmPassword,
+            checksheets, // ✅ FEATURE UPDATE
           }),
         });
 
@@ -455,69 +466,90 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // ✅ LOGIN - Kirim ke PostgreSQL API
   // ──────────────────────────────────────────────────────────────────────────
   const login = useCallback(
-    async (username: string, password: string) => {
-      if (!username.trim() || !password) {
-        return { success: false, error: "Username dan password harus diisi!" };
-      }
+  async (username: string, password: string) => {
+    if (!username.trim() || !password) {
+      return { success: false, error: "Username dan password harus diisi!" };
+    }
 
+    try {
+      console.log('📤 [Login] Sending request...');
+      
+      const response = await fetch('/e-checksheet-ga/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          username: username.trim(),
+          password,
+        }),
+      });
+
+      console.log('📥 [Login] Response status:', response.status);
+      
+      // ✅ Get response text first for debugging
+      const responseText = await response.text();
+      console.log('📥 [Login] Response text:', responseText.substring(0, 500));
+
+      let result;
       try {
-        console.log('📤 Sending login request to API...');
-        
-        const response = await fetch('/e-checksheet-ga/api/auth/login', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            username: username.trim(),
-            password,
-          }),
-        });
-
-        const result = await response.json();
-
-        if (!response.ok) {
-          console.error('❌ Login failed:', result.error);
-          
-          if (response.status === 401) {
-            return { success: false, error: result.error || "Username atau password salah!" };
-          }
-          if (response.status === 403) {
-            return { success: false, error: result.error || "Akun tidak aktif!" };
-          }
-          return { success: false, error: result.error || "Login gagal!" };
-        }
-
-        // ✅ Validasi role dari response API
-        if (!isValidRole(result.user.role)) {
-          console.error('❌ Invalid role from API:', result.user.role);
-          return { success: false, error: "Role pengguna tidak valid!" };
-        }
-
-        // Simpan user ke state dan localStorage
-        const safeUser: User = {
-          id: result.user.id,
-          username: result.user.username,
-          fullName: result.user.fullName,
-          nik: result.user.nik,
-          department: result.user.department,
-          role: result.user.role,
+        result = JSON.parse(responseText);
+      } catch (parseError) {
+        console.error('❌ [Login] Failed to parse JSON:', parseError);
+        console.error('❌ [Login] Raw response:', responseText);
+        return { 
+          success: false, 
+          error: "Server mengembalikan response tidak valid. Cek console untuk detail." 
         };
-
-        setCurrentUser(safeUser);
-
-        // Set session token
-        const sessionToken = `sess_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-        localStorage.setItem(SESSION_TOKEN_KEY, sessionToken);
-
-        console.log('✅ Login successful:', safeUser.fullName, 'Role:', safeUser.role);
-        return { success: true };
-        
-      } catch (error) {
-        console.error("❌ Error during login API call:", error);
-        return { success: false, error: "Gagal terhubung ke server. Periksa koneksi Anda." };
       }
-    },
-    []
-  );
+
+      if (!response.ok) {
+        console.error('❌ [Login] API error:', result);
+        return { 
+          success: false, 
+          error: result.error || result.details || "Login gagal!" 
+        };
+      }
+
+      // ✅ Validasi role dari response API
+      if (!result.user?.role) {
+        console.error('❌ [Login] Missing role in response');
+        return { success: false, error: "Data user tidak valid!" };
+      }
+
+      if (!isValidRole(result.user.role)) {
+        console.error('❌ [Login] Invalid role:', result.user.role);
+        return { success: false, error: "Role pengguna tidak valid!" };
+      }
+
+      // ✅ Build safeUser dengan checksheets dari API response
+      const safeUser: User = {
+        id: result.user.id,
+        username: result.user.username,
+        fullName: result.user.fullName,
+        nik: result.user.nik,
+        department: result.user.department,
+        role: result.user.role,
+        checksheets: result.user.checksheets || [], 
+      };
+
+      setCurrentUser(safeUser);
+
+      // Set session token
+      const sessionToken = `sess_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+      localStorage.setItem(SESSION_TOKEN_KEY, sessionToken);
+
+      console.log('✅ [Login] Success:', safeUser.fullName, 'Role:', safeUser.role);
+      return { success: true };
+      
+    } catch (error: any) {
+      console.error("❌ [Login] Network error:", error);
+      return { 
+        success: false, 
+        error: `Gagal terhubung ke server: ${error.message}` 
+      };
+    }
+  },
+  []
+);
 
   const logout = useCallback(() => {
     console.log('👋 Logging out user...');
@@ -602,6 +634,7 @@ export async function getAuth(request?: Request): Promise<{ user: User | null; e
           nik: currentUser.nik,
           department: currentUser.department,
           role: currentUser.role,
+          checksheets: currentUser.checksheets || [], // ✅ FEATURE UPDATE
         },
       };
     }
@@ -647,6 +680,7 @@ export function getCurrentUser(): User | null {
       nik: currentUser.nik,
       department: currentUser.department,
       role: currentUser.role,
+      checksheets: currentUser.checksheets || [], // ✅ FEATURE UPDATE
     };
   } catch (error) {
     console.error("Error parsing current user:", error);

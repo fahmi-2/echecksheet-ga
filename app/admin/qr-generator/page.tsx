@@ -138,7 +138,7 @@ const APAR_SLUGS = [
 const TOILET_AREAS = [
   "toilet-driver", "toilet-bea-cukai", "toilet-parkir", "toilet-c2", "toilet-c1",
   "toilet-d", "toilet-auditorium", "toilet-whs", "toilet-b1", "toilet-a",
-  "toilet-lobby", "toilet-office-main"
+  "toilet-lobby", "toilet-office-main", "toilet-genba-b", "toile\t-b2"
 ];
 
 const LIFT_BARANG_UNITS = [

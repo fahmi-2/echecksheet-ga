@@ -11,7 +11,11 @@ import { QrCode } from "lucide-react";
 // ✅ TAMBAHKAN IMPORT HOOK SCAN VERIFICATION
 import { useScanVerification } from "@/lib/hooks/useScanVerification";
 
-// ─── TYPES ───────────────────────────────────────────────
+// ✅ TAMBAHKAN IMPORT UNTUK OFFLINE MODE
+import { smartFetch } from '@/lib/smart-fetch';
+import { useConnection } from '@/lib/connection-context';
+
+// ─── TYPES ──────────────────────────────────────────────
 interface ChecksheetEntry {
   date: string;
   hasilPemeriksaan: string;
@@ -27,6 +31,8 @@ interface SavedData {
   [itemKey: string]: ChecksheetEntry[];
 }
 
+type FormType = "wanita" | "general" | "mixed";
+
 // ─── STATIC DATA ─────────────────────────────────────────
 const INSPECTION_ITEMS = [
   { key: "kebersihanLantai", no: 1, item: "Kebersihan lantai (tidak licin, tidak basah, bebas sampah)" },
@@ -39,21 +45,40 @@ const INSPECTION_ITEMS = [
   { key: "tempatSampah", no: 8, item: "Tempat sampah tersedia dan tertutup" },
   { key: "ventilasi", no: 9, item: "Ventilasi cukup (tidak pengap)" },
   { key: "perlengkapanLain", no: 10, item: "Perlengkapan lain (pengharum, sapu, dll) tersedia dan rapi" },
+  { key: "lampu", no: 11, item: "Lampu penerangan berfungsi baik (tidak mati, tidak berkedip, tidak redup)" },
+  { key: "keran", no: 12, item: "Keran air berfungsi baik (tidak bocor, tidak macet, aliran air normal)" },
+  { key: "exhaustFan", no: 13, item: "Exhaust fan berfungsi baik (berputar normal, tidak berbunyi kasar, tidak bergetar berlebihan)" },
 ];
 
-const AREA_MAP: Record<string, { title: string; desc: string }> = {
-  "toilet-driver": { title: "TOILET - DRIVER", desc: "Toilet laki & perempuan" },
-  "toilet-bea-cukai": { title: "TOILET - BEA CUKAI", desc: "Toilet laki & perempuan" },
-  "toilet-parkir": { title: "TOILET - PARKIR", desc: "Toilet laki & perempuan" },
-  "toilet-c2": { title: "TOILET - C2", desc: "Toilet wanita" },
-  "toilet-c1": { title: "TOILET - C1", desc: "Toilet laki & perempuan" },
-  "toilet-d": { title: "TOILET - D", desc: "Toilet laki & perempuan" },
-  "toilet-auditorium": { title: "TOILET - AUDITORIUM", desc: "Toilet laki & perempuan" },
-  "toilet-whs": { title: "TOILET - WHS", desc: "Toilet wanita" },
-  "toilet-b1": { title: "TOILET - B1", desc: "Toilet laki & perempuan" },
-  "toilet-a": { title: "TOILET - A", desc: "Toilet laki & perempuan" },
-  "toilet-lobby": { title: "TOILET - LOBBY", desc: "Toilet laki & perempuan" },
-  "toilet-office-main": { title: "TOILET - OFFICE MAIN", desc: "Toilet laki & perempuan" },
+const AREA_MAP: Record<string, { title: string; desc: string; type: FormType }> = {
+  "toilet-driver": { title: "TOILET - DRIVER", desc: "Toilet umum", type: "general" },
+  "toilet-bea-cukai": { title: "TOILET - BEA CUKAI", desc: "Toilet laki & perempuan", type: "mixed" },
+  "toilet-parkir": { title: "TOILET - PARKIR", desc: "Toilet umum", type: "general" },
+  "toilet-c2": { title: "TOILET - C2", desc: "Toilet wanita", type: "wanita" },
+  "toilet-c1": { title: "TOILET - C1", desc: "Toilet laki & perempuan", type: "mixed" },
+  "toilet-d": { title: "TOILET - D", desc: "Toilet laki & perempuan", type: "mixed" },
+  "toilet-auditorium": { title: "TOILET - AUDITORIUM", desc: "Toilet laki & perempuan", type: "mixed" },
+  "toilet-whs": { title: "TOILET - WHS", desc: "Toilet wanita", type: "wanita" },
+  "toilet-b1": { title: "TOILET - B1", desc: "Toilet laki & perempuan", type: "mixed" },
+  "toilet-b2": { title: "TOILET - B2", desc: "Toilet wanita", type: "wanita" },
+  "toilet-genba-b": { title: "TOILET - GENBA B", desc: "Toilet wanita", type: "wanita" },
+  "toilet-a": { title: "TOILET - A", desc: "Toilet laki & perempuan", type: "mixed" },
+  "toilet-lobby": { title: "TOILET - LOBBY", desc: "Toilet laki & perempuan", type: "mixed" },
+  "toilet-office-main": { title: "TOILET - OFFICE MAIN", desc: "Toilet laki & perempuan", type: "mixed" },
+};
+
+// Helper untuk mendapatkan label dan warna berdasarkan tipe
+const getTypeBadge = (type: FormType) => {
+  switch (type) {
+    case "wanita":
+      return { label: "🚺 Wanita", color: "#e91e63", bgColor: "#fce4ec", desc: "Female only" };
+    case "general":
+      return { label: "🚻 General", color: "#0d47a1", bgColor: "#e3f2fd", desc: "Toilet umum" };
+    case "mixed":
+      return { label: "🚹🚺 Mixed", color: "#7b1fa2", bgColor: "#f3e5f5", desc: "Laki & perempuan" };
+    default:
+      return { label: "Mixed", color: "#7b1fa2", bgColor: "#f3e5f5", desc: "" };
+  }
 };
 
 // ─── MAIN COMPONENT ──────────────────────────────────────
@@ -66,6 +91,9 @@ export default function ChecksheetToiletForm({ params }: { params: Promise<{ are
   // ✅ TAMBAHKAN HOOK INI - WAJIB DI TOP LEVEL
   const { isScanned, isLoading: scanLoading } = useScanVerification();
 
+  // ✅ TAMBAHKAN HOOK UNTUK OFFLINE MODE
+  const { isOnline, refreshPendingCount } = useConnection();
+
   const [isMounted, setIsMounted] = useState(false);
   const [selectedDate, setSelectedDate] = useState<string>("");
   const [answers, setAnswers] = useState<Record<string, string>>({});
@@ -74,10 +102,12 @@ export default function ChecksheetToiletForm({ params }: { params: Promise<{ are
   // Step flow: "laki" → isi laki-laki dulu, "perempuan" → lanjut ke perempuan
   const [activeStep, setActiveStep] = useState<"laki" | "perempuan">("laki");
 
-  const currentArea = AREA_MAP[areaId] || { title: decodeURIComponent(areaId), desc: "Lokasi tidak diketahui" };
-  const isWanitaOnly = ["toilet-c2", "toilet-whs"].includes(areaId);
+  const currentArea = AREA_MAP[areaId] || { title: decodeURIComponent(areaId), desc: "Lokasi tidak diketahui", type: "mixed" as FormType };
+  const formType: FormType = currentArea.type;
+  const isSingleForm = formType === "wanita" || formType === "general";
   const kategori = "Toilet";
   const lokasi = currentArea.desc;
+  const typeBadge = getTypeBadge(formType);
 
   // ─── EFFECTS ────────────────────────────────────────────
   useEffect(() => setIsMounted(true), []);
@@ -105,7 +135,7 @@ export default function ChecksheetToiletForm({ params }: { params: Promise<{ are
     const picName = user.fullName || "";
     const newAnswers: Record<string, string> = {};
 
-    if (isWanitaOnly) {
+    if (isSingleForm) {
       INSPECTION_ITEMS.forEach((item) => {
         newAnswers[`${item.key}_hasil`] = "OK";
         newAnswers[`${item.key}_keterangan`] = "";
@@ -129,7 +159,7 @@ export default function ChecksheetToiletForm({ params }: { params: Promise<{ are
       });
     }
     setAnswers(newAnswers);
-  }, [isMounted, isWanitaOnly, user]);
+  }, [isMounted, isSingleForm, user]);
 
   // ─── HANDLERS ───────────────────────────────────────────
   const handleInputChange = (field: string, value: string) => {
@@ -157,8 +187,9 @@ export default function ChecksheetToiletForm({ params }: { params: Promise<{ are
     }
 
     try {
+      const toiletTypeParam = formType === "wanita" ? "wanita_only" : formType === "general" ? "general" : "laki_perempuan";
       const response = await fetch(
-        `/e-checksheet-ga/api/toilet-inspections/check-status?area_code=${areaId}&inspection_date=${selectedDate}&toilet_type=${isWanitaOnly ? 'wanita_only' : 'laki_perempuan'}`
+        `/e-checksheet-ga/api/toilet-inspections/check-status?area_code=${areaId}&inspection_date=${selectedDate}&toilet_type=${toiletTypeParam}`
       );
 
       if (!response.ok) throw new Error(`API error: ${response.status}`);
@@ -169,14 +200,15 @@ export default function ChecksheetToiletForm({ params }: { params: Promise<{ are
         const existingData: Record<string, string> = {};
         const data = result.data;
 
-        if (isWanitaOnly) {
+        if (isSingleForm) {
+          const suffix = formType === "wanita" ? "p" : "g";
           INSPECTION_ITEMS.forEach((item) => {
             const itemNum = item.no;
-            existingData[`${item.key}_hasil`] = data[`item_${itemNum}_hasil_p`] || "OK";
-            existingData[`${item.key}_keterangan`] = data[`item_${itemNum}_keterangan_p`] || "";
-            existingData[`${item.key}_foto`] = data[`item_${itemNum}_foto_p`] || "";
-            existingData[`${item.key}_tindakan`] = data[`item_${itemNum}_tindakan_p`] || "";
-            existingData[`${item.key}_pic`] = data[`item_${itemNum}_pic_p`] || user?.fullName || "";
+            existingData[`${item.key}_hasil`] = data[`item_${itemNum}_hasil_${suffix}`] || "OK";
+            existingData[`${item.key}_keterangan`] = data[`item_${itemNum}_keterangan_${suffix}`] || "";
+            existingData[`${item.key}_foto`] = data[`item_${itemNum}_foto_${suffix}`] || "";
+            existingData[`${item.key}_tindakan`] = data[`item_${itemNum}_tindakan_${suffix}`] || "";
+            existingData[`${item.key}_pic`] = data[`item_${itemNum}_pic_${suffix}`] || user?.fullName || "";
           });
         } else {
           INSPECTION_ITEMS.forEach((item) => {
@@ -206,7 +238,7 @@ export default function ChecksheetToiletForm({ params }: { params: Promise<{ are
             const existingData: Record<string, string> = {};
             let found = false;
 
-            if (isWanitaOnly) {
+            if (isSingleForm) {
               INSPECTION_ITEMS.forEach((item) => {
                 const entry = (localData[item.key] || []).find((e: any) => e.date === selectedDate);
                 if (entry) {
@@ -248,7 +280,7 @@ export default function ChecksheetToiletForm({ params }: { params: Promise<{ are
               alert("ℹ️ Tidak ada data untuk tanggal ini. Form direset ke kondisi default.");
               const picName = user?.fullName || "";
               const resetData: Record<string, string> = {};
-              if (isWanitaOnly) {
+              if (isSingleForm) {
                 INSPECTION_ITEMS.forEach((item) => {
                   resetData[`${item.key}_hasil`] = "OK";
                   resetData[`${item.key}_keterangan`] = "";
@@ -284,8 +316,8 @@ export default function ChecksheetToiletForm({ params }: { params: Promise<{ are
     }
   };
 
-  // Check if all laki-laki fields are filled
-  const isLakiComplete = !isWanitaOnly && INSPECTION_ITEMS.every(
+  // Check if all laki-laki fields are filled (only for mixed type)
+  const isLakiComplete = formType === "mixed" && INSPECTION_ITEMS.every(
     (item) => !!answers[`${item.key}_L_hasil`]
   );
 
@@ -318,9 +350,9 @@ export default function ChecksheetToiletForm({ params }: { params: Promise<{ are
     if (selectedDateObj > today) { alert("Tanggal pemeriksaan tidak boleh di masa depan!"); return; }
 
     const missingFields: string[] = [];
-    if (isWanitaOnly) {
+    if (isSingleForm) {
       INSPECTION_ITEMS.forEach((item) => {
-        if (!answers[`${item.key}_hasil`]) missingFields.push(`Item ${item.no} (Wanita)`);
+        if (!answers[`${item.key}_hasil`]) missingFields.push(`Item ${item.no}`);
       });
     } else {
       INSPECTION_ITEMS.forEach((item) => {
@@ -340,6 +372,8 @@ export default function ChecksheetToiletForm({ params }: { params: Promise<{ are
       const seconds = now.getSeconds().toString().padStart(2, '0');
       const inspection_time = `${hours}:${minutes}:${seconds}`;
 
+      const toiletType = formType === "wanita" ? "wanita_only" : formType === "general" ? "general" : "laki_perempuan";
+
       const apiPayload: Record<string, any> = {
         area_code: areaId,
         area_name: currentArea.title,
@@ -348,17 +382,18 @@ export default function ChecksheetToiletForm({ params }: { params: Promise<{ are
         user_id: user.id || "",
         inspector_name: user.fullName || "Unknown User",
         inspector_nik: user.nik || "",
-        toilet_type: isWanitaOnly ? "wanita_only" : "laki_perempuan",
+        toilet_type: toiletType,
       };
 
-      if (isWanitaOnly) {
+      if (isSingleForm) {
+        const suffix = formType === "wanita" ? "p" : "g";
         INSPECTION_ITEMS.forEach((item) => {
           const itemNum = item.no;
-          apiPayload[`item_${itemNum}_hasil_p`] = answers[`${item.key}_hasil`] || "OK";
-          apiPayload[`item_${itemNum}_keterangan_p`] = answers[`${item.key}_keterangan`] || "";
-          apiPayload[`item_${itemNum}_foto_p`] = answers[`${item.key}_foto`] || "";
-          apiPayload[`item_${itemNum}_tindakan_p`] = answers[`${item.key}_tindakan`] || "";
-          apiPayload[`item_${itemNum}_pic_p`] = answers[`${item.key}_pic`] || user.fullName || "";
+          apiPayload[`item_${itemNum}_hasil_${suffix}`] = answers[`${item.key}_hasil`] || "OK";
+          apiPayload[`item_${itemNum}_keterangan_${suffix}`] = answers[`${item.key}_keterangan`] || "";
+          apiPayload[`item_${itemNum}_foto_${suffix}`] = answers[`${item.key}_foto`] || "";
+          apiPayload[`item_${itemNum}_tindakan_${suffix}`] = answers[`${item.key}_tindakan`] || "";
+          apiPayload[`item_${itemNum}_pic_${suffix}`] = answers[`${item.key}_pic`] || user.fullName || "";
         });
       } else {
         INSPECTION_ITEMS.forEach((item) => {
@@ -376,29 +411,18 @@ export default function ChecksheetToiletForm({ params }: { params: Promise<{ are
         });
       }
 
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 30000);
+      // ✅ GANTI fetch biasa dengan smartFetch
+      const response = await smartFetch(
+        '/e-checksheet-ga/api/toilet-inspections/submit',
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(apiPayload),
+          queueType: 'toilet', // ← Penting! Tandai sebagai data toilet
+        }
+      );
 
-      const response = await fetch("/e-checksheet-ga/api/toilet-inspections/submit", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(apiPayload),
-        signal: controller.signal,
-      });
-
-      clearTimeout(timeoutId);
-
-      const contentType = response.headers.get("content-type");
-      if (!contentType || !contentType.includes("application/json")) {
-        const text = await response.text();
-        throw new Error(`Server error: ${response.status} - ${response.statusText}`);
-      }
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.message || errorData.error?.message || `Error ${response.status}`);
-      }
-
+      // Handle response
       const result = await response.json();
 
       // Backup ke localStorage
@@ -406,7 +430,7 @@ export default function ChecksheetToiletForm({ params }: { params: Promise<{ are
       const storageKey = `e-checksheet-toilet-${areaId}`;
       const inspectorName = user.fullName || "Unknown User";
 
-      if (isWanitaOnly) {
+      if (isSingleForm) {
         INSPECTION_ITEMS.forEach((item) => {
           const entry: ChecksheetEntry = {
             date: selectedDate,
@@ -463,7 +487,7 @@ export default function ChecksheetToiletForm({ params }: { params: Promise<{ are
       localStorage.setItem(storageKey, JSON.stringify(newData));
 
       const hasNG = INSPECTION_ITEMS.some((item) => {
-        if (isWanitaOnly) return answers[`${item.key}_hasil`] === "NG";
+        if (isSingleForm) return answers[`${item.key}_hasil`] === "NG";
         return answers[`${item.key}_L_hasil`] === "NG" || answers[`${item.key}_P_hasil`] === "NG";
       });
 
@@ -481,7 +505,15 @@ export default function ChecksheetToiletForm({ params }: { params: Promise<{ are
       globalHistory.push(globalEntry);
       localStorage.setItem("checksheet_history", JSON.stringify(globalHistory));
 
-      alert(`✓ Data berhasil disimpan untuk tanggal: ${new Date(selectedDate).toLocaleDateString("id-ID")}`);
+      // ✅ Cek apakah offline mode
+      if ((response as any).offline) {
+        // Mode offline - data tersimpan di queue
+        alert(`📴 Data tersimpan offline. Akan otomatis sync saat online.`);
+      } else {
+        alert(`✓ Data berhasil disimpan untuk tanggal: ${new Date(selectedDate).toLocaleDateString("id-ID")}`);
+      }
+
+      await refreshPendingCount();
       router.push(`/status-ga/checksheet-toilet`);
 
     } catch (err) {
@@ -527,6 +559,9 @@ export default function ChecksheetToiletForm({ params }: { params: Promise<{ are
           --cs-female: #ad1457;
           --cs-female-bg: #f48fb1;
           --cs-female-pale: #fce4ec;
+          --cs-general: #0d47a1;
+          --cs-general-bg: #90caf9;
+          --cs-general-pale: #e3f2fd;
           --cs-ok: #2e7d32;
           --cs-ng: #c62828;
           --cs-border: #dde3ea;
@@ -556,8 +591,15 @@ export default function ChecksheetToiletForm({ params }: { params: Promise<{ are
           box-shadow: 0 4px 14px rgba(6,93,208,0.25);
         }
 
+        .cs-header-top {
+          display: flex;
+          align-items: center;
+          gap: 12px;
+          margin-bottom: 8px;
+        }
+
         .cs-header h1 {
-          margin: 0 0 6px;
+          margin: 0;
           color: #fff;
           font-size: clamp(18px, 4vw, 26px);
           font-weight: 700;
@@ -568,6 +610,45 @@ export default function ChecksheetToiletForm({ params }: { params: Promise<{ are
           margin: 0;
           color: rgba(255,255,255,0.88);
           font-size: clamp(12px, 2.5vw, 14px);
+        }
+
+        /* ─── TYPE BADGE ─── */
+        .cs-type-badge {
+          display: inline-flex;
+          align-items: center;
+          gap: 6px;
+          padding: 6px 14px;
+          border-radius: 20px;
+          font-size: 13px;
+          font-weight: 700;
+          margin-left: 12px;
+          box-shadow: 0 2px 6px rgba(0,0,0,0.15);
+        }
+
+        .cs-type-badge--wanita {
+          background: #fce4ec;
+          color: #e91e63;
+          border: 2px solid #f48fb1;
+        }
+
+        .cs-type-badge--general {
+          background: #e3f2fd;
+          color: #0d47a1;
+          border: 2px solid #90caf9;
+        }
+
+        .cs-type-badge--mixed {
+          background: #f3e5f5;
+          color: #7b1fa2;
+          border: 2px solid #ce93d8;
+        }
+
+        .cs-type-desc {
+          display: block;
+          font-size: 11px;
+          font-weight: 500;
+          opacity: 0.85;
+          margin-top: 2px;
         }
 
         /* ─── CARD ─── */
@@ -789,7 +870,7 @@ export default function ChecksheetToiletForm({ params }: { params: Promise<{ are
           -webkit-overflow-scrolling: touch;
         }
 
-        /* ─── TABLE ─── */
+        /* ─── TABLE ── */
         .cs-table {
           width: 100%;
           border-collapse: collapse;
@@ -814,7 +895,8 @@ export default function ChecksheetToiletForm({ params }: { params: Promise<{ are
         .cs-th--item   { min-width: 250px; background: var(--cs-blue-mid); color: var(--cs-blue-dark); }
         .cs-th--male   { background: var(--cs-male-bg); color: var(--cs-male); }
         .cs-th--female { background: var(--cs-female-bg); color: var(--cs-female); }
-        .cs-th--wanita { background: var(--cs-blue-mid); color: var(--cs-blue-dark); }
+        .cs-th--wanita { background: var(--cs-female-bg); color: var(--cs-female); }
+        .cs-th--general { background: var(--cs-general-bg); color: var(--cs-general); }
 
         .cs-th--hasil   { min-width: 100px; }
         .cs-th--ket     { min-width: 200px; }
@@ -869,6 +951,7 @@ export default function ChecksheetToiletForm({ params }: { params: Promise<{ are
         .cs-select--male   { border-color: #2196f3; }
         .cs-select--female { border-color: #e91e63; }
         .cs-select--wanita { border-color: #e91e63; }
+        .cs-select--general { border-color: #1565c0; }
 
         .cs-select:disabled,
         .cs-textarea:disabled,
@@ -898,7 +981,8 @@ export default function ChecksheetToiletForm({ params }: { params: Promise<{ are
 
         .cs-input-text--male   { background: #e8f4fd; color: var(--cs-male); }
         .cs-input-text--female { background: #fde4ee; color: var(--cs-female); }
-        .cs-input-text--wanita { background: #e8f5e9; color: var(--cs-ok); }
+        .cs-input-text--wanita { background: #fde4ee; color: var(--cs-female); }
+        .cs-input-text--general { background: #e3f2fd; color: var(--cs-general); }
 
         /* ─── FILE INPUT ─── */
         .cs-file-input {
@@ -1031,6 +1115,11 @@ export default function ChecksheetToiletForm({ params }: { params: Promise<{ are
           color: var(--cs-female);
         }
 
+        .cs-mobile-gender-title--general {
+          background: var(--cs-general-bg);
+          color: var(--cs-general);
+        }
+
         .cs-mobile-fields {
           padding: 10px 12px;
           display: flex;
@@ -1158,6 +1247,17 @@ export default function ChecksheetToiletForm({ params }: { params: Promise<{ are
             margin-bottom: 14px;
           }
 
+          .cs-header-top {
+            flex-direction: column;
+            align-items: flex-start;
+            gap: 8px;
+          }
+
+          .cs-type-badge {
+            margin-left: 0;
+            margin-top: 8px;
+          }
+
           .cs-card {
             padding: 12px 14px;
             margin-bottom: 12px;
@@ -1258,7 +1358,7 @@ export default function ChecksheetToiletForm({ params }: { params: Promise<{ are
         <div className="cs-main">
           {/* ── Header ── */}
           <div className="cs-header">
-            <div style={{ display: "flex", alignItems: "center", gap: "12px", marginBottom: "8px" }}>
+            <div className="cs-header-top">
               <button
                 onClick={() => router.push("/status-ga/checksheet-toilet")}
                 style={{
@@ -1282,9 +1382,15 @@ export default function ChecksheetToiletForm({ params }: { params: Promise<{ are
               >
                 ← Kembali
               </button>
-              <h1 style={{ margin: 0 }}>🚻 Checksheet Toilet</h1>
+              <div>
+                <h1>🚻 Checksheet Toilet</h1>
+                <p>Form Pemeriksaan Kebersihan &amp; Kelayakan Toilet</p>
+              </div>
+              <span className={`cs-type-badge cs-type-badge--${formType}`}>
+                <span>{typeBadge.label}</span>
+                <span className="cs-type-desc">{typeBadge.desc}</span>
+              </span>
             </div>
-            <p>Form Pemeriksaan Kebersihan &amp; Kelayakan Toilet</p>
           </div>
 
           {/* ✅ SCAN WARNING BANNER - TAMBAHAN BARU */}
@@ -1338,8 +1444,8 @@ export default function ChecksheetToiletForm({ params }: { params: Promise<{ are
             </p>
           </div>
 
-          {/* ── Step Indicator (only for laki & perempuan) ── */}
-          {!isWanitaOnly && (
+          {/* ── Step Indicator (only for mixed type) ── */}
+          {formType === "mixed" && (
             <div className="cs-step-bar">
               <button
                 className={`cs-step ${activeStep === "laki" ? "cs-step--active-male" : "cs-step--done"}`}
@@ -1369,7 +1475,7 @@ export default function ChecksheetToiletForm({ params }: { params: Promise<{ are
             <div className="cs-table-scroll">
               <ChecksheetTable
                 inspectionItems={INSPECTION_ITEMS}
-                isWanitaOnly={isWanitaOnly}
+                formType={formType}
                 activeStep={activeStep}
                 answers={answers}
                 selectedDate={selectedDate}
@@ -1386,7 +1492,7 @@ export default function ChecksheetToiletForm({ params }: { params: Promise<{ are
               <MobileCard
                 key={item.key}
                 item={item}
-                isWanitaOnly={isWanitaOnly}
+                formType={formType}
                 activeStep={activeStep}
                 answers={answers}
                 selectedDate={selectedDate}
@@ -1397,8 +1503,8 @@ export default function ChecksheetToiletForm({ params }: { params: Promise<{ are
             ))}
           </div>
 
-          {/* ── Step Navigation Buttons ── */}
-          {!isWanitaOnly && (
+          {/* ── Step Navigation Buttons (mixed type only) ── */}
+          {formType === "mixed" && (
             <div className="cs-step-nav">
               {activeStep === "laki" ? (
                 <>
@@ -1432,8 +1538,8 @@ export default function ChecksheetToiletForm({ params }: { params: Promise<{ are
             </div>
           )}
 
-          {/* ── Action Buttons (wanita only) ── */}
-          {isWanitaOnly && (
+          {/* ── Action Buttons (single form: wanita & general) ── */}
+          {isSingleForm && (
             <div className="cs-btn-row">
               <button className="cs-btn cs-btn--back" onClick={() => router.push("/status-ga/checksheet-toilet")}>
                 ← Kembali
@@ -1471,7 +1577,7 @@ const InfoRow = ({ label, value }: { label: string; value: string }) => (
 // Desktop/Tablet Table
 const ChecksheetTable = ({
   inspectionItems,
-  isWanitaOnly,
+  formType,
   activeStep,
   answers,
   selectedDate,
@@ -1480,65 +1586,69 @@ const ChecksheetTable = ({
   onImageUpload,
 }: {
   inspectionItems: typeof INSPECTION_ITEMS;
-  isWanitaOnly: boolean;
+  formType: FormType;
   activeStep: "laki" | "perempuan";
   answers: Record<string, string>;
   selectedDate: string;
   isScanned: boolean;
   onInputChange: (field: string, value: string) => void;
   onImageUpload: (field: string, e: React.ChangeEvent<HTMLInputElement>) => void;
-}) => (
-  <table className="cs-table" style={{ minWidth: "820px" }}>
-    <thead>
-      <tr>
-        <th className="cs-th--no cs-th--hasil" rowSpan={2}>No</th>
-        <th className="cs-th--item cs-th--ket" rowSpan={2}>Item Pengecekan</th>
-        {isWanitaOnly ? (
-          <>
-            <th className="cs-th--wanita cs-th--hasil">HASIL</th>
-            <th className="cs-th--wanita cs-th--ket">KETERANGAN + FOTO</th>
-            <th className="cs-th--wanita cs-th--tindakan">TINDAKAN</th>
-            <th className="cs-th--wanita cs-th--pic">PIC</th>
-          </>
-        ) : activeStep === "laki" ? (
-          <>
-            <th className="cs-th--male cs-th--hasil">HASIL</th>
-            <th className="cs-th--male cs-th--ket">KETERANGAN + FOTO</th>
-            <th className="cs-th--male cs-th--tindakan">TINDAKAN</th>
-            <th className="cs-th--male cs-th--pic">PIC</th>
-          </>
-        ) : (
-          <>
-            <th className="cs-th--female cs-th--hasil">HASIL</th>
-            <th className="cs-th--female cs-th--ket">KETERANGAN + FOTO</th>
-            <th className="cs-th--female cs-th--tindakan">TINDAKAN</th>
-            <th className="cs-th--female cs-th--pic">PIC</th>
-          </>
-        )}
-      </tr>
-    </thead>
-    <tbody>
-      {inspectionItems.map((item) => (
-        <TableRow
-          key={item.key}
-          item={item}
-          isWanitaOnly={isWanitaOnly}
-          activeStep={activeStep}
-          answers={answers}
-          selectedDate={selectedDate}
-          isScanned={isScanned}
-          onInputChange={onInputChange}
-          onImageUpload={onImageUpload}
-        />
-      ))}
-    </tbody>
-  </table>
-);
+}) => {
+  const isSingleForm = formType === "wanita" || formType === "general";
+  
+  return (
+    <table className="cs-table" style={{ minWidth: "820px" }}>
+      <thead>
+        <tr>
+          <th className="cs-th--no cs-th--hasil" rowSpan={2}>No</th>
+          <th className="cs-th--item cs-th--ket" rowSpan={2}>Item Pengecekan</th>
+          {isSingleForm ? (
+            <>
+              <th className={formType === "wanita" ? "cs-th--wanita cs-th--hasil" : "cs-th--general cs-th--hasil"}>HASIL</th>
+              <th className={formType === "wanita" ? "cs-th--wanita cs-th--ket" : "cs-th--general cs-th--ket"}>KETERANGAN + FOTO</th>
+              <th className={formType === "wanita" ? "cs-th--wanita cs-th--tindakan" : "cs-th--general cs-th--tindakan"}>TINDAKAN</th>
+              <th className={formType === "wanita" ? "cs-th--wanita cs-th--pic" : "cs-th--general cs-th--pic"}>PIC</th>
+            </>
+          ) : activeStep === "laki" ? (
+            <>
+              <th className="cs-th--male cs-th--hasil">HASIL</th>
+              <th className="cs-th--male cs-th--ket">KETERANGAN + FOTO</th>
+              <th className="cs-th--male cs-th--tindakan">TINDAKAN</th>
+              <th className="cs-th--male cs-th--pic">PIC</th>
+            </>
+          ) : (
+            <>
+              <th className="cs-th--female cs-th--hasil">HASIL</th>
+              <th className="cs-th--female cs-th--ket">KETERANGAN + FOTO</th>
+              <th className="cs-th--female cs-th--tindakan">TINDAKAN</th>
+              <th className="cs-th--female cs-th--pic">PIC</th>
+            </>
+          )}
+        </tr>
+      </thead>
+      <tbody>
+        {inspectionItems.map((item) => (
+          <TableRow
+            key={item.key}
+            item={item}
+            formType={formType}
+            activeStep={activeStep}
+            answers={answers}
+            selectedDate={selectedDate}
+            isScanned={isScanned}
+            onInputChange={onInputChange}
+            onImageUpload={onImageUpload}
+          />
+        ))}
+      </tbody>
+    </table>
+  );
+};
 
 // Table Row
 const TableRow = ({
   item,
-  isWanitaOnly,
+  formType,
   activeStep,
   answers,
   selectedDate,
@@ -1547,7 +1657,7 @@ const TableRow = ({
   onImageUpload,
 }: {
   item: (typeof INSPECTION_ITEMS)[0];
-  isWanitaOnly: boolean;
+  formType: FormType;
   activeStep: "laki" | "perempuan";
   answers: Record<string, string>;
   selectedDate: string;
@@ -1555,7 +1665,9 @@ const TableRow = ({
   onInputChange: (field: string, value: string) => void;
   onImageUpload: (field: string, e: React.ChangeEvent<HTMLInputElement>) => void;
 }) => {
-  const renderCell = (prefix: string, variant: "male" | "female" | "wanita") => (
+  const isSingleForm = formType === "wanita" || formType === "general";
+  
+  const renderCell = (prefix: string, variant: "male" | "female" | "wanita" | "general") => (
     <>
       <td className="cs-td">
         <select
@@ -1620,8 +1732,8 @@ const TableRow = ({
     <tr>
       <td className="cs-td--no cs-td--item cs-td">{item.no}</td>
       <td className="cs-td--item">{item.item}</td>
-      {isWanitaOnly
-        ? renderCell(item.key, "wanita")
+      {isSingleForm
+        ? renderCell(item.key, formType)
         : activeStep === "laki"
           ? renderCell(`${item.key}_L`, "male")
           : renderCell(`${item.key}_P`, "female")
@@ -1633,7 +1745,7 @@ const TableRow = ({
 // Mobile Card (used on small screens instead of table)
 const MobileCard = ({
   item,
-  isWanitaOnly,
+  formType,
   activeStep,
   answers,
   selectedDate,
@@ -1642,7 +1754,7 @@ const MobileCard = ({
   onImageUpload,
 }: {
   item: (typeof INSPECTION_ITEMS)[0];
-  isWanitaOnly: boolean;
+  formType: FormType;
   activeStep: "laki" | "perempuan";
   answers: Record<string, string>;
   selectedDate: string;
@@ -1650,7 +1762,9 @@ const MobileCard = ({
   onInputChange: (field: string, value: string) => void;
   onImageUpload: (field: string, e: React.ChangeEvent<HTMLInputElement>) => void;
 }) => {
-  const renderFields = (prefix: string, variant: "male" | "female" | "wanita") => (
+  const isSingleForm = formType === "wanita" || formType === "general";
+  
+  const renderFields = (prefix: string, variant: "male" | "female" | "wanita" | "general") => (
     <div className="cs-mobile-fields">
       <div>
         <div className="cs-mobile-field-label">Hasil Pemeriksaan</div>
@@ -1718,14 +1832,20 @@ const MobileCard = ({
     </div>
   );
 
-  const genderLabel = isWanitaOnly
-    ? <div className="cs-mobile-gender-title cs-mobile-gender-title--wanita">🚺 Wanita</div>
-    : activeStep === "laki"
-      ? <div className="cs-mobile-gender-title cs-mobile-gender-title--male">🚹 Laki-laki</div>
-      : <div className="cs-mobile-gender-title cs-mobile-gender-title--female">🚺 Perempuan</div>;
+  const getGenderLabel = () => {
+    if (formType === "wanita") {
+      return <div className="cs-mobile-gender-title cs-mobile-gender-title--wanita">🚺 Wanita</div>;
+    } else if (formType === "general") {
+      return <div className="cs-mobile-gender-title cs-mobile-gender-title--general">🚻 Umum</div>;
+    } else {
+      return activeStep === "laki"
+        ? <div className="cs-mobile-gender-title cs-mobile-gender-title--male">🚹 Laki-laki</div>
+        : <div className="cs-mobile-gender-title cs-mobile-gender-title--female">🚺 Perempuan</div>;
+    }
+  };
 
-  const prefix = isWanitaOnly ? item.key : activeStep === "laki" ? `${item.key}_L` : `${item.key}_P`;
-  const variant: "male" | "female" | "wanita" = isWanitaOnly ? "wanita" : activeStep === "laki" ? "male" : "female";
+  const prefix = isSingleForm ? item.key : activeStep === "laki" ? `${item.key}_L` : `${item.key}_P`;
+  const variant: "male" | "female" | "wanita" | "general" = isSingleForm ? formType : activeStep === "laki" ? "male" : "female";
 
   return (
     <div className="cs-mobile-card">
@@ -1734,7 +1854,7 @@ const MobileCard = ({
         <div className="cs-mobile-card-item">{item.item}</div>
       </div>
       <div className="cs-mobile-gender-block">
-        {genderLabel}
+        {getGenderLabel()}
         {renderFields(prefix, variant)}
       </div>
     </div>

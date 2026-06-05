@@ -49,9 +49,7 @@ export default function LoginPage() {
               Kelola checklist Anda dengan efisien menggunakan platform digital kami. Akses mudah, monitoring real-time,
               dan laporan komprehensif.
             </p>
-            <Link href="/signup-page" className="btn-outline">
-              Daftar Sekarang
-            </Link>
+          
           </div>
 
           <div className="login-form-section">
