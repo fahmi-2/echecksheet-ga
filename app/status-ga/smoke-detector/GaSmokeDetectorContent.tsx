@@ -4,6 +4,8 @@ import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
 import { Sidebar } from "@/components/Sidebar";
+import { useConnection } from "@/lib/connection-context";
+import { smartFetch } from "@/lib/smart-fetch";
 import QrScanner from 'qr-scanner';
 import { ArrowLeft, Plus, Trash2, Edit2, X } from "lucide-react";
 import {
@@ -69,6 +71,7 @@ const detectDetectorType = (name: string): string => {
 export function GaSmokeDetectorContent() {
   const router = useRouter();
   const { user, loading: authLoading, isInitialized } = useAuth();
+  const { isOnline, pendingCount } = useConnection();
 
   // ✅ FIX: Use native URL API instead of useSearchParams hook to avoid conflicts
   const getQueryParam = (name: string): string => {
@@ -396,7 +399,7 @@ export function GaSmokeDetectorContent() {
       const newNo = maxNo + 1;
       const newName = `${addFormData.name} \\x07 ${addFormData.location}`;
       
-      const response = await fetch(`/e-checksheet-ga/api/ga/checksheet/${TYPE_SLUG}/areas`, {
+      const response = await smartFetch(`/e-checksheet-ga/api/ga/checksheet/${TYPE_SLUG}/areas`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -409,6 +412,8 @@ export function GaSmokeDetectorContent() {
           type_id: 8,
           is_active: true
         }),
+        queueType: 'smoke_detector',
+        metadata: { areaCode: TYPE_SLUG }
       });
 
       const result = await response.json();
@@ -446,8 +451,10 @@ export function GaSmokeDetectorContent() {
     try {
       setIsDeleting(true);
       
-      const response = await fetch(`/e-checksheet-ga/api/ga/checksheet/${TYPE_SLUG}/areas/${deleteTarget.id}`, {
+      const response = await smartFetch(`/e-checksheet-ga/api/ga/checksheet/${TYPE_SLUG}/areas/${deleteTarget.id}`, {
         method: 'DELETE',
+        queueType: 'smoke_detector',
+        metadata: { areaCode: TYPE_SLUG }
       });
 
       const result = await response.json();

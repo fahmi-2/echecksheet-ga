@@ -39,7 +39,7 @@ const INSPECTION_ITEMS = [
   { key: "kebersihanDinding", no: 2, item: "Kebersihan dinding (tidak berlumut, tidak kotor, tidak berjamur)" },
   { key: "bauToilet", no: 3, item: "Bau tidak menyengat / tidak ada bau tidak sedap" },
   { key: "ketersediaanAir", no: 4, item: "Ketersediaan air mencukupi" },
-  { key: "klosetBersih", no: 5, item: "Kloset bersih, tidak mampet, tidak bocor" },
+  { key: "klosetBersih", no: 5, item: "Kloset dan Urinoir bersih, tidak mampet, tidak bocor" },
   { key: "wastafel", no: 6, item: "Wastafel bersih, air mengalir lancar, sabun tersedia" },
   { key: "tisuToilet", no: 7, item: "Tisu toilet tersedia" },
   { key: "tempatSampah", no: 8, item: "Tempat sampah tersedia dan tertutup" },

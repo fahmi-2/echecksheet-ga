@@ -5,6 +5,8 @@ import { useState, useEffect, useCallback, use } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useAuth } from "@/lib/auth-context";
+import { useConnection } from "@/lib/connection-context";
+import { smartFetch } from "@/lib/smart-fetch";
 import { Sidebar } from "@/components/Sidebar";
 import { ArrowLeft, QrCode } from "lucide-react";
 
@@ -58,6 +60,7 @@ export default function ChecksheetFireAlarm({
 }) {
   const router = useRouter();
   const { user } = useAuth();
+  const { isOnline, pendingCount } = useConnection();
   const { zona } = use(params);
 
   const today = new Date();
@@ -117,10 +120,12 @@ export default function ChecksheetFireAlarm({
     setMasterInfo(null);
     try {
       const url = `/e-checksheet-ga/api/fire-alarm/master?zona=${encodeURIComponent(zona)}&_t=${Date.now()}`;
-      const res = await fetch(url, {
+      const res = await smartFetch(url, {
         method: "GET",
         cache: "no-store",
         headers: { "Cache-Control": "no-cache, no-store, must-revalidate", Pragma: "no-cache" },
+        queueType: 'fire_alarm',
+        metadata: { areaCode: zona }
       });
       if (!res.ok) throw new Error(`Server error ${res.status}: ${res.statusText}`);
       const json = await res.json();

@@ -625,7 +625,7 @@ export function GaInspeksiApdContent() {
                               View
                             </button>
                             <a
-                              href={`/e-checksheet-ins-apd?areaId=${area.id}&areaName=${encodeURIComponent(areaName)}&areaType=${encodeURIComponent(areaType)}`}
+                              href={`/e-checksheet-ga/e-checksheet-ins-apd?areaId=${area.id}&areaName=${encodeURIComponent(areaName)}&areaType=${encodeURIComponent(areaType)}`}
                               style={{
                                 padding: "7px 14px",
                                 borderRadius: "5px",

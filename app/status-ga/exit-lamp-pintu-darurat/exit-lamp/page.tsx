@@ -5,6 +5,8 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
 import { Sidebar } from "@/components/Sidebar";
+import { useConnection } from "@/lib/connection-context";
+import { smartFetch } from "@/lib/smart-fetch";
 import { QrCode } from "lucide-react";
 
 // ✅ TAMBAHKAN IMPORT HOOK SCAN VERIFICATION
@@ -13,6 +15,7 @@ import { useScanVerification } from "@/lib/hooks/useScanVerification";
 export default function ExitLampChecklist() {
   const router = useRouter();
   const { user } = useAuth();
+  const { isOnline, pendingCount } = useConnection();
 
   // ✅ TAMBAHKAN HOOK INI - WAJIB DI TOP LEVEL
   const { isScanned, isLoading: scanLoading } = useScanVerification();
@@ -164,7 +167,7 @@ export default function ExitLampChecklist() {
         return;
       }
 
-      const response = await fetch('/e-checksheet-ga/api/exit-lamp/submit', {
+      const response = await smartFetch('/e-checksheet-ga/api/exit-lamp/submit', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -173,7 +176,9 @@ export default function ExitLampChecklist() {
           nik: user?.nik || '',
           department: user?.department || '',
           items
-        })
+        }),
+        queueType: 'exit_lamp',
+        metadata: { areaCode: 'exit-lamp' }
       });
 
       const result = await response.json();

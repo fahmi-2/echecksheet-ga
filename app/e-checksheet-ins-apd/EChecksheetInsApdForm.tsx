@@ -7,16 +7,25 @@ import { Sidebar } from "@/components/Sidebar";
 import {
   getItemsByType,
   getChecklistByDate,
-  saveChecklist,
   getAvailableDates,
   getAreaById,
   ChecklistItem
 } from "@/lib/api/checksheet";
 
+// ✅ TAMBAHKAN IMPORT OFFLINE & SCAN VERIFICATION
+import { useConnection } from "@/lib/connection-context";
+import { smartFetch } from "@/lib/smart-fetch";
+import { useScanVerification } from "@/lib/hooks/useScanVerification";
+import { QrCode } from "lucide-react";
+
 export function EChecksheetInsApdForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { user, loading: authLoading, isInitialized } = useAuth();
+  
+  // ✅ TAMBAHKAN HOOK CONNECTION & SCAN
+  const { isOnline, pendingCount } = useConnection();
+  const { isScanned, isLoading: scanLoading } = useScanVerification();
   
   // ✅ Handle both 'areaId' and 'areald' (typo in URL)
   const areaIdParam = searchParams.get('areaId') || searchParams.get('areald');
@@ -202,13 +211,13 @@ export function EChecksheetInsApdForm() {
       setAuthVerified(false);
       return;
     }
-    if (user && user.role === "inspector-ga") {
+    if (user && user.role === "inspector-ga-personal") {
       setAuthVerified(true);
       return;
     }
 
     const verificationTimeout = setTimeout(() => {
-      if (!user || user.role !== "inspector-ga") {
+      if (!user || user.role !== "inspector-ga-personal") {
         router.push("/login-page");
       } else {
         setAuthVerified(true);
@@ -274,7 +283,7 @@ export function EChecksheetInsApdForm() {
     }
   };
 
-  // ✅ Save to API
+  // ✅ MODIFIKASI handleSave MENGGUNAKAN SMARTFETCH
   const handleSave = async () => {
     if (!user) {
       alert("User belum login");
@@ -334,24 +343,45 @@ export function EChecksheetInsApdForm() {
         };
       });
 
-      await saveChecklist(
-        TYPE_SLUG,
-        areaId,
-        selectedDate,
-        checklistData,
-        user.id || "unknown",
-        user.fullName || "Unknown Inspector"
-      );
+      const submitData = {
+        type: TYPE_SLUG,
+        areaId: areaId,
+        date: selectedDate,
+        data: checklistData,
+        userId: user.id || "unknown",
+        userName: user.fullName || "Unknown Inspector",
+        // Data tambahan dari URL params untuk metadata
+        areaName: areaNameParam,
+        areaType: areaType
+      };
 
-      alert(`Inspection data saved for ${new Date(selectedDate).toLocaleDateString("id-ID")}`);
-      
-      setTimeout(() => {
-        router.push(`/status-ga/inspeksi-apd?openArea=${encodeURIComponent(areaNameParam)}`);
-      }, 500);
+      // ✅ GUNAKAN SMARTFETCH UNTUK OFFLINE MODE
+      const response = await smartFetch('/api/checksheet/save', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(submitData),
+        queueType: 'inspeksi_apd',
+        metadata: { 
+          areaCode: `apd-${areaIdParam}`,
+         
+        }
+      });
+
+      const result = await response.json();
+
+      if (response.ok) {
+        alert(`Inspection data saved for ${new Date(selectedDate).toLocaleDateString("id-ID")}`);
+        
+        setTimeout(() => {
+          router.push(`/status-ga/inspeksi-apd?openArea=${encodeURIComponent(areaNameParam)}`);
+        }, 500);
+      } else {
+        throw new Error(result.message || 'Gagal menyimpan data');
+      }
       
     } catch (error) {
       console.error("Error saving checklist data:", error);
-      alert("Failed to save data. Please try again.");
+      alert("Failed to save data: " + (error as Error).message);
     } finally {
       setIsSaving(false);
     }
@@ -424,6 +454,20 @@ export function EChecksheetInsApdForm() {
           </div>
         </div>
 
+        {/* ✅ SCAN WARNING BANNER - TAMBAHAN BARU */}
+        {!isScanned && (
+          <div className="banner banner-warning scan-warning">
+            <span>🔒 Akses melalui scan QR code terlebih dahulu untuk mengisi checksheet ini.</span>
+            <button 
+              onClick={() => router.push("/scan")} 
+              className="banner-btn"
+              disabled={isSaving}
+            >
+              <QrCode size={14} /> Scan Sekarang
+            </button>
+          </div>
+        )}
+
         {/* Info Area */}
         <div style={{
           background: "white",
@@ -482,6 +526,8 @@ export function EChecksheetInsApdForm() {
               value={selectedDate}
               onChange={(e) => setSelectedDate(e.target.value)}
               max={new Date().toISOString().split('T')[0]}
+              disabled={!isScanned}
+              title={!isScanned ? "Harap scan QR code terlebih dahulu" : ""}
               style={{
                 color: "#212121",
                 padding: "7px 12px",
@@ -489,7 +535,9 @@ export function EChecksheetInsApdForm() {
                 borderRadius: "5px",
                 fontSize: "14px",
                 outline: "none",
-                minWidth: "160px"
+                minWidth: "160px",
+                background: isScanned ? "white" : "#f5f5f5",
+                cursor: isScanned ? "text" : "not-allowed"
               }}
             />
           </div>
@@ -505,6 +553,8 @@ export function EChecksheetInsApdForm() {
                     setSelectedDate(date);
                   }
                 }}
+                disabled={!isScanned}
+                title={!isScanned ? "Harap scan QR code terlebih dahulu" : ""}
                 style={{
                   color: "#212121",
                   padding: "7px 12px",
@@ -512,7 +562,9 @@ export function EChecksheetInsApdForm() {
                   borderRadius: "5px",
                   fontSize: "14px",
                   outline: "none",
-                  minWidth: "180px"
+                  minWidth: "180px",
+                  background: isScanned ? "white" : "#f5f5f5",
+                  cursor: isScanned ? "pointer" : "not-allowed"
                 }}
               >
                 <option value="">— Pilih tanggal lama —</option>
@@ -530,14 +582,15 @@ export function EChecksheetInsApdForm() {
               </select>
               <button
                 onClick={handleLoadExisting}
-                disabled={!selectedDate}
+                disabled={!selectedDate || !isScanned}
+                title={!isScanned ? "Harap scan QR code terlebih dahulu" : ""}
                 style={{
                   padding: "7px 16px",
-                  background: selectedDate ? "#ff9800" : "#e0e0e0",
-                  color: selectedDate ? "white" : "#9e9e9e",
+                  background: (selectedDate && isScanned) ? "#ff9800" : "#e0e0e0",
+                  color: (selectedDate && isScanned) ? "white" : "#9e9e9e",
                   border: "none",
                   borderRadius: "5px",
-                  cursor: selectedDate ? "pointer" : "not-allowed",
+                  cursor: (selectedDate && isScanned) ? "pointer" : "not-allowed",
                   fontWeight: "500",
                   fontSize: "14px"
                 }}
@@ -649,7 +702,8 @@ export function EChecksheetInsApdForm() {
                               <input
                                 value={row[field]}
                                 onChange={(e) => updateRowField(idx, String(field), e.target.value)}
-                                disabled={!selectedDate}
+                                disabled={!selectedDate || !isScanned}
+                                title={!isScanned ? "Harap scan QR code terlebih dahulu" : ""}
                                 placeholder="NIK/Mesin"
                                 style={{
                                   width: "100%",
@@ -657,20 +711,24 @@ export function EChecksheetInsApdForm() {
                                   fontSize: "12px",
                                   border: "1px solid #ccc",
                                   borderRadius: "3px",
-                                  background: "#f9f9f9"
+                                  background: (selectedDate && isScanned) ? "#f9f9f9" : "#f5f5f5",
+                                  cursor: (selectedDate && isScanned) ? "text" : "not-allowed"
                                 }}
                               />
                             ) : (
                               <select
                                 value={row[field]}
                                 onChange={(e) => updateRowField(idx, String(field), e.target.value)}
-                                disabled={!selectedDate}
+                                disabled={!selectedDate || !isScanned}
+                                title={!isScanned ? "Harap scan QR code terlebih dahulu" : ""}
                                 style={{
                                   width: "100%",
                                   padding: "4px",
                                   fontSize: "12px",
                                   border: "1px solid #ccc",
-                                  borderRadius: "3px"
+                                  borderRadius: "3px",
+                                  background: (selectedDate && isScanned) ? "white" : "#f5f5f5",
+                                  cursor: (selectedDate && isScanned) ? "pointer" : "not-allowed"
                                 }}
                               >
                                 <option value="">-</option>
@@ -697,7 +755,8 @@ export function EChecksheetInsApdForm() {
                         <textarea
                           value={row.problem}
                           onChange={(e) => updateRowField(idx, "problem", e.target.value)}
-                          disabled={!selectedDate}
+                          disabled={!selectedDate || !isScanned}
+                          title={!isScanned ? "Harap scan QR code terlebih dahulu" : ""}
                           placeholder="Alasan tidak memakai APD..."
                           rows={1}
                           style={{
@@ -706,7 +765,9 @@ export function EChecksheetInsApdForm() {
                             fontSize: "12px",
                             resize: "vertical",
                             border: "1px solid #ccc",
-                            borderRadius: "3px"
+                            borderRadius: "3px",
+                            background: (selectedDate && isScanned) ? "white" : "#f5f5f5",
+                            cursor: (selectedDate && isScanned) ? "text" : "not-allowed"
                           }}
                         />
                       </td>
@@ -718,7 +779,8 @@ export function EChecksheetInsApdForm() {
                         <textarea
                           value={row.tindakanPerbaikan}
                           onChange={(e) => updateRowField(idx, "tindakanPerbaikan", e.target.value)}
-                          disabled={!selectedDate}
+                          disabled={!selectedDate || !isScanned}
+                          title={!isScanned ? "Harap scan QR code terlebih dahulu" : ""}
                           placeholder="Tindakan perbaikan..."
                           rows={1}
                           style={{
@@ -727,7 +789,9 @@ export function EChecksheetInsApdForm() {
                             fontSize: "12px",
                             resize: "vertical",
                             border: "1px solid #ccc",
-                            borderRadius: "3px"
+                            borderRadius: "3px",
+                            background: (selectedDate && isScanned) ? "white" : "#f5f5f5",
+                            cursor: (selectedDate && isScanned) ? "text" : "not-allowed"
                           }}
                         />
                       </td>
@@ -740,14 +804,17 @@ export function EChecksheetInsApdForm() {
                           type="text"
                           value={row.pic}
                           onChange={(e) => updateRowField(idx, "pic", e.target.value)}
-                          disabled={!selectedDate}
+                          disabled={!selectedDate || !isScanned}
+                          title={!isScanned ? "Harap scan QR code terlebih dahulu" : ""}
                           placeholder="PIC"
                           style={{
                             width: "100%",
                             padding: "4px",
                             fontSize: "12px",
                             border: "1px solid #ccc",
-                            borderRadius: "3px"
+                            borderRadius: "3px",
+                            background: (selectedDate && isScanned) ? "white" : "#f5f5f5",
+                            cursor: (selectedDate && isScanned) ? "text" : "not-allowed"
                           }}
                         />
                       </td>
@@ -760,14 +827,17 @@ export function EChecksheetInsApdForm() {
                           type="text"
                           value={row.verify}
                           onChange={(e) => updateRowField(idx, "verify", e.target.value)}
-                          disabled={!selectedDate}
+                          disabled={!selectedDate || !isScanned}
+                          title={!isScanned ? "Harap scan QR code terlebih dahulu" : ""}
                           placeholder="Verify"
                           style={{
                             width: "100%",
                             padding: "4px",
                             fontSize: "12px",
                             border: "1px solid #ccc",
-                            borderRadius: "3px"
+                            borderRadius: "3px",
+                            background: (selectedDate && isScanned) ? "white" : "#f5f5f5",
+                            cursor: (selectedDate && isScanned) ? "text" : "not-allowed"
                           }}
                         />
                       </td>
@@ -797,24 +867,81 @@ export function EChecksheetInsApdForm() {
           </button>
           <button
             onClick={handleSave}
-            disabled={!selectedDate || isSaving || rows.length === 0}
+            disabled={!selectedDate || isSaving || rows.length === 0 || !isScanned}
+            title={!isScanned ? "Harap scan QR code terlebih dahulu" : ""}
             style={{
               padding: "11px 28px",
-              background: (selectedDate && !isSaving && rows.length > 0) ? "#1976d2" : "#e0e0e0",
-              color: (selectedDate && !isSaving && rows.length > 0) ? "white" : "#9e9e9e",
+              background: (selectedDate && !isSaving && rows.length > 0 && isScanned) ? "#1976d2" : "#e0e0e0",
+              color: (selectedDate && !isSaving && rows.length > 0 && isScanned) ? "white" : "#9e9e9e",
               border: "none",
               borderRadius: "6px",
               fontWeight: "500",
               fontSize: "15px",
-              opacity: (selectedDate && !isSaving && rows.length > 0) ? 1 : 0.6,
-              cursor: (selectedDate && !isSaving && rows.length > 0) ? "pointer" : "not-allowed"
+              opacity: (selectedDate && !isSaving && rows.length > 0 && isScanned) ? 1 : 0.6,
+              cursor: (selectedDate && !isSaving && rows.length > 0 && isScanned) ? "pointer" : "not-allowed"
             }}
           >
             {isSaving ? "Menyimpan..." : "✓ Simpan Data"}
           </button>
         </div>
 
+        {/* ✅ CSS UNTUK BANNER */}
         <style jsx>{`
+          .banner {
+            border-radius: 10px;
+            padding: 12px 18px;
+            margin-bottom: 18px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-weight: 500;
+          }
+          .banner-warning {
+            background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
+            border: 1px solid #f59e0b;
+            color: #92400e;
+            box-shadow: 0 2px 8px rgba(245,158,11,0.12);
+          }
+          .banner-btn {
+            margin-left: auto;
+            background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+            color: white;
+            border: none;
+            border-radius: 7px;
+            padding: 8px 16px;
+            cursor: pointer;
+            font-size: 0.85rem;
+            font-weight: 600;
+            transition: all 0.2s;
+            box-shadow: 0 2px 6px rgba(245,158,11,0.3);
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            min-height: 36px;
+          }
+          .banner-btn:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 4px 10px rgba(245,158,11,0.4);
+          }
+          .banner-btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+          }
+          .scan-warning {
+            background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
+            border-left: 4px solid #f59e0b;
+            justify-content: space-between;
+          }
+          .scan-warning .banner-btn {
+            background: linear-gradient(135deg, #7c3aed 0%, #5b21b6 100%);
+            padding: 8px 16px;
+          }
+          .scan-warning .banner-btn:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 4px 10px rgba(124, 58, 237, 0.4);
+          }
+
           @media (max-width: 1200px) {
             div[style*="paddingLeft"] {
               padding-left: 80px !important;

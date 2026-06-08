@@ -9,17 +9,26 @@ import React from "react";
 import {
   getItemsByType,
   getChecklistByDate,
-  saveChecklist,
   getAvailableDates,
   getAreasByType,
   ChecklistItem,
   ChecklistData
 } from "@/lib/api/checksheet";
 
+// ✅ TAMBAHKAN IMPORT OFFLINE & SCAN VERIFICATION
+import { useConnection } from "@/lib/connection-context";
+import { smartFetch } from "@/lib/smart-fetch";
+import { useScanVerification } from "@/lib/hooks/useScanVerification";
+import { QrCode } from "lucide-react";
+
 export function EChecksheetPanelForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { user, loading: authLoading, isInitialized } = useAuth();
+  
+  // ✅ TAMBAHKAN HOOK CONNECTION & SCAN
+  const { isOnline, pendingCount } = useConnection();
+  const { isScanned, isLoading: scanLoading } = useScanVerification();
   
   // ✅ Gunakan useSearchParams untuk membaca parameter
   const panelName = searchParams.get('panelName') || 'Panel';
@@ -112,7 +121,7 @@ export function EChecksheetPanelForm() {
       return;
     }
 
-    if (user && user.role === "inspector-ga") {
+    if (user && user.role === "inspector-ga-electrical") {
       console.log('✅ Auth verified successfully');
       setAuthVerified(true);
       return;
@@ -120,7 +129,7 @@ export function EChecksheetPanelForm() {
 
     // Beri waktu 1.5 detik sebelum redirect
     const verificationTimeout = setTimeout(() => {
-      if (!user || user.role !== "inspector-ga") {
+      if (!user || user.role !== "inspector-ga-electrical") {
         console.error('❌ Auth verification failed after delay:', { user, authLoading });
         router.push("/login-page");
       } else {
@@ -211,7 +220,7 @@ export function EChecksheetPanelForm() {
     }
   };
 
-  // ✅ Save to API
+  // ✅ MODIFIKASI handleSave MENGGUNAKAN SMARTFETCH
   const handleSave = async () => {
     if (!user) {
       alert("User belum login");
@@ -259,25 +268,46 @@ export function EChecksheetPanelForm() {
         };
       });
 
-      await saveChecklist(
-        TYPE_SLUG,
-        areaId,
-        selectedDate,
-        checklistData,
-        user.id || "unknown",
-        user.fullName || "Unknown Inspector"
-      );
+      const submitData = {
+        type: TYPE_SLUG,
+        areaId: areaId,
+        date: selectedDate,
+        data: checklistData,
+        userId: user.id || "unknown",
+        userName: user.fullName || "Unknown Inspector",
+        // Data tambahan dari URL params untuk metadata
+        panelName: panelName,
+        area: area
+      };
 
-      alert(`Data berhasil disimpan untuk tanggal ${new Date(selectedDate).toLocaleDateString("id-ID")}`);
-      
-      // Redirect ke status page setelah 500ms
-      setTimeout(() => {
-        router.push(`/status-ga/panel?openPanel=${encodeURIComponent(panelName)}`);
-      }, 500);
+      // ✅ GUNAKAN SMARTFETCH UNTUK OFFLINE MODE
+      const response = await smartFetch('/api/checksheet/save', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(submitData),
+        queueType: 'panel_inspeksi',
+        metadata: { 
+          areaCode: `panel-${areaId}`,
+          areaType: 'general'
+        }
+      });
+
+      const result = await response.json();
+
+      if (response.ok) {
+        alert(`Data berhasil disimpan untuk tanggal ${new Date(selectedDate).toLocaleDateString("id-ID")}`);
+        
+        // Redirect ke status page setelah 500ms
+        setTimeout(() => {
+          router.push(`/status-ga/panel?openPanel=${encodeURIComponent(panelName)}`);
+        }, 500);
+      } else {
+        throw new Error(result.message || 'Gagal menyimpan data');
+      }
       
     } catch (error) {
       console.error("Error saving checklist data:", error);
-      alert("Gagal menyimpan data.");
+      alert("Gagal menyimpan data: " + (error as Error).message);
     } finally {
       setIsSaving(false);
     }
@@ -287,6 +317,7 @@ export function EChecksheetPanelForm() {
     setAnswers((prev) => ({ ...prev, [field]: value }));
   };
 
+  // ✅ Upload foto sudah base64, kompatibel offline
   const handleImageUpload = (event: React.ChangeEvent<HTMLInputElement>, itemKey: string) => {
     const files = event.target.files;
     if (!files) return;
@@ -408,6 +439,20 @@ export function EChecksheetPanelForm() {
             </p>
           </div>
 
+          {/* ✅ SCAN WARNING BANNER - TAMBAHAN BARU */}
+          {!isScanned && (
+            <div className="banner banner-warning scan-warning">
+              <span>🔒 Akses melalui scan QR code terlebih dahulu untuk mengisi checksheet ini.</span>
+              <button 
+                onClick={() => router.push("/scan")} 
+                className="banner-btn"
+                disabled={isSaving}
+              >
+                <QrCode size={14} /> Scan Sekarang
+              </button>
+            </div>
+          )}
+
           {/* Info Area */}
           <div style={{
             background: "white",
@@ -471,13 +516,17 @@ export function EChecksheetPanelForm() {
                 value={selectedDate}
                 onChange={(e) => setSelectedDate(e.target.value)}
                 max={getMaxDate()}
+                disabled={!isScanned}
+                title={!isScanned ? "Harap scan QR code terlebih dahulu" : ""}
                 style={{
                   color: "#0d47a1",
                   padding: "8px 12px",
                   border: "2px solid #1e88e5",
                   borderRadius: "6px",
                   fontSize: "14px",
-                  minWidth: "160px"
+                  minWidth: "160px",
+                  background: isScanned ? "white" : "#f5f5f5",
+                  cursor: isScanned ? "text" : "not-allowed"
                 }}
               />
             </div>
@@ -504,13 +553,17 @@ export function EChecksheetPanelForm() {
                       setSelectedDate(date);
                     }
                   }}
+                  disabled={!isScanned}
+                  title={!isScanned ? "Harap scan QR code terlebih dahulu" : ""}
                   style={{
                     color: "#0d47a1",
                     padding: "8px 12px",
                     border: "2px solid #1e88e5",
                     borderRadius: "6px",
                     fontSize: "14px",
-                    minWidth: "180px"
+                    minWidth: "180px",
+                    background: isScanned ? "white" : "#f5f5f5",
+                    cursor: isScanned ? "pointer" : "not-allowed"
                   }}
                 >
                   <option value="">— Pilih tanggal lama —</option>
@@ -528,14 +581,15 @@ export function EChecksheetPanelForm() {
                 </select>
                 <button
                   onClick={handleLoadExisting}
-                  disabled={!selectedDate || isLoading}
+                  disabled={!selectedDate || isLoading || !isScanned}
+                  title={!isScanned ? "Harap scan QR code terlebih dahulu" : ""}
                   style={{
                     padding: "8px 16px",
-                    background: (selectedDate && !isLoading) ? "#ff9800" : "#bdbdbd",
-                    color: "white",
+                    background: (selectedDate && !isLoading && isScanned) ? "#ff9800" : "#bdbdbd",
+                    color: (selectedDate && !isLoading && isScanned) ? "white" : "#9e9e9e",
                     border: "none",
                     borderRadius: "6px",
-                    cursor: (selectedDate && !isLoading) ? "pointer" : "not-allowed",
+                    cursor: (selectedDate && !isLoading && isScanned) ? "pointer" : "not-allowed",
                     fontWeight: "600"
                   }}
                 >
@@ -619,7 +673,8 @@ export function EChecksheetPanelForm() {
                                 type="text"
                                 value={answers[`${item.item_key}_hasil`] || ""}
                                 onChange={(e) => handleInputChange(`${item.item_key}_hasil`, e.target.value)}
-                                disabled={!selectedDate}
+                                disabled={!selectedDate || !isScanned}
+                                title={!isScanned ? "Harap scan QR code terlebih dahulu" : ""}
                                 placeholder="Contoh: 45°C"
                                 style={{ 
                                   width: "100%", 
@@ -627,7 +682,9 @@ export function EChecksheetPanelForm() {
                                   border: "1px solid #1e88e5", 
                                   borderRadius: "4px",
                                   fontSize: "12px",
-                                  textAlign: "center"
+                                  textAlign: "center",
+                                  background: (selectedDate && isScanned) ? "white" : "#f5f5f5",
+                                  cursor: (selectedDate && isScanned) ? "text" : "not-allowed"
                                 }}
                               />
                             ) : (
@@ -635,15 +692,17 @@ export function EChecksheetPanelForm() {
                               <select
                                 value={answers[`${item.item_key}_hasil`] || ""}
                                 onChange={(e) => handleInputChange(`${item.item_key}_hasil`, e.target.value)}
-                                disabled={!selectedDate}
+                                disabled={!selectedDate || !isScanned}
+                                title={!isScanned ? "Harap scan QR code terlebih dahulu" : ""}
                                 style={{ 
                                   width: "100%", 
                                   padding: "6px", 
                                   border: "1px solid #1e88e5", 
                                   borderRadius: "4px",
-                                  background: getValueColor(answers[`${item.item_key}_hasil`] || ""),
-                                  color: getValueTextColor(answers[`${item.item_key}_hasil`] || ""),
-                                  fontWeight: "600"
+                                  background: (selectedDate && isScanned) ? getValueColor(answers[`${item.item_key}_hasil`] || "") : "#f5f5f5",
+                                  color: (selectedDate && isScanned) ? getValueTextColor(answers[`${item.item_key}_hasil`] || "") : "#999",
+                                  fontWeight: "600",
+                                  cursor: (selectedDate && isScanned) ? "pointer" : "not-allowed"
                                 }}
                               >
                                 <option value="">-</option>
@@ -656,24 +715,33 @@ export function EChecksheetPanelForm() {
                             <textarea
                               value={answers[`${item.item_key}_keterangan`] || ""}
                               onChange={(e) => handleInputChange(`${item.item_key}_keterangan`, e.target.value)}
-                              disabled={!selectedDate}
+                              disabled={!selectedDate || !isScanned}
+                              title={!isScanned ? "Harap scan QR code terlebih dahulu" : ""}
                               placeholder="Keterangan jika NG..."
                               rows={2}
-                              style={{ width: "100%", padding: "6px", fontSize: "12px", resize: "vertical" }}
+                              style={{ 
+                                width: "100%", 
+                                padding: "6px", 
+                                fontSize: "12px", 
+                                resize: "vertical",
+                                background: (selectedDate && isScanned) ? "white" : "#f5f5f5",
+                                cursor: (selectedDate && isScanned) ? "text" : "not-allowed"
+                              }}
                             />
                           </td>
                           <td style={{ padding: "8px", border: "1px solid #0d47a1" }}>
                             <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
                               <button
                                 onClick={() => openCamera(item.item_key)}
-                                disabled={!selectedDate}
+                                disabled={!selectedDate || !isScanned}
+                                title={!isScanned ? "Harap scan QR code terlebih dahulu" : ""}
                                 style={{
                                   padding: "4px 8px",
-                                  background: selectedDate ? "#1e88e5" : "#bdbdbd",
+                                  background: (selectedDate && isScanned) ? "#1e88e5" : "#bdbdbd",
                                   color: "white",
                                   borderRadius: "4px",
                                   fontSize: "11px",
-                                  cursor: selectedDate ? "pointer" : "not-allowed",
+                                  cursor: (selectedDate && isScanned) ? "pointer" : "not-allowed",
                                   textAlign: "center",
                                   border: "none"
                                 }}
@@ -684,13 +752,14 @@ export function EChecksheetPanelForm() {
                                 htmlFor={`file-${item.item_key}`}
                                 style={{
                                   padding: "4px 8px",
-                                  background: selectedDate ? "#4caf50" : "#bdbdbd",
+                                  background: (selectedDate && isScanned) ? "#4caf50" : "#bdbdbd",
                                   color: "white",
                                   borderRadius: "4px",
                                   fontSize: "11px",
-                                  cursor: selectedDate ? "pointer" : "not-allowed",
+                                  cursor: (selectedDate && isScanned) ? "pointer" : "not-allowed",
                                   textAlign: "center"
                                 }}
+                                title={!isScanned ? "Harap scan QR code terlebih dahulu" : ""}
                               >
                                 🖼️ File
                               </label>
@@ -699,7 +768,7 @@ export function EChecksheetPanelForm() {
                                 type="file"
                                 accept="image/*"
                                 multiple
-                                disabled={!selectedDate}
+                                disabled={!selectedDate || !isScanned}
                                 onChange={(e) => handleImageUpload(e as any, item.item_key)}
                                 style={{ display: "none" }}
                               />
@@ -722,6 +791,8 @@ export function EChecksheetPanelForm() {
                                         e.stopPropagation();
                                         removeImage(images.findIndex(i => i.key === item.item_key && i.url === img.url));
                                       }}
+                                      disabled={!isScanned}
+                                      title={!isScanned ? "Harap scan QR code terlebih dahulu" : ""}
                                       style={{
                                         position: "absolute",
                                         top: "2px",
@@ -748,10 +819,18 @@ export function EChecksheetPanelForm() {
                             <textarea
                               value={answers[`${item.item_key}_tindakan`] || ""}
                               onChange={(e) => handleInputChange(`${item.item_key}_tindakan`, e.target.value)}
-                              disabled={!selectedDate}
+                              disabled={!selectedDate || !isScanned}
+                              title={!isScanned ? "Harap scan QR code terlebih dahulu" : ""}
                               placeholder="Tindakan perbaikan..."
                               rows={2}
-                              style={{ width: "100%", padding: "6px", fontSize: "12px", resize: "vertical" }}
+                              style={{ 
+                                width: "100%", 
+                                padding: "6px", 
+                                fontSize: "12px", 
+                                resize: "vertical",
+                                background: (selectedDate && isScanned) ? "white" : "#f5f5f5",
+                                cursor: (selectedDate && isScanned) ? "text" : "not-allowed"
+                              }}
                             />
                           </td>
                           <td style={{ padding: "8px", border: "1px solid #0d47a1" }}>
@@ -759,9 +838,16 @@ export function EChecksheetPanelForm() {
                               type="text"
                               value={answers[`${item.item_key}_pic`] || ""}
                               onChange={(e) => handleInputChange(`${item.item_key}_pic`, e.target.value)}
-                              disabled={!selectedDate}
+                              disabled={!selectedDate || !isScanned}
+                              title={!isScanned ? "Harap scan QR code terlebih dahulu" : ""}
                               placeholder="PIC"
-                              style={{ width: "100%", padding: "6px", fontSize: "12px" }}
+                              style={{ 
+                                width: "100%", 
+                                padding: "6px", 
+                                fontSize: "12px",
+                                background: (selectedDate && isScanned) ? "white" : "#f5f5f5",
+                                cursor: (selectedDate && isScanned) ? "text" : "not-allowed"
+                              }}
                             />
                           </td>
                           <td style={{ padding: "8px", border: "1px solid #0d47a1" }}>
@@ -769,8 +855,14 @@ export function EChecksheetPanelForm() {
                               type="date"
                               value={answers[`${item.item_key}_dueDate`] || ""}
                               onChange={(e) => handleInputChange(`${item.item_key}_dueDate`, e.target.value)}
-                              disabled={!selectedDate}
-                              style={{ width: "100%", padding: "6px" }}
+                              disabled={!selectedDate || !isScanned}
+                              title={!isScanned ? "Harap scan QR code terlebih dahulu" : ""}
+                              style={{ 
+                                width: "100%", 
+                                padding: "6px",
+                                background: (selectedDate && isScanned) ? "white" : "#f5f5f5",
+                                cursor: (selectedDate && isScanned) ? "text" : "not-allowed"
+                              }}
                             />
                           </td>
                           <td style={{ padding: "8px", border: "1px solid #0d47a1" }}>
@@ -778,9 +870,16 @@ export function EChecksheetPanelForm() {
                               type="text"
                               value={answers[`${item.item_key}_verify`] || ""}
                               onChange={(e) => handleInputChange(`${item.item_key}_verify`, e.target.value)}
-                              disabled={!selectedDate}
+                              disabled={!selectedDate || !isScanned}
+                              title={!isScanned ? "Harap scan QR code terlebih dahulu" : ""}
                               placeholder="Verifikasi"
-                              style={{ width: "100%", padding: "6px", fontSize: "12px" }}
+                              style={{ 
+                                width: "100%", 
+                                padding: "6px", 
+                                fontSize: "12px",
+                                background: (selectedDate && isScanned) ? "white" : "#f5f5f5",
+                                cursor: (selectedDate && isScanned) ? "text" : "not-allowed"
+                              }}
                             />
                           </td>
                         </tr>
@@ -815,18 +914,19 @@ export function EChecksheetPanelForm() {
             </button>
             <button
               onClick={handleSave}
-              disabled={!selectedDate || isSaving || !areaId}
+              disabled={!selectedDate || isSaving || !areaId || !isScanned}
+              title={!isScanned ? "Harap scan QR code terlebih dahulu" : ""}
               style={{
                 padding: "12px 28px",
-                background: (selectedDate && !isSaving && areaId) 
+                background: (selectedDate && !isSaving && areaId && isScanned) 
                   ? "linear-gradient(135deg, #1e88e5, #0d47a1)" 
                   : "#bdbdbd",
-                color: "white",
+                color: (selectedDate && !isSaving && areaId && isScanned) ? "white" : "#9e9e9e",
                 border: "none",
                 borderRadius: "8px",
                 fontWeight: "600",
-                cursor: (selectedDate && !isSaving && areaId) ? "pointer" : "not-allowed",
-                opacity: (selectedDate && !isSaving && areaId) ? 1 : 0.6
+                cursor: (selectedDate && !isSaving && areaId && isScanned) ? "pointer" : "not-allowed",
+                opacity: (selectedDate && !isSaving && areaId && isScanned) ? 1 : 0.6
               }}
             >
               {isSaving ? "⏳ Menyimpan..." : "✓ Simpan Data"}
@@ -1150,6 +1250,64 @@ export function EChecksheetPanelForm() {
           </div>
         </div>
       )}
+
+      {/* ✅ CSS UNTUK BANNER */}
+      <style jsx>{`
+        .banner {
+          border-radius: 10px;
+          padding: 12px 18px;
+          margin-bottom: 18px;
+          display: flex;
+          align-items: center;
+          gap: 10px;
+          font-weight: 500;
+        }
+        .banner-warning {
+          background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
+          border: 1px solid #f59e0b;
+          color: #92400e;
+          box-shadow: 0 2px 8px rgba(245,158,11,0.12);
+        }
+        .banner-btn {
+          margin-left: auto;
+          background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+          color: white;
+          border: none;
+          border-radius: 7px;
+          padding: 8px 16px;
+          cursor: pointer;
+          font-size: 0.85rem;
+          font-weight: 600;
+          transition: all 0.2s;
+          box-shadow: 0 2px 6px rgba(245,158,11,0.3);
+          display: inline-flex;
+          align-items: center;
+          gap: 6px;
+          min-height: 36px;
+        }
+        .banner-btn:hover {
+          transform: translateY(-1px);
+          box-shadow: 0 4px 10px rgba(245,158,11,0.4);
+        }
+        .banner-btn:disabled {
+          opacity: 0.6;
+          cursor: not-allowed;
+          transform: none;
+        }
+        .scan-warning {
+          background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
+          border-left: 4px solid #f59e0b;
+          justify-content: space-between;
+        }
+        .scan-warning .banner-btn {
+          background: linear-gradient(135deg, #7c3aed 0%, #5b21b6 100%);
+          padding: 8px 16px;
+        }
+        .scan-warning .banner-btn:hover {
+          transform: translateY(-1px);
+          box-shadow: 0 4px 10px rgba(124, 58, 237, 0.4);
+        }
+      `}</style>
     </div>
   );
 }

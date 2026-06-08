@@ -1,3 +1,4 @@
+// app/api/users/[id]/route.ts
 import { NextRequest, NextResponse } from "next/server";
 import { Pool } from "pg";
 import bcrypt from "bcrypt";

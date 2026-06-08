@@ -414,7 +414,7 @@ export function GaPanelContent() {
                             View
                           </button>
                           <a
-                            href={`/e-checksheet-panel?panelName=${encodeURIComponent(panelName)}&area=${encodeURIComponent(areaName)}`}
+                            href={`/e-checksheet-ga/e-checksheet-panel?panelName=${encodeURIComponent(panelName)}&area=${encodeURIComponent(areaName)}`}
                             style={{
                               padding: "7px 14px",
                               borderRadius: "5px",

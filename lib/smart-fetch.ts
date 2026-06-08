@@ -15,7 +15,7 @@ interface SmartFetchOptions extends RequestInit {
   skipQueue?: boolean;
   metadata?: {
     areaType?: 'wanita' | 'general' | 'mixed';
-    areaCode?: string;
+    areaCode?: string;itemId?: string; 
   };
 }
 

@@ -7,17 +7,26 @@ import { Sidebar } from "@/components/Sidebar";
 import {
   getItemsByType,
   getChecklistByDate,
-  saveChecklist,
   getAvailableDates,
   getAreasByType,
   ChecklistItem,
   ChecklistData
 } from "@/lib/api/checksheet";
+import { QrCode } from "lucide-react";
+
+// ✅ TAMBAHKAN IMPORT HOOK OFFLINE & SCAN VERIFICATION
+import { useConnection } from "@/lib/connection-context";
+import { smartFetch } from "@/lib/smart-fetch";
+import { useScanVerification } from "@/lib/hooks/useScanVerification";
 
 export function EChecksheetHydrantForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { user, loading } = useAuth();
+  
+  // ✅ TAMBAHKAN HOOK CONNECTION & SCAN
+  const { isOnline, pendingCount } = useConnection();
+  const { isScanned, isLoading: scanLoading } = useScanVerification();
   
   const no = searchParams.get('no') || '';
   const lokasi = searchParams.get('lokasi') || '';
@@ -56,7 +65,7 @@ export function EChecksheetHydrantForm() {
 
   useEffect(() => {
     if (!isMounted || loading) return;
-    if (!user || user.role !== "inspector-ga") {
+    if (!user || user.role !== "inspector-ga-fire") {
       router.push("/login-page");
     }
   }, [user, loading, router, isMounted]);
@@ -174,6 +183,7 @@ export function EChecksheetHydrantForm() {
     setVerify("");
   };
 
+  // ✅ MODIFIKASI handleSave MENGGUNAKAN SMARTFETCH
   const handleSave = async () => {
     if (!user || !selectedDate || !areaId) {
       alert("Lengkapi data terlebih dahulu!");
@@ -201,19 +211,41 @@ export function EChecksheetHydrantForm() {
           notes: ""
         };
       });
-      await saveChecklist(
-        TYPE_SLUG,
-        areaId,
-        selectedDate,
-        checklistData,
-        user.id || "unknown",
-        user.fullName || "Unknown Inspector"
-      );
-      alert(`✅ Data berhasil disimpan!`);
-      router.push(`/status-ga/inspeksi-hydrant`);
+
+      const submitData = {
+        type: TYPE_SLUG,
+        areaId: areaId,
+        date: selectedDate,
+        data: checklistData,
+        userId: user.id || "unknown",
+        userName: user.fullName || "Unknown Inspector",
+        // Data tambahan dari URL params untuk metadata
+        no: no,
+        lokasi: lokasi,
+        zona: zona,
+        jenisHydrant: jenisHydrant
+      };
+
+      // ✅ GUNAKAN SMARTFETCH UNTUK OFFLINE MODE
+const response = await smartFetch('/api/checksheet/save', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(submitData),
+          queueType: 'hydrant_inspeksi',
+          metadata: { areaCode: `hydrant-${no}` }
+        });
+
+      const result = await response.json();
+
+      if (response.ok) {
+        alert(`✅ Data berhasil disimpan!`);
+        router.push(`/status-ga/inspeksi-hydrant`);
+      } else {
+        throw new Error(result.message || 'Gagal menyimpan data');
+      }
     } catch (error) {
       console.error("❌ Error saving:", error);
-      alert("Gagal menyimpan data.");
+      alert("Gagal menyimpan data: " + (error as Error).message);
     } finally {
       setIsLoading(false);
     }
@@ -223,7 +255,7 @@ export function EChecksheetHydrantForm() {
     setItems((prev) => ({ ...prev, [field]: value }));
   };
 
-  // Image upload handler
+  // Image upload handler - sudah base64, kompatibel offline
   const handleImageUpload = (event: React.ChangeEvent<HTMLInputElement>, itemKey: string) => {
     const files = event.target.files;
     if (!files) return;
@@ -236,12 +268,10 @@ export function EChecksheetHydrantForm() {
     });
   };
 
-  // Remove image
   const removeImage = (index: number) => {
     setImages(prev => prev.filter((_, i) => i !== index));
   };
 
-  // Open image modal
   const openImageModal = (imgUrl: string) => {
     setCurrentImage(imgUrl);
     setShowImageModal(true);
@@ -252,13 +282,11 @@ export function EChecksheetHydrantForm() {
     setCurrentImage("");
   };
 
-  // Open camera for specific item
   const openCamera = (itemKey: string) => {
     setCurrentItemKey(itemKey);
     setShowCameraModal(true);
   };
 
-  // Capture image from camera
   const captureImage = () => {
     if (!videoRef.current || !canvasRef.current) return;
     const video = videoRef.current;
@@ -292,7 +320,7 @@ export function EChecksheetHydrantForm() {
     );
   }
 
-  if (!user || user.role !== "inspector-ga") {
+  if (!user || user.role !== "inspector-ga-fire") {
     return null;
   }
 
@@ -316,6 +344,20 @@ export function EChecksheetHydrantForm() {
             </p>
           </div>
         </div>
+
+        {/* ✅ SCAN WARNING BANNER - TAMBAHAN BARU */}
+        {!isScanned && (
+          <div className="banner banner-warning scan-warning">
+            <span>🔒 Akses melalui scan QR code terlebih dahulu untuk mengisi checksheet ini.</span>
+            <button 
+              onClick={() => router.push("/scan")} 
+              className="banner-btn"
+              disabled={isLoading}
+            >
+              <QrCode size={14} /> Scan Sekarang
+            </button>
+          </div>
+        )}
 
         {/* Info Card */}
         <div style={{
@@ -356,6 +398,8 @@ export function EChecksheetHydrantForm() {
               value={selectedDate}
               onChange={(e) => setSelectedDate(e.target.value)}
               max={getMaxDate()}
+              disabled={!isScanned}
+              title={!isScanned ? "Harap scan QR code terlebih dahulu" : ""}
               style={{
                 color: "#212121",
                 padding: "10px 14px",
@@ -363,17 +407,20 @@ export function EChecksheetHydrantForm() {
                 borderRadius: "8px",
                 fontSize: "14px",
                 outline: "none",
-                minWidth: "180px"
+                minWidth: "180px",
+                background: isScanned ? "white" : "#f5f5f5",
+                cursor: isScanned ? "text" : "not-allowed"
               }}
             />
           </div>
           {availableDates.length > 0 && (
             <div style={{ display: "flex", alignItems: "center", gap: "12px", flexWrap: "wrap" }}>
               <label style={{ fontWeight: "600", color: "#424242", fontSize: "14px" }}>Riwayat Isian:</label>
-              {/* ✅ FIX: value={selectedDate} agar menampilkan tanggal terpilih */}
               <select
                 value={selectedDate}
                 onChange={(e) => setSelectedDate(e.target.value)}
+                disabled={!isScanned}
+                title={!isScanned ? "Harap scan QR code terlebih dahulu" : ""}
                 style={{
                   color: "#212121",
                   padding: "10px 14px",
@@ -381,7 +428,9 @@ export function EChecksheetHydrantForm() {
                   borderRadius: "8px",
                   fontSize: "14px",
                   outline: "none",
-                  minWidth: "200px"
+                  minWidth: "200px",
+                  background: isScanned ? "white" : "#f5f5f5",
+                  cursor: isScanned ? "pointer" : "not-allowed"
                 }}
               >
                 <option value="">— Pilih tanggal lama —</option>
@@ -393,14 +442,15 @@ export function EChecksheetHydrantForm() {
               </select>
               <button
                 onClick={handleLoadExisting}
-                disabled={!selectedDate || isLoading}
+                disabled={!selectedDate || isLoading || !isScanned}
+                title={!isScanned ? "Harap scan QR code terlebih dahulu" : ""}
                 style={{
                   padding: "10px 20px",
-                  background: selectedDate ? "#ff9800" : "#e0e0e0",
-                  color: selectedDate ? "white" : "#9e9e9e",
+                  background: (selectedDate && isScanned) ? "#ff9800" : "#e0e0e0",
+                  color: (selectedDate && isScanned) ? "white" : "#9e9e9e",
                   border: "none",
                   borderRadius: "8px",
-                  cursor: selectedDate ? "pointer" : "not-allowed",
+                  cursor: (selectedDate && isScanned) ? "pointer" : "not-allowed",
                   fontWeight: "600",
                   fontSize: "14px"
                 }}
@@ -474,7 +524,8 @@ export function EChecksheetHydrantForm() {
                         <select
                           value={items[item.item_key] || ""}
                           onChange={(e) => handleInputChange(item.item_key, e.target.value)}
-                          disabled={!selectedDate}
+                          disabled={!selectedDate || !isScanned}
+                          title={!isScanned ? "Harap scan QR code terlebih dahulu" : ""}
                           style={{
                             width: "100%",
                             padding: "8px 12px",
@@ -483,8 +534,9 @@ export function EChecksheetHydrantForm() {
                             fontWeight: "600",
                             fontSize: "13px",
                             outline: "none",
-                            background: selectedDate ? "white" : "#f5f5f5",
-                            color: selectedDate ? "#212121" : "#9e9e9e"
+                            background: (selectedDate && isScanned) ? "white" : "#f5f5f5",
+                            color: (selectedDate && isScanned) ? "#212121" : "#9e9e9e",
+                            cursor: (selectedDate && isScanned) ? "pointer" : "not-allowed"
                           }}
                         >
                           <option value="">-</option>
@@ -499,20 +551,22 @@ export function EChecksheetHydrantForm() {
                         <textarea
                           value={keteranganKondisi}
                           onChange={(e) => setKeteranganKondisi(e.target.value)}
-                          disabled={!selectedDate}
+                          disabled={!selectedDate || !isScanned}
                           placeholder="Jika NG..."
                           rows={2}
-                          style={{ width: "100%", padding: "6px", fontSize: "12px", resize: "vertical", border: "1px solid #1976d2", borderRadius: "6px", outline: "none", background: selectedDate ? "white" : "#f5f5f5" }}
+                          title={!isScanned ? "Harap scan QR code terlebih dahulu" : ""}
+                          style={{ width: "100%", padding: "6px", fontSize: "12px", resize: "vertical", border: "1px solid #1976d2", borderRadius: "6px", outline: "none", background: (selectedDate && isScanned) ? "white" : "#f5f5f5", cursor: (selectedDate && isScanned) ? "text" : "not-allowed" }}
                         />
                       </td>
                       <td style={{ padding: "12px", border: "1px solid #e0e0e0" }}>
                         <textarea
                           value={tindakanPerbaikan}
                           onChange={(e) => setTindakanPerbaikan(e.target.value)}
-                          disabled={!selectedDate}
+                          disabled={!selectedDate || !isScanned}
                           placeholder="Tindakan..."
                           rows={2}
-                          style={{ width: "100%", padding: "6px", fontSize: "12px", resize: "vertical", border: "1px solid #1976d2", borderRadius: "6px", outline: "none", background: selectedDate ? "white" : "#f5f5f5" }}
+                          title={!isScanned ? "Harap scan QR code terlebih dahulu" : ""}
+                          style={{ width: "100%", padding: "6px", fontSize: "12px", resize: "vertical", border: "1px solid #1976d2", borderRadius: "6px", outline: "none", background: (selectedDate && isScanned) ? "white" : "#f5f5f5", cursor: (selectedDate && isScanned) ? "text" : "not-allowed" }}
                         />
                       </td>
                       <td style={{ padding: "12px", border: "1px solid #e0e0e0" }}>
@@ -520,9 +574,10 @@ export function EChecksheetHydrantForm() {
                           type="text"
                           value={pic}
                           onChange={(e) => setPic(e.target.value)}
-                          disabled={!selectedDate}
+                          disabled={!selectedDate || !isScanned}
                           placeholder="Nama PIC"
-                          style={{ width: "100%", padding: "6px", fontSize: "12px", border: "1px solid #1976d2", borderRadius: "6px", outline: "none", background: selectedDate ? "white" : "#f5f5f5" }}
+                          title={!isScanned ? "Harap scan QR code terlebih dahulu" : ""}
+                          style={{ width: "100%", padding: "6px", fontSize: "12px", border: "1px solid #1976d2", borderRadius: "6px", outline: "none", background: (selectedDate && isScanned) ? "white" : "#f5f5f5", cursor: (selectedDate && isScanned) ? "text" : "not-allowed" }}
                         />
                       </td>
                       <td style={{ padding: "12px", border: "1px solid #e0e0e0" }}>
@@ -530,8 +585,9 @@ export function EChecksheetHydrantForm() {
                           type="date"
                           value={dueDate}
                           onChange={(e) => setDueDate(e.target.value)}
-                          disabled={!selectedDate}
-                          style={{ width: "100%", padding: "6px", fontSize: "12px", border: "1px solid #1976d2", borderRadius: "6px", outline: "none", background: selectedDate ? "white" : "#f5f5f5" }}
+                          disabled={!selectedDate || !isScanned}
+                          title={!isScanned ? "Harap scan QR code terlebih dahulu" : ""}
+                          style={{ width: "100%", padding: "6px", fontSize: "12px", border: "1px solid #1976d2", borderRadius: "6px", outline: "none", background: (selectedDate && isScanned) ? "white" : "#f5f5f5", cursor: (selectedDate && isScanned) ? "text" : "not-allowed" }}
                         />
                       </td>
                       <td style={{ padding: "12px", border: "1px solid #e0e0e0" }}>
@@ -539,9 +595,10 @@ export function EChecksheetHydrantForm() {
                           type="text"
                           value={verify}
                           onChange={(e) => setVerify(e.target.value)}
-                          disabled={!selectedDate}
+                          disabled={!selectedDate || !isScanned}
                           placeholder="Verifier"
-                          style={{ width: "100%", padding: "6px", fontSize: "12px", border: "1px solid #1976d2", borderRadius: "6px", outline: "none", background: selectedDate ? "white" : "#f5f5f5" }}
+                          title={!isScanned ? "Harap scan QR code terlebih dahulu" : ""}
+                          style={{ width: "100%", padding: "6px", fontSize: "12px", border: "1px solid #1976d2", borderRadius: "6px", outline: "none", background: (selectedDate && isScanned) ? "white" : "#f5f5f5", cursor: (selectedDate && isScanned) ? "text" : "not-allowed" }}
                         />
                       </td>
                       <td style={{ padding: "12px", border: "1px solid #e0e0e0" }}>
@@ -549,15 +606,16 @@ export function EChecksheetHydrantForm() {
                           <div style={{ display: "flex", gap: "6px" }}>
                             <button
                               onClick={() => openCamera(item.item_key)}
-                              disabled={!selectedDate}
+                              disabled={!selectedDate || !isScanned}
+                              title={!isScanned ? "Harap scan QR code terlebih dahulu" : ""}
                               style={{
                                 flex: 1,
                                 padding: "6px 10px",
-                                background: selectedDate ? "#1976d2" : "#e0e0e0",
+                                background: (selectedDate && isScanned) ? "#1976d2" : "#e0e0e0",
                                 color: "white",
                                 borderRadius: "6px",
                                 fontSize: "12px",
-                                cursor: selectedDate ? "pointer" : "not-allowed",
+                                cursor: (selectedDate && isScanned) ? "pointer" : "not-allowed",
                                 fontWeight: "500",
                                 border: "none"
                               }}
@@ -568,22 +626,23 @@ export function EChecksheetHydrantForm() {
                               style={{
                                 flex: 1,
                                 padding: "6px 10px",
-                                background: selectedDate ? "#4caf50" : "#e0e0e0",
+                                background: (selectedDate && isScanned) ? "#4caf50" : "#e0e0e0",
                                 color: "white",
                                 borderRadius: "6px",
                                 fontSize: "12px",
                                 textAlign: "center",
-                                cursor: selectedDate ? "pointer" : "not-allowed",
+                                cursor: (selectedDate && isScanned) ? "pointer" : "not-allowed",
                                 fontWeight: "500",
                                 display: "inline-block"
                               }}
+                              title={!isScanned ? "Harap scan QR code terlebih dahulu" : ""}
                             >
                               🖼️ Upload
                               <input
                                 type="file"
                                 accept="image/*"
                                 multiple
-                                disabled={!selectedDate}
+                                disabled={!selectedDate || !isScanned}
                                 onChange={(e) => handleImageUpload(e, item.item_key)}
                                 style={{ display: "none" }}
                               />
@@ -606,6 +665,7 @@ export function EChecksheetHydrantForm() {
                                         e.stopPropagation();
                                         removeImage(globalIndex);
                                       }}
+                                      disabled={!isScanned}
                                       style={{
                                         position: "absolute",
                                         top: "-4px",
@@ -659,16 +719,17 @@ export function EChecksheetHydrantForm() {
           </button>
           <button
             onClick={handleSave}
-            disabled={!selectedDate || isLoading || !areaId}
+            disabled={!selectedDate || isLoading || !areaId || !isScanned}
+            title={!isScanned ? "Harap scan QR code terlebih dahulu" : ""}
             style={{
               padding: "12px 32px",
-              background: (selectedDate && !isLoading && areaId) ? "#1976d2" : "#e0e0e0",
-              color: (selectedDate && !isLoading && areaId) ? "white" : "#9e9e9e",
+              background: (selectedDate && !isLoading && areaId && isScanned) ? "#1976d2" : "#e0e0e0",
+              color: (selectedDate && !isLoading && areaId && isScanned) ? "white" : "#9e9e9e",
               border: "none",
               borderRadius: "8px",
               fontWeight: "600",
               fontSize: "15px",
-              cursor: (selectedDate && !isLoading && areaId) ? "pointer" : "not-allowed"
+              cursor: (selectedDate && !isLoading && areaId && isScanned) ? "pointer" : "not-allowed"
             }}
           >
             {isLoading ? "⏳ Menyimpan..." : "💾 Simpan Data"}
@@ -798,6 +859,64 @@ export function EChecksheetHydrantForm() {
             </div>
           </div>
         )}
+
+        {/* ✅ CSS UNTUK BANNER */}
+        <style jsx>{`
+          .banner {
+            border-radius: 10px;
+            padding: 12px 18px;
+            margin-bottom: 18px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-weight: 500;
+          }
+          .banner-warning {
+            background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
+            border: 1px solid #f59e0b;
+            color: #92400e;
+            box-shadow: 0 2px 8px rgba(245,158,11,0.12);
+          }
+          .banner-btn {
+            margin-left: auto;
+            background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+            color: white;
+            border: none;
+            border-radius: 7px;
+            padding: 8px 16px;
+            cursor: pointer;
+            font-size: 0.85rem;
+            font-weight: 600;
+            transition: all 0.2s;
+            box-shadow: 0 2px 6px rgba(245,158,11,0.3);
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            min-height: 36px;
+          }
+          .banner-btn:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 4px 10px rgba(245,158,11,0.4);
+          }
+          .banner-btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+          }
+          .scan-warning {
+            background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
+            border-left: 4px solid #f59e0b;
+            justify-content: space-between;
+          }
+          .scan-warning .banner-btn {
+            background: linear-gradient(135deg, #7c3aed 0%, #5b21b6 100%);
+            padding: 8px 16px;
+          }
+          .scan-warning .banner-btn:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 4px 10px rgba(124, 58, 237, 0.4);
+          }
+        `}</style>
       </div>
     </div>
   );

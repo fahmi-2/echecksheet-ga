@@ -4,10 +4,13 @@ import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { useAuth } from "@/lib/auth-context"
 import { Sidebar } from "@/components/Sidebar";
+import { useConnection } from "@/lib/connection-context";
+import { smartFetch } from "@/lib/smart-fetch";
 
 export default function EChecksheetApdPage() {
   const router = useRouter()
   const { user } = useAuth()
+  const { isOnline, pendingCount } = useConnection()
   const [redirected, setRedirected] = useState(false)
   
   // Jenis APD dari Excel
@@ -202,14 +205,16 @@ export default function EChecksheetApdPage() {
         }))
       };
       console.log('📤 Sending to API:', apiPayload);
-      const response = await fetch('/e-checksheet-ga/api/apd/submit', {
+      const response = await smartFetch('/e-checksheet-ga/api/apd/submit', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'Accept': 'application/json'
         },
         body: JSON.stringify(apiPayload),
-        credentials: 'include'
+        credentials: 'include',
+        queueType: 'apd',
+        metadata: { areaCode: 'apd-form' }
       });
       console.log('📥 Response status:', response.status);
       const result = await response.json();

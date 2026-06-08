@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
-import { NavbarStatic } from "@/components/navbar-static";
+import { Sidebar } from "@/components/Sidebar";
 import QrScanner from 'qr-scanner';
 
 interface HydrantItem {
@@ -236,7 +236,7 @@ export function GaSelangHydrantContent({
 
   return (
     <div style={{ minHeight: "100vh", background: "#f8f9fa" }}>
-      <NavbarStatic userName={user?.fullName || "User"} />
+      <Sidebar userName={user?.fullName || "User"} />
       <div style={{ padding: "20px 16px", maxWidth: "1400px", margin: "0 auto" }}>
         {/* Header */}
         <div style={{ marginBottom: "24px" }}>
@@ -405,7 +405,7 @@ export function GaSelangHydrantContent({
                             DETAIL
                           </button>
                           <a
-                            href={`/e-checksheet-slg-hydrant?lokasi=${encodeURIComponent(area.lokasi)}&zona=${encodeURIComponent(area.zona)}&jenisHydrant=${encodeURIComponent(area.jenisHydrant)}&pic=${encodeURIComponent(area.pic)}`}
+                            href={`/e-checksheet-ga/e-checksheet-slg-hydrant?lokasi=${encodeURIComponent(area.lokasi)}&zona=${encodeURIComponent(area.zona)}&jenisHydrant=${encodeURIComponent(area.jenisHydrant)}&pic=${encodeURIComponent(area.pic)}`}
                             style={{
                               padding: "6px 14px",
                               borderRadius: "6px",

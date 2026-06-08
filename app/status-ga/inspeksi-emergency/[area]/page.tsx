@@ -4,6 +4,8 @@ import { useState, useEffect, use } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
 import { Sidebar } from "@/components/Sidebar";
+import { useConnection } from "@/lib/connection-context";
+import { smartFetch } from "@/lib/smart-fetch";
 import { ArrowLeft, QrCode } from "lucide-react";
 
 // ✅ TAMBAHKAN IMPORT HOOK SCAN VERIFICATION
@@ -116,6 +118,7 @@ const statusFieldKeys: StatusFieldKey[] = statusFields.map(f => f.key);
 export default function EmergencyLampChecklist({ params }: { params: Promise<{ area: string }> }) {
   const router = useRouter();
   const { user } = useAuth();
+  const { isOnline, pendingCount } = useConnection();
   const { area } = use(params);
   
   // ✅ TAMBAHKAN HOOK INI - WAJIB DI TOP LEVEL
@@ -127,7 +130,6 @@ export default function EmergencyLampChecklist({ params }: { params: Promise<{ a
   const [showPreview, setShowPreview] = useState(false);
   const [hasNg, setHasNg] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [tempPhotoPreviews, setTempPhotoPreviews] = useState<Record<number, string>>({});
   const [expandedItem, setExpandedItem] = useState<number | null>(null);
 
   // Validasi akses
@@ -164,8 +166,8 @@ export default function EmergencyLampChecklist({ params }: { params: Promise<{ a
     setItems(newItems);
   };
 
-  // 🔥 UPLOAD FOTO KE API
-  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>, index: number) => {
+  // ✅ UPLOAD FOTO MENGGUNAKAN BASE64 (KONSISTEN DENGAN OFFLINE MODE)
+  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>, index: number) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
@@ -179,64 +181,16 @@ export default function EmergencyLampChecklist({ params }: { params: Promise<{ a
       return;
     }
 
-    try {
-      setLoading(true);
-
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setTempPhotoPreviews(prev => ({ ...prev, [index]: reader.result as string }));
-      };
-      reader.readAsDataURL(file);
-
-      const formData = new FormData();
-      formData.append('file', file);
-      formData.append('area', area);
-      formData.append('lokasi', items[index].lokasi);
-
-      const response = await fetch('/e-checksheet-ga/api/emergency-lamp/upload', {
-        method: 'POST',
-        body: formData,
-      });
-
-      const result = await response.json();
-
-      if (response.ok && result.success) {
-        handleInputChange(index, "foto", result.data.path);
-        setTempPhotoPreviews(prev => {
-          const newPreviews = { ...prev };
-          delete newPreviews[index];
-          return newPreviews;
-        });
-        alert('✅ Foto berhasil diupload!');
-      } else {
-        setTempPhotoPreviews(prev => {
-          const newPreviews = { ...prev };
-          delete newPreviews[index];
-          return newPreviews;
-        });
-        alert('❌ Gagal upload foto: ' + (result.message || 'Error tidak diketahui'));
-      }
-    } catch (error) {
-      console.error('Upload error:', error);
-      setTempPhotoPreviews(prev => {
-        const newPreviews = { ...prev };
-        delete newPreviews[index];
-        return newPreviews;
-      });
-      alert('❌ Terjadi kesalahan saat upload foto');
-    } finally {
-      setLoading(false);
-      e.target.value = '';
-    }
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      handleInputChange(index, "foto", reader.result as string);
+    };
+    reader.readAsDataURL(file);
+    e.target.value = '';
   };
 
   const handleRemoveImage = (index: number) => {
     handleInputChange(index, "foto", "");
-    setTempPhotoPreviews(prev => {
-      const newPreviews = { ...prev };
-      delete newPreviews[index];
-      return newPreviews;
-    });
   };
 
   const handleShowPreview = () => {
@@ -332,11 +286,14 @@ export default function EmergencyLampChecklist({ params }: { params: Promise<{ a
         }))
       };
 
-      const response = await fetch('/e-checksheet-ga/api/emergency-lamp/submit', {
+      // ✅ PENGGUNAAN SMARTFETCH UNTUK OFFLINE MODE
+      const response = await smartFetch('/e-checksheet-ga/api/emergency-lamp/submit', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
         body: JSON.stringify(submitData),
-        credentials: 'include'
+        credentials: 'include',
+        queueType: 'emergency_lamp',
+        metadata: { areaCode: area }
       });
 
       const result = await response.json();
@@ -528,14 +485,13 @@ export default function EmergencyLampChecklist({ params }: { params: Promise<{ a
                       </td>
                       <td>
                         <div className="image-upload">
-                          {(items[index].foto || tempPhotoPreviews[index]) ? (
+                          {items[index].foto ? (
                             <div className="image-preview">
                               <img
                                 src={
-                                  tempPhotoPreviews[index] ||
-                                  (items[index].foto.startsWith('data:')
+                                  items[index].foto.startsWith('data:')
                                     ? items[index].foto
-                                    : `${process.env.NEXT_PUBLIC_BASE_URL || ''}${items[index].foto}`)
+                                    : `${process.env.NEXT_PUBLIC_BASE_URL || ''}${items[index].foto}`
                                 }
                                 alt="Preview"
                                 className="uploaded-image"
@@ -549,11 +505,6 @@ export default function EmergencyLampChecklist({ params }: { params: Promise<{ a
                               >
                                 ✕
                               </button>
-                              {loading && (
-                                <div className="upload-loading">
-                                  <div className="spinner-small"></div>
-                                </div>
-                              )}
                             </div>
                           ) : (
                             <label className={`file-label ${!isScanned ? 'disabled' : ''}`}
@@ -644,14 +595,13 @@ export default function EmergencyLampChecklist({ params }: { params: Promise<{ a
                       <div className="form-group">
                         <label>Foto</label>
                         <div className="image-upload">
-                          {(items[index].foto || tempPhotoPreviews[index]) ? (
+                          {items[index].foto ? (
                             <div className="image-preview">
                               <img
                                 src={
-                                  tempPhotoPreviews[index] ||
-                                  (items[index].foto.startsWith('data:')
+                                  items[index].foto.startsWith('data:')
                                     ? items[index].foto
-                                    : `${process.env.NEXT_PUBLIC_BASE_URL || ''}${items[index].foto}`)
+                                    : `${process.env.NEXT_PUBLIC_BASE_URL || ''}${items[index].foto}`
                                 }
                                 alt="Preview"
                                 className="uploaded-image"
@@ -665,11 +615,6 @@ export default function EmergencyLampChecklist({ params }: { params: Promise<{ a
                               >
                                 ✕
                               </button>
-                              {loading && (
-                                <div className="upload-loading">
-                                  <div className="spinner-small"></div>
-                                </div>
-                              )}
                             </div>
                           ) : (
                             <label className={`file-label file-label-large ${!isScanned ? 'disabled' : ''}`}
@@ -1483,28 +1428,6 @@ export default function EmergencyLampChecklist({ params }: { params: Promise<{ a
           border-radius: 50%;
           animation: spin 0.8s linear infinite;
           margin-bottom: 16px;
-        }
-
-        .upload-loading {
-          position: absolute;
-          top: 0;
-          left: 0;
-          right: 0;
-          bottom: 0;
-          background: rgba(0, 0, 0, 0.5);
-          display: flex;
-          justify-content: center;
-          align-items: center;
-          border-radius: 6px;
-        }
-
-        .spinner-small {
-          width: 24px;
-          height: 24px;
-          border: 3px solid rgba(255, 255, 255, 0.3);
-          border-top-color: #4caf50;
-          border-radius: 50%;
-          animation: spin 0.8s linear infinite;
         }
 
         @keyframes spin {

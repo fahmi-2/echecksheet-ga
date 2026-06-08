@@ -4,6 +4,8 @@ import { useState, useEffect, useRef } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
 import { Sidebar } from "@/components/Sidebar";
+import { useConnection } from "@/lib/connection-context";
+import { smartFetch } from "@/lib/smart-fetch";
 import { ArrowLeft, Plus, Trash2, Edit2, X } from "lucide-react";
 import {
   getAreasByType,
@@ -25,6 +27,7 @@ export function GaInfJalanContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { user, loading: authLoading, isInitialized } = useAuth();
+  const { isOnline, pendingCount } = useConnection();
   
   const openAreaParam = searchParams.get('openArea') || '';
   const TYPE_SLUG = 'inf-jalan';
@@ -180,12 +183,12 @@ export function GaInfJalanContent() {
       setAuthVerified(false);
       return;
     }
-    if (user && user.role === "inspector-ga") {
+    if (user && user.role === "inspector-ga-personal") {
       setAuthVerified(true);
       return;
     }
     const verificationTimeout = setTimeout(() => {
-      if (!user || user.role !== "inspector-ga") {
+      if (!user || user.role !== "inspector-ga-personal") {
         router.push("/login-page");
       } else {
         setAuthVerified(true);
@@ -289,7 +292,7 @@ export function GaInfJalanContent() {
       const newNo = maxNo + 1;
       const newName = `${addFormData.namaArea} \u0007 ${addFormData.kategori} \u0007 ${addFormData.lokasi}`;
       
-      const response = await fetch(`/e-checksheet-ga/api/ga/checksheet/${TYPE_SLUG}/areas`, {
+      const response = await smartFetch(`/e-checksheet-ga/api/ga/checksheet/${TYPE_SLUG}/areas`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -302,6 +305,8 @@ export function GaInfJalanContent() {
           type_id: 2,
           is_active: true
         }),
+        queueType: 'inf_jalan',
+        metadata: { areaCode: TYPE_SLUG }
       });
 
       const result = await response.json();
@@ -339,8 +344,10 @@ export function GaInfJalanContent() {
     try {
       setIsDeleting(true);
       
-      const response = await fetch(`/e-checksheet-ga/api/ga/checksheet/${TYPE_SLUG}/areas/${deleteTarget.id}`, {
+      const response = await smartFetch(`/e-checksheet-ga/api/ga/checksheet/${TYPE_SLUG}/areas/${deleteTarget.id}`, {
         method: 'DELETE',
+        queueType: 'inf_jalan',
+        metadata: { areaCode: TYPE_SLUG }
       });
 
       const result = await response.json();

@@ -4,6 +4,8 @@ import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
 import { Sidebar } from "@/components/Sidebar";
+import { useConnection } from "@/lib/connection-context";
+import { smartFetch } from "@/lib/smart-fetch";
 import QrScanner from 'qr-scanner';
 import { ArrowLeft, Edit2, Plus, Trash2, X } from "lucide-react";
 import {
@@ -189,7 +191,7 @@ export function GaInspeksiHydrantContent() {
         ? `${addFormData.namaHydrant.toUpperCase()} \x07 ${addFormData.lokasiDetail.toUpperCase()}`
         : addFormData.namaHydrant.toUpperCase();
 
-      const response = await fetch(`/e-checksheet-ga/api/ga/checksheet/${TYPE_SLUG}/areas`, {
+      const response = await smartFetch(`/e-checksheet-ga/api/ga/checksheet/${TYPE_SLUG}/areas`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -199,6 +201,8 @@ export function GaInspeksiHydrantContent() {
           type_id: 4,
           is_active: true
         }),
+        queueType: 'inspeksi_hydrant',
+        metadata: { areaCode: 'hydrant' }
       });
 
       const result = await response.json();
@@ -225,7 +229,11 @@ export function GaInspeksiHydrantContent() {
     if (!deleteTarget) return;
     try {
       setIsDeleting(true);
-      const response = await fetch(`/e-checksheet-ga/api/ga/checksheet/${TYPE_SLUG}/areas/${deleteTarget.id}`, { method: 'DELETE' });
+      const response = await smartFetch(`/e-checksheet-ga/api/ga/checksheet/${TYPE_SLUG}/areas/${deleteTarget.id}`, { 
+        method: 'DELETE',
+        queueType: 'inspeksi_hydrant',
+        metadata: { areaCode: 'hydrant' }
+      });
       const result = await response.json();
       if (!result.success) throw new Error(result.message || 'Gagal menghapus data');
       setAreas(prev => prev.filter(area => area.id !== deleteTarget.id));
@@ -504,7 +512,7 @@ export function GaInspeksiHydrantContent() {
                             </button>
                             {/* ✅ FIXED: URL inspect pakai area.no untuk lookup, plus nama & zona sebagai info */}
                             <a
-                              href={`/e-checksheet-hydrant?no=${area.no}&nama=${encodeURIComponent(namaHydrant)}&lokasi=${encodeURIComponent(lokasiDetail)}&zona=${encodeURIComponent(zona)}`}
+                              href={`/e-checksheet-ga/e-checksheet-hydrant?no=${area.no}&nama=${encodeURIComponent(namaHydrant)}&lokasi=${encodeURIComponent(lokasiDetail)}&zona=${encodeURIComponent(zona)}`}
                               style={{ padding: "7px 14px", borderRadius: "5px", fontSize: "13px", fontWeight: "500", background: isDeleteMode ? "#bdbdbd" : "#43a047", color: "white", textDecoration: "none", display: "inline-block", pointerEvents: isDeleteMode ? "none" : "auto" }}
                             >
                               Inspect

@@ -5,6 +5,8 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
 import { Sidebar } from "@/components/Sidebar";
+import { useConnection } from "@/lib/connection-context";
+import { smartFetch } from "@/lib/smart-fetch";
 import { QrCode } from "lucide-react";
 
 // ✅ TAMBAHKAN IMPORT HOOK SCAN VERIFICATION
@@ -41,6 +43,7 @@ type CheckData = {
 export default function FormStopKontak() {
   const router = useRouter();
   const { user } = useAuth();
+  const { isOnline, pendingCount } = useConnection();
   
   // ✅ TAMBAHKAN HOOK INI - WAJIB DI TOP LEVEL
   const { isScanned, isLoading: scanLoading } = useScanVerification();
@@ -106,12 +109,14 @@ export default function FormStopKontak() {
         additional_notes: ""
       };
 
-      const response = await fetch('/e-checksheet-ga/api/electrical_inspections/submit', {
+      const response = await smartFetch('/e-checksheet-ga/api/electrical_inspections/submit', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify(payload)
+        body: JSON.stringify(payload),
+        queueType: 'electrical_inspection',
+        metadata: { areaCode: 'stop-kontak' }
       });
 
       const result = await response.json();

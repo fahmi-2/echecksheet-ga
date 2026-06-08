@@ -5,6 +5,8 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
 import { Sidebar } from "@/components/Sidebar";
+import { useConnection } from "@/lib/connection-context";
+import { smartFetch } from "@/lib/smart-fetch";
 import { QrCode } from "lucide-react";
 
 // ✅ TAMBAHKAN IMPORT HOOK SCAN VERIFICATION
@@ -13,6 +15,7 @@ import { useScanVerification } from "@/lib/hooks/useScanVerification";
 export default function TitikKumpulChecklist() {
   const router = useRouter();
   const { user } = useAuth();
+  const { isOnline, pendingCount } = useConnection();
 
   // ✅ TAMBAHKAN HOOK INI - WAJIB DI TOP LEVEL
   const { isScanned, isLoading: scanLoading } = useScanVerification();
@@ -215,7 +218,8 @@ export default function TitikKumpulChecklist() {
         return;
       }
 
-      const response = await fetch('/e-checksheet-ga/api/titik-kumpul/submit', {
+      // ✅ PENGGUNAAN SMARTFETCH UNTUK OFFLINE MODE
+      const response = await smartFetch('/e-checksheet-ga/api/titik-kumpul/submit', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -225,7 +229,9 @@ export default function TitikKumpulChecklist() {
           department: user?.department || '',
           titikKumpul: titikKumpulItems,
           jalurEvakuasi: jalurEvakuasiItemsState
-        })
+        }),
+        queueType: 'titik_kumpul',
+        metadata: { areaCode: 'titik-kumpul' }
       });
 
       const result = await response.json();

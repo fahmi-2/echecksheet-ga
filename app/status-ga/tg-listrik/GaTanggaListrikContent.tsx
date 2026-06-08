@@ -5,6 +5,8 @@ import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
 import { Sidebar } from "@/components/Sidebar";
+import { useConnection } from "@/lib/connection-context";
+import { smartFetch } from "@/lib/smart-fetch";
 import { ArrowLeft, Plus, Trash2, Edit2 } from "lucide-react";
 
 import { 
@@ -37,6 +39,7 @@ interface Props {
 export function GaTanggaListrikContent({ openArea = '' }: Props) {
   const router = useRouter();
   const { user, loading } = useAuth();
+  const { isOnline, pendingCount } = useConnection();
   
   const TYPE_SLUG = 'tg-listrik';
   
@@ -210,7 +213,7 @@ export function GaTanggaListrikContent({ openArea = '' }: Props) {
     try {
       setIsAdding(true);
       const maxNo = areas.reduce((max, a) => Math.max(max, a.no), 0);
-      const response = await fetch(`/e-checksheet-ga/api/ga/checksheet/${TYPE_SLUG}/areas`, {
+      const response = await smartFetch(`/e-checksheet-ga/api/ga/checksheet/${TYPE_SLUG}/areas`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -220,6 +223,8 @@ export function GaTanggaListrikContent({ openArea = '' }: Props) {
           type_id: 1,
           is_active: true
         }),
+        queueType: 'tg_listrik',
+        metadata: { areaCode: TYPE_SLUG }
       });
       const result = await response.json();
       if (!result.success) throw new Error(result.message || 'Gagal menyimpan');
@@ -240,7 +245,11 @@ export function GaTanggaListrikContent({ openArea = '' }: Props) {
     if (!deleteTarget) return;
     try {
       setIsDeleting(true);
-      const response = await fetch(`/e-checksheet-ga/api/ga/checksheet/${TYPE_SLUG}/areas/${deleteTarget.id}`, { method: 'DELETE' });
+      const response = await smartFetch(`/e-checksheet-ga/api/ga/checksheet/${TYPE_SLUG}/areas/${deleteTarget.id}`, {
+        method: 'DELETE',
+        queueType: 'tg_listrik',
+        metadata: { areaCode: TYPE_SLUG }
+      });
       const result = await response.json();
       if (!result.success) throw new Error(result.message || 'Gagal menghapus');
       setAreas(prev => prev.filter(a => a.id !== deleteTarget.id));
@@ -517,7 +526,7 @@ export function GaTanggaListrikContent({ openArea = '' }: Props) {
                               DETAIL
                             </button>
                             <a
-                              href={`/e-checksheet-tg-listrik?areaName=${encodeURIComponent(area.name)}&lokasi=${encodeURIComponent(area.location)}`}
+                              href={`/e-checksheet-ga/e-checksheet-tg-listrik?areaName=${encodeURIComponent(area.name)}&lokasi=${encodeURIComponent(area.location)}`}
                               style={{ padding: "7px 14px", borderRadius: "6px", fontSize: "13px", fontWeight: "600", background: isDeleteMode ? "#bdbdbd" : "#4caf50", color: "white", textDecoration: "none", display: "inline-block", pointerEvents: isDeleteMode ? "none" : "auto" }}
                             >
                               CHECK

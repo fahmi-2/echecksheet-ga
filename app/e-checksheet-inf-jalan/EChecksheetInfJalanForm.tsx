@@ -9,12 +9,17 @@ import React from "react";
 import {
   getItemsByType,
   getChecklistByDate,
-  saveChecklist,
   getAvailableDates,
   getAreasByType,
   ChecklistItem,
   ChecklistData
 } from "@/lib/api/checksheet";
+
+// ✅ TAMBAHKAN IMPORT OFFLINE & SCAN VERIFICATION
+import { useConnection } from "@/lib/connection-context";
+import { smartFetch } from "@/lib/smart-fetch";
+import { useScanVerification } from "@/lib/hooks/useScanVerification";
+import { QrCode } from "lucide-react";
 
 // ✅ Helper: Extract tahun dari tanggal
 const getYear = (dateString: string) => new Date(dateString).getFullYear();
@@ -59,6 +64,10 @@ export function EChecksheetInfJalanForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { user, loading: authLoading, isInitialized } = useAuth();
+  
+  // ✅ TAMBAHKAN HOOK CONNECTION & SCAN
+  const { isOnline, pendingCount } = useConnection();
+  const { isScanned, isLoading: scanLoading } = useScanVerification();
   
   // ✅ Gunakan useSearchParams untuk membaca parameter
   const areaName = searchParams.get('areaName') || '';
@@ -167,7 +176,7 @@ export function EChecksheetInfJalanForm() {
       setAuthVerified(false);
       return;
     }
-    if (user && user.role === "inspector-ga") {
+    if (user && user.role === "inspector-ga-personal") {
       console.log('✅ Auth verified successfully');
       setAuthVerified(true);
       return;
@@ -175,7 +184,7 @@ export function EChecksheetInfJalanForm() {
     
     // Beri waktu 1.5 detik sebelum redirect
     const verificationTimeout = setTimeout(() => {
-      if (!user || user.role !== "inspector-ga") {
+      if (!user || user.role !== "inspector-ga-personal") {
         console.error('❌ Auth verification failed after delay:', { user, authLoading });
         router.push("/login-page");
       } else {
@@ -280,7 +289,7 @@ export function EChecksheetInfJalanForm() {
     }
   };
   
-  // ✅ Save to API
+  // ✅ MODIFIKASI handleSave MENGGUNAKAN SMARTFETCH
   const handleSave = async () => {
     if (!user) {
       alert("User belum login");
@@ -326,22 +335,40 @@ export function EChecksheetInfJalanForm() {
           notes: ""
         };
       });
-      
-      await saveChecklist(
-        TYPE_SLUG,
-        areaId,
-        selectedDate,
-        checklistData,
-        user.id || "unknown",
-        user.fullName || "Unknown Inspector"
-      );
-      
-      alert(`Data berhasil disimpan untuk tanggal ${new Date(selectedDate).toLocaleDateString("id-ID")}`);
-      
-      router.push(`/status-ga/inf-jalan?openArea=${encodeURIComponent(areaName)}`);
+
+      const submitData = {
+        type: TYPE_SLUG,
+        areaId: areaId,
+        date: selectedDate,
+        data: checklistData,
+        userId: user.id || "unknown",
+        userName: user.fullName || "Unknown Inspector",
+        // Data tambahan dari URL params untuk metadata
+        areaName: areaName,
+        kategori: kategori,
+        lokasi: lokasi
+      };
+
+      // ✅ GUNAKAN SMARTFETCH UNTUK OFFLINE MODE
+      const response = await smartFetch('/api/checksheet/save', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(submitData),
+        queueType: 'inf_jalan_inspeksi',
+        metadata: { areaCode: `inf-jalan-${areaName}` }
+      });
+
+      const result = await response.json();
+
+      if (response.ok) {
+        alert(`Data berhasil disimpan untuk tanggal ${new Date(selectedDate).toLocaleDateString("id-ID")}`);
+        router.push(`/status-ga/inf-jalan?openArea=${encodeURIComponent(areaName)}`);
+      } else {
+        throw new Error(result.message || 'Gagal menyimpan data');
+      }
     } catch (error) {
       console.error("Error saving checklist data:", error);
-      alert("Gagal menyimpan data.");
+      alert("Gagal menyimpan data: " + (error as Error).message);
     } finally {
       setIsLoading(false);
     }
@@ -351,6 +378,7 @@ export function EChecksheetInfJalanForm() {
     setAnswers((prev) => ({ ...prev, [field]: value }));
   };
   
+  // ✅ Upload foto sudah base64, kompatibel offline
   const handleImageUpload = (event: React.ChangeEvent<HTMLInputElement>, itemKey: string) => {
     const files = event.target.files;
     if (!files) return;
@@ -476,6 +504,20 @@ export function EChecksheetInfJalanForm() {
             </p>
           </div>
         </div>
+
+        {/* ✅ SCAN WARNING BANNER - TAMBAHAN BARU */}
+        {!isScanned && (
+          <div className="banner banner-warning scan-warning">
+            <span>🔒 Akses melalui scan QR code terlebih dahulu untuk mengisi checksheet ini.</span>
+            <button 
+              onClick={() => router.push("/scan")} 
+              className="banner-btn"
+              disabled={isLoading}
+            >
+              <QrCode size={14} /> Scan Sekarang
+            </button>
+          </div>
+        )}
         
         {/* Info Area */}
         <div style={{
@@ -543,13 +585,17 @@ export function EChecksheetInfJalanForm() {
               value={selectedDate}
               onChange={(e) => setSelectedDate(e.target.value)}
               max={getMaxDate()}
+              disabled={!isScanned}
+              title={!isScanned ? "Harap scan QR code terlebih dahulu" : ""}
               style={{
                 color: "#0d47a1",
                 padding: "8px 12px",
                 border: "2px solid #1e88e5",
                 borderRadius: "6px",
                 fontSize: "14px",
-                minWidth: "160px"
+                minWidth: "160px",
+                background: isScanned ? "white" : "#f5f5f5",
+                cursor: isScanned ? "text" : "not-allowed"
               }}
             />
           </div>
@@ -584,6 +630,8 @@ export function EChecksheetInfJalanForm() {
                   setSelectedDate(""); // Reset date when year changes
                   console.log('📅 Year changed:', year);
                 }}
+                disabled={!isScanned}
+                title={!isScanned ? "Harap scan QR code terlebih dahulu" : ""}
                 style={{
                   color: "#0d47a1",
                   padding: "8px 12px",
@@ -591,8 +639,8 @@ export function EChecksheetInfJalanForm() {
                   borderRadius: "6px",
                   fontSize: "14px",
                   minWidth: "100px",
-                  background: "white",
-                  cursor: "pointer",
+                  background: isScanned ? "white" : "#f5f5f5",
+                  cursor: isScanned ? "pointer" : "not-allowed",
                   fontWeight: "500"
                 }}
               >
@@ -611,16 +659,17 @@ export function EChecksheetInfJalanForm() {
                   setSelectedDate(""); // Reset date when month changes
                   console.log('📅 Month changed:', month);
                 }}
-                disabled={selectedYear === ""}
+                disabled={selectedYear === "" || !isScanned}
+                title={!isScanned ? "Harap scan QR code terlebih dahulu" : ""}
                 style={{
-                  color: selectedYear === "" ? "#999" : "#0d47a1",
+                  color: (selectedYear === "" || !isScanned) ? "#999" : "#0d47a1",
                   padding: "8px 12px",
                   border: "2px solid #1e88e5",
                   borderRadius: "6px",
                   fontSize: "14px",
                   minWidth: "140px",
-                  background: "white",
-                  cursor: selectedYear === "" ? "not-allowed" : "pointer",
+                  background: (selectedYear !== "" && isScanned) ? "white" : "#f5f5f5",
+                  cursor: (selectedYear !== "" && isScanned) ? "pointer" : "not-allowed",
                   fontWeight: "500"
                 }}
               >
@@ -639,6 +688,8 @@ export function EChecksheetInfJalanForm() {
                     setSelectedDate(date);
                     console.log('📅 Date selected from filter:', date);
                   }}
+                  disabled={!isScanned}
+                  title={!isScanned ? "Harap scan QR code terlebih dahulu" : ""}
                   style={{
                     color: "#0d47a1",
                     padding: "8px 12px",
@@ -646,8 +697,8 @@ export function EChecksheetInfJalanForm() {
                     borderRadius: "6px",
                     fontSize: "14px",
                     minWidth: "160px",
-                    background: "white",
-                    cursor: "pointer",
+                    background: isScanned ? "white" : "#f5f5f5",
+                    cursor: isScanned ? "pointer" : "not-allowed",
                     fontWeight: "500"
                   }}
                 >
@@ -666,14 +717,15 @@ export function EChecksheetInfJalanForm() {
               
               <button
                 onClick={handleLoadExisting}
-                disabled={!selectedDate || isLoading}
+                disabled={!selectedDate || isLoading || !isScanned}
+                title={!isScanned ? "Harap scan QR code terlebih dahulu" : ""}
                 style={{
                   padding: "8px 16px",
-                  background: (selectedDate && !isLoading) ? "#ff9800" : "#bdbdbd",
+                  background: (selectedDate && !isLoading && isScanned) ? "#ff9800" : "#bdbdbd",
                   color: "white",
                   border: "none",
                   borderRadius: "6px",
-                  cursor: (selectedDate && !isLoading) ? "pointer" : "not-allowed",
+                  cursor: (selectedDate && !isLoading && isScanned) ? "pointer" : "not-allowed",
                   fontSize: "13px",
                   fontWeight: "600"
                 }}
@@ -809,7 +861,8 @@ export function EChecksheetInfJalanForm() {
                       <select
                         value={answers[`${item.item_key}_hasil`] || ""}
                         onChange={(e) => handleInputChange(`${item.item_key}_hasil`, e.target.value)}
-                        disabled={!selectedDate}
+                        disabled={!selectedDate || !isScanned}
+                        title={!isScanned ? "Harap scan QR code terlebih dahulu" : ""}
                         style={{
                           width: "100%",
                           padding: "4px",
@@ -817,8 +870,9 @@ export function EChecksheetInfJalanForm() {
                           borderRadius: "4px",
                           fontSize: "11px",
                           fontWeight: "600",
-                          cursor: selectedDate ? "pointer" : "not-allowed",
-                          opacity: selectedDate ? 1 : 0.5
+                          cursor: (selectedDate && isScanned) ? "pointer" : "not-allowed",
+                          opacity: (selectedDate && isScanned) ? 1 : 0.5,
+                          background: (selectedDate && isScanned) ? "white" : "#f5f5f5"
                         }}
                       >
                         <option value="">-</option>
@@ -835,7 +889,8 @@ export function EChecksheetInfJalanForm() {
                       <textarea
                         value={answers[`${item.item_key}_keterangan`] || ""}
                         onChange={(e) => handleInputChange(`${item.item_key}_keterangan`, e.target.value)}
-                        disabled={!selectedDate}
+                        disabled={!selectedDate || !isScanned}
+                        title={!isScanned ? "Harap scan QR code terlebih dahulu" : ""}
                         placeholder="Keterangan..."
                         rows={2}
                         style={{
@@ -845,7 +900,9 @@ export function EChecksheetInfJalanForm() {
                           resize: "vertical",
                           border: "1px solid #ccc",
                           borderRadius: "4px",
-                          opacity: selectedDate ? 1 : 0.5
+                          opacity: (selectedDate && isScanned) ? 1 : 0.5,
+                          background: (selectedDate && isScanned) ? "white" : "#f5f5f5",
+                          cursor: (selectedDate && isScanned) ? "text" : "not-allowed"
                         }}
                       />
                     </td>
@@ -863,14 +920,15 @@ export function EChecksheetInfJalanForm() {
                               setCurrentItemKey(item.item_key);
                               setShowCameraModal(true);
                             }}
-                            disabled={!selectedDate}
+                            disabled={!selectedDate || !isScanned}
+                            title={!isScanned ? "Harap scan QR code terlebih dahulu" : ""}
                             style={{
                               padding: "4px 8px",
-                              background: selectedDate ? "#1e88e5" : "#bdbdbd",
+                              background: (selectedDate && isScanned) ? "#1e88e5" : "#bdbdbd",
                               color: "white",
                               borderRadius: "4px",
                               fontSize: "11px",
-                              cursor: selectedDate ? "pointer" : "not-allowed",
+                              cursor: (selectedDate && isScanned) ? "pointer" : "not-allowed",
                               textAlign: "center",
                               whiteSpace: "nowrap",
                               border: "none"
@@ -882,14 +940,15 @@ export function EChecksheetInfJalanForm() {
                             htmlFor={`file-${item.item_key}`}
                             style={{
                               padding: "4px 8px",
-                              background: selectedDate ? "#4caf50" : "#bdbdbd",
+                              background: (selectedDate && isScanned) ? "#4caf50" : "#bdbdbd",
                               color: "white",
                               borderRadius: "4px",
                               fontSize: "11px",
-                              cursor: selectedDate ? "pointer" : "not-allowed",
+                              cursor: (selectedDate && isScanned) ? "pointer" : "not-allowed",
                               textAlign: "center",
                               whiteSpace: "nowrap"
                             }}
+                            title={!isScanned ? "Harap scan QR code terlebih dahulu" : ""}
                           >
                             🖼️ File
                           </label>
@@ -898,7 +957,7 @@ export function EChecksheetInfJalanForm() {
                             type="file"
                             accept="image/*"
                             multiple
-                            disabled={!selectedDate}
+                            disabled={!selectedDate || !isScanned}
                             onChange={(e) => handleImageUpload(e, item.item_key)}
                             style={{ display: "none" }}
                           />
@@ -922,6 +981,8 @@ export function EChecksheetInfJalanForm() {
                                   e.stopPropagation();
                                   removeImage(images.findIndex(i => i.key === item.item_key && i.url === img.url));
                                 }}
+                                disabled={!isScanned}
+                                title={!isScanned ? "Harap scan QR code terlebih dahulu" : ""}
                                 style={{
                                   position: "absolute",
                                   top: "2px",
@@ -953,7 +1014,8 @@ export function EChecksheetInfJalanForm() {
                       <textarea
                         value={answers[`${item.item_key}_tindakan`] || ""}
                         onChange={(e) => handleInputChange(`${item.item_key}_tindakan`, e.target.value)}
-                        disabled={!selectedDate}
+                        disabled={!selectedDate || !isScanned}
+                        title={!isScanned ? "Harap scan QR code terlebih dahulu" : ""}
                         placeholder="Tindakan..."
                         rows={2}
                         style={{
@@ -963,7 +1025,9 @@ export function EChecksheetInfJalanForm() {
                           resize: "vertical",
                           border: "1px solid #ccc",
                           borderRadius: "4px",
-                          opacity: selectedDate ? 1 : 0.5
+                          opacity: (selectedDate && isScanned) ? 1 : 0.5,
+                          background: (selectedDate && isScanned) ? "white" : "#f5f5f5",
+                          cursor: (selectedDate && isScanned) ? "text" : "not-allowed"
                         }}
                       />
                     </td>
@@ -977,7 +1041,8 @@ export function EChecksheetInfJalanForm() {
                         type="text"
                         value={answers[`${item.item_key}_pic`] || ""}
                         onChange={(e) => handleInputChange(`${item.item_key}_pic`, e.target.value)}
-                        disabled={!selectedDate}
+                        disabled={!selectedDate || !isScanned}
+                        title={!isScanned ? "Harap scan QR code terlebih dahulu" : ""}
                         placeholder="PIC"
                         style={{
                           width: "100%",
@@ -985,7 +1050,9 @@ export function EChecksheetInfJalanForm() {
                           fontSize: "11px",
                           border: "1px solid #ccc",
                           borderRadius: "4px",
-                          opacity: selectedDate ? 1 : 0.5
+                          opacity: (selectedDate && isScanned) ? 1 : 0.5,
+                          background: (selectedDate && isScanned) ? "white" : "#f5f5f5",
+                          cursor: (selectedDate && isScanned) ? "text" : "not-allowed"
                         }}
                       />
                     </td>
@@ -999,14 +1066,17 @@ export function EChecksheetInfJalanForm() {
                         type="date"
                         value={answers[`${item.item_key}_dueDate`] || ""}
                         onChange={(e) => handleInputChange(`${item.item_key}_dueDate`, e.target.value)}
-                        disabled={!selectedDate}
+                        disabled={!selectedDate || !isScanned}
+                        title={!isScanned ? "Harap scan QR code terlebih dahulu" : ""}
                         style={{
                           width: "100%",
                           padding: "4px",
                           fontSize: "11px",
                           border: "1px solid #ccc",
                           borderRadius: "4px",
-                          opacity: selectedDate ? 1 : 0.5
+                          opacity: (selectedDate && isScanned) ? 1 : 0.5,
+                          background: (selectedDate && isScanned) ? "white" : "#f5f5f5",
+                          cursor: (selectedDate && isScanned) ? "text" : "not-allowed"
                         }}
                       />
                     </td>
@@ -1041,18 +1111,19 @@ export function EChecksheetInfJalanForm() {
           </button>
           <button
             onClick={handleSave}
-            disabled={!selectedDate || isLoading || !areaId}
+            disabled={!selectedDate || isLoading || !areaId || !isScanned}
+            title={!isScanned ? "Harap scan QR code terlebih dahulu" : ""}
             style={{
               padding: "12px 28px",
-              background: (selectedDate && !isLoading && areaId) 
+              background: (selectedDate && !isLoading && areaId && isScanned) 
                 ? "linear-gradient(135deg, #1e88e5, #0d47a1)" 
                 : "#bdbdbd",
               color: "white",
               border: "none",
               borderRadius: "8px",
               fontWeight: "600",
-              cursor: (selectedDate && !isLoading && areaId) ? "pointer" : "not-allowed",
-              opacity: (selectedDate && !isLoading && areaId) ? 1 : 0.6
+              cursor: (selectedDate && !isLoading && areaId && isScanned) ? "pointer" : "not-allowed",
+              opacity: (selectedDate && !isLoading && areaId && isScanned) ? 1 : 0.6
             }}
           >
             {isLoading ? "⏳ Menyimpan..." : "✓ Simpan Data"}
@@ -1195,6 +1266,64 @@ export function EChecksheetInfJalanForm() {
             </div>
           </div>
         )}
+
+        {/* ✅ CSS UNTUK BANNER */}
+        <style jsx>{`
+          .banner {
+            border-radius: 10px;
+            padding: 12px 18px;
+            margin-bottom: 18px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-weight: 500;
+          }
+          .banner-warning {
+            background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
+            border: 1px solid #f59e0b;
+            color: #92400e;
+            box-shadow: 0 2px 8px rgba(245,158,11,0.12);
+          }
+          .banner-btn {
+            margin-left: auto;
+            background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+            color: white;
+            border: none;
+            border-radius: 7px;
+            padding: 8px 16px;
+            cursor: pointer;
+            font-size: 0.85rem;
+            font-weight: 600;
+            transition: all 0.2s;
+            box-shadow: 0 2px 6px rgba(245,158,11,0.3);
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            min-height: 36px;
+          }
+          .banner-btn:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 4px 10px rgba(245,158,11,0.4);
+          }
+          .banner-btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+          }
+          .scan-warning {
+            background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
+            border-left: 4px solid #f59e0b;
+            justify-content: space-between;
+          }
+          .scan-warning .banner-btn {
+            background: linear-gradient(135deg, #7c3aed 0%, #5b21b6 100%);
+            padding: 8px 16px;
+          }
+          .scan-warning .banner-btn:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 4px 10px rgba(124, 58, 237, 0.4);
+          }
+        `}</style>
       </div>
     </div>
   );

@@ -11,11 +11,16 @@ import {
   getAreasByType,
   getItemsByType,
   getChecklistByDate,
-  saveChecklist,
   getAvailableDates,
   ChecklistItem,
   ChecklistData
 } from "@/lib/api/checksheet";
+
+// ✅ TAMBAHKAN IMPORT OFFLINE & SCAN VERIFICATION
+import { useConnection } from "@/lib/connection-context";
+import { smartFetch } from "@/lib/smart-fetch";
+import { useScanVerification } from "@/lib/hooks/useScanVerification";
+import { QrCode } from "lucide-react";
 
 interface EChecksheetTgListrikFormProps {
   areaName: string;
@@ -29,6 +34,10 @@ export function EChecksheetTgListrikForm({
   const router = useRouter();
   const searchParams = useSearchParams();
   const { user, loading } = useAuth();
+  
+  // ✅ TAMBAHKAN HOOK CONNECTION & SCAN
+  const { isOnline, pendingCount } = useConnection();
+  const { isScanned, isLoading: scanLoading } = useScanVerification();
   
   const TYPE_SLUG = 'tg-listrik';
   
@@ -181,7 +190,7 @@ export function EChecksheetTgListrikForm({
     }
   };
 
-  // ✅ Save
+  // ✅ MODIFIKASI handleSave MENGGUNAKAN SMARTFETCH
   const handleSave = async () => {
     if (!user) { alert("User belum login"); router.push("/login-page"); return; }
     if (!selectedDate) { alert("Pilih tanggal pemeriksaan terlebih dahulu!"); return; }
@@ -208,18 +217,46 @@ export function EChecksheetTgListrikForm({
         };
       });
 
-      await saveChecklist(TYPE_SLUG, areaId, selectedDate, checklistData, user.id || "unknown", user.fullName || "Unknown Inspector");
+      const submitData = {
+        type: TYPE_SLUG,
+        areaId: areaId,
+        date: selectedDate,
+        data: checklistData,
+        userId: user.id || "unknown",
+        userName: user.fullName || "Unknown Inspector",
+        // Data tambahan dari props untuk metadata
+        areaName: areaName,
+        lokasi: lokasi
+      };
 
-      alert(`✅ Data berhasil disimpan untuk tanggal ${new Date(selectedDate).toLocaleDateString("id-ID")}`);
-      
-      // Refresh available dates
-      const dates = await getAvailableDates(TYPE_SLUG, areaId);
-      setAvailableDates(dates);
-      
-      router.push(`/status-ga/tg-listrik?openArea=${encodeURIComponent(areaName)}`);
+      // ✅ GUNAKAN SMARTFETCH UNTUK OFFLINE MODE
+      const response = await smartFetch('/api/checksheet/save', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(submitData),
+        queueType: 'tg_listrik_inspeksi',
+        metadata: { 
+          areaCode: `tg-listrik-${areaId}`,
+          areaType: 'general'
+        }
+      });
+
+      const result = await response.json();
+
+      if (response.ok) {
+        alert(`✅ Data berhasil disimpan untuk tanggal ${new Date(selectedDate).toLocaleDateString("id-ID")}`);
+        
+        // Refresh available dates
+        const dates = await getAvailableDates(TYPE_SLUG, areaId);
+        setAvailableDates(dates);
+        
+        router.push(`/status-ga/tg-listrik?openArea=${encodeURIComponent(areaName)}`);
+      } else {
+        throw new Error(result.message || 'Gagal menyimpan data');
+      }
     } catch (error) {
       console.error("❌ Error saving:", error);
-      alert("Gagal menyimpan data. Silakan coba lagi.");
+      alert("Gagal menyimpan data: " + (error as Error).message);
     } finally {
       setIsLoading(false);
     }
@@ -229,6 +266,7 @@ export function EChecksheetTgListrikForm({
     setAnswers(prev => ({ ...prev, [field]: value }));
   };
 
+  // ✅ Upload foto sudah base64, kompatibel offline
   const handleImageUpload = (event: React.ChangeEvent<HTMLInputElement>, itemKey: string) => {
     const files = event.target.files;
     if (!files) return;
@@ -284,6 +322,20 @@ export function EChecksheetTgListrikForm({
           </div>
         </div>
 
+        {/* ✅ SCAN WARNING BANNER - TAMBAHAN BARU */}
+        {!isScanned && (
+          <div className="banner banner-warning scan-warning">
+            <span>🔒 Akses melalui scan QR code terlebih dahulu untuk mengisi checksheet ini.</span>
+            <button 
+              onClick={() => router.push("/scan")} 
+              className="banner-btn"
+              disabled={isLoading}
+            >
+              <QrCode size={14} /> Scan Sekarang
+            </button>
+          </div>
+        )}
+
         {/* Info */}
         <div style={{ background: "white", border: "1px solid #e8e8e8", borderRadius: "10px", padding: "16px 20px", boxShadow: "0 2px 6px rgba(0,0,0,0.05)", marginBottom: "20px" }}>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(250px, 1fr))", gap: "12px" }}>
@@ -311,9 +363,20 @@ export function EChecksheetTgListrikForm({
                 setImages([]);
               }}
               max={new Date().toISOString().split('T')[0]}
-              style={{ color: "#0d47a1", padding: "8px 12px", border: "2px solid #1e88e5", borderRadius: "6px", fontSize: "14px", minWidth: "160px" }}
+              disabled={!isScanned}
+              title={!isScanned ? "Harap scan QR code terlebih dahulu" : ""}
+              style={{ 
+                color: "#0d47a1", 
+                padding: "8px 12px", 
+                border: "2px solid #1e88e5", 
+                borderRadius: "6px", 
+                fontSize: "14px", 
+                minWidth: "160px",
+                background: isScanned ? "white" : "#f5f5f5",
+                cursor: isScanned ? "text" : "not-allowed"
+              }}
             />
-            {selectedDate && (
+            {selectedDate && isScanned && (
               <span style={{ fontSize: "13px", color: "#43a047", fontWeight: "600" }}>
                 ✅ Tanggal dipilih — silakan isi form di bawah
               </span>
@@ -337,7 +400,19 @@ export function EChecksheetTgListrikForm({
                   setSelectedMonth("");
                   setFilteredDates([]);
                 }}
-                style={{ color: "#0d47a1", padding: "8px 12px", border: "2px solid #1e88e5", borderRadius: "6px", fontSize: "14px", minWidth: "100px", background: "white", cursor: "pointer", fontWeight: "500" }}
+                disabled={!isScanned}
+                title={!isScanned ? "Harap scan QR code terlebih dahulu" : ""}
+                style={{ 
+                  color: "#0d47a1", 
+                  padding: "8px 12px", 
+                  border: "2px solid #1e88e5", 
+                  borderRadius: "6px", 
+                  fontSize: "14px", 
+                  minWidth: "100px", 
+                  background: isScanned ? "white" : "#f5f5f5", 
+                  cursor: isScanned ? "pointer" : "not-allowed", 
+                  fontWeight: "500" 
+                }}
               >
                 <option value="">— Tahun —</option>
                 {availableYears.map(y => <option key={y} value={y}>{y}</option>)}
@@ -351,8 +426,19 @@ export function EChecksheetTgListrikForm({
                   setSelectedMonth(m);
                   setFilteredDates([]);
                 }}
-                disabled={selectedYear === ""}
-                style={{ color: selectedYear === "" ? "#999" : "#0d47a1", padding: "8px 12px", border: "2px solid #1e88e5", borderRadius: "6px", fontSize: "14px", minWidth: "140px", background: "white", cursor: selectedYear === "" ? "not-allowed" : "pointer", fontWeight: "500" }}
+                disabled={selectedYear === "" || !isScanned}
+                title={!isScanned ? "Harap scan QR code terlebih dahulu" : ""}
+                style={{ 
+                  color: (selectedYear === "" || !isScanned) ? "#999" : "#0d47a1", 
+                  padding: "8px 12px", 
+                  border: "2px solid #1e88e5", 
+                  borderRadius: "6px", 
+                  fontSize: "14px", 
+                  minWidth: "140px", 
+                  background: (selectedYear !== "" && isScanned) ? "white" : "#f5f5f5", 
+                  cursor: (selectedYear !== "" && isScanned) ? "pointer" : "not-allowed", 
+                  fontWeight: "500" 
+                }}
               >
                 <option value="">— Bulan —</option>
                 {monthNames.map((m, i) => <option key={i} value={i}>{m}</option>)}
@@ -367,7 +453,19 @@ export function EChecksheetTgListrikForm({
                     setAnswers({});
                     setImages([]);
                   }}
-                  style={{ color: "#0d47a1", padding: "8px 12px", border: "2px solid #1e88e5", borderRadius: "6px", fontSize: "14px", minWidth: "160px", background: "white", cursor: "pointer", fontWeight: "500" }}
+                  disabled={!isScanned}
+                  title={!isScanned ? "Harap scan QR code terlebih dahulu" : ""}
+                  style={{ 
+                    color: "#0d47a1", 
+                    padding: "8px 12px", 
+                    border: "2px solid #1e88e5", 
+                    borderRadius: "6px", 
+                    fontSize: "14px", 
+                    minWidth: "160px", 
+                    background: isScanned ? "white" : "#f5f5f5", 
+                    cursor: isScanned ? "pointer" : "not-allowed", 
+                    fontWeight: "500" 
+                  }}
                 >
                   <option value="">— Pilih Tanggal —</option>
                   {filteredDates.map(date => (
@@ -381,14 +479,15 @@ export function EChecksheetTgListrikForm({
               {/* Tombol Muat */}
               <button
                 onClick={handleLoadExisting}
-                disabled={!selectedDate || isLoading}
+                disabled={!selectedDate || isLoading || !isScanned}
+                title={!isScanned ? "Harap scan QR code terlebih dahulu" : ""}
                 style={{
                   padding: "8px 16px",
-                  background: (selectedDate && !isLoading) ? "#ff9800" : "#bdbdbd",
-                  color: "white",
+                  background: (selectedDate && !isLoading && isScanned) ? "#ff9800" : "#bdbdbd",
+                  color: (selectedDate && !isLoading && isScanned) ? "white" : "#9e9e9e",
                   border: "none",
                   borderRadius: "6px",
-                  cursor: (selectedDate && !isLoading) ? "pointer" : "not-allowed",
+                  cursor: (selectedDate && !isLoading && isScanned) ? "pointer" : "not-allowed",
                   fontWeight: "600",
                   fontSize: "14px"
                 }}
@@ -458,8 +557,17 @@ export function EChecksheetTgListrikForm({
                             <select
                               value={answers[`${item.item_key}_hasil`] || ""}
                               onChange={(e) => handleInputChange(`${item.item_key}_hasil`, e.target.value)}
-                              disabled={!selectedDate}
-                              style={{ width: "100%", padding: "4px", border: "1px solid #1e88e5", borderRadius: "4px", fontSize: "11px" }}
+                              disabled={!selectedDate || !isScanned}
+                              title={!isScanned ? "Harap scan QR code terlebih dahulu" : ""}
+                              style={{ 
+                                width: "100%", 
+                                padding: "4px", 
+                                border: "1px solid #1e88e5", 
+                                borderRadius: "4px", 
+                                fontSize: "11px",
+                                background: (selectedDate && isScanned) ? "white" : "#f5f5f5",
+                                cursor: (selectedDate && isScanned) ? "pointer" : "not-allowed"
+                              }}
                             >
                               <option value="">-</option>
                               <option value="OK">✓ OK</option>
@@ -471,10 +579,18 @@ export function EChecksheetTgListrikForm({
                             <textarea
                               value={answers[`${item.item_key}_keterangan`] || ""}
                               onChange={(e) => handleInputChange(`${item.item_key}_keterangan`, e.target.value)}
-                              disabled={!selectedDate}
+                              disabled={!selectedDate || !isScanned}
+                              title={!isScanned ? "Harap scan QR code terlebih dahulu" : ""}
                               placeholder="Keterangan..."
                               rows={2}
-                              style={{ width: "100%", padding: "4px", fontSize: "11px", resize: "vertical" }}
+                              style={{ 
+                                width: "100%", 
+                                padding: "4px", 
+                                fontSize: "11px", 
+                                resize: "vertical",
+                                background: (selectedDate && isScanned) ? "white" : "#f5f5f5",
+                                cursor: (selectedDate && isScanned) ? "text" : "not-allowed"
+                              }}
                             />
                           </td>
                           {/* DOKUMENTASI */}
@@ -482,25 +598,72 @@ export function EChecksheetTgListrikForm({
                             <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
                               <button
                                 onClick={() => openCamera(item.item_key)}
-                                disabled={!selectedDate}
-                                style={{ padding: "4px 8px", background: selectedDate ? "#1e88e5" : "#bdbdbd", color: "white", borderRadius: "4px", fontSize: "11px", cursor: selectedDate ? "pointer" : "not-allowed", border: "none", display: "flex", alignItems: "center", gap: "4px", justifyContent: "center" }}
+                                disabled={!selectedDate || !isScanned}
+                                title={!isScanned ? "Harap scan QR code terlebih dahulu" : ""}
+                                style={{ 
+                                  padding: "4px 8px", 
+                                  background: (selectedDate && isScanned) ? "#1e88e5" : "#bdbdbd", 
+                                  color: "white", 
+                                  borderRadius: "4px", 
+                                  fontSize: "11px", 
+                                  cursor: (selectedDate && isScanned) ? "pointer" : "not-allowed", 
+                                  border: "none", 
+                                  display: "flex", 
+                                  alignItems: "center", 
+                                  gap: "4px", 
+                                  justifyContent: "center" 
+                                }}
                               >
                                 📷 Kamera
                               </button>
                               <label
                                 htmlFor={`file-${item.item_key}`}
-                                style={{ padding: "4px 8px", background: selectedDate ? "#4caf50" : "#bdbdbd", color: "white", borderRadius: "4px", fontSize: "11px", cursor: selectedDate ? "pointer" : "not-allowed", textAlign: "center" }}
+                                style={{ 
+                                  padding: "4px 8px", 
+                                  background: (selectedDate && isScanned) ? "#4caf50" : "#bdbdbd", 
+                                  color: "white", 
+                                  borderRadius: "4px", 
+                                  fontSize: "11px", 
+                                  cursor: (selectedDate && isScanned) ? "pointer" : "not-allowed", 
+                                  textAlign: "center" 
+                                }}
+                                title={!isScanned ? "Harap scan QR code terlebih dahulu" : ""}
                               >
                                 🖼️ File
                               </label>
-                              <input id={`file-${item.item_key}`} type="file" accept="image/*" multiple disabled={!selectedDate} onChange={(e) => handleImageUpload(e, item.item_key)} style={{ display: "none" }} />
+                              <input 
+                                id={`file-${item.item_key}`} 
+                                type="file" 
+                                accept="image/*" 
+                                multiple 
+                                disabled={!selectedDate || !isScanned} 
+                                onChange={(e) => handleImageUpload(e, item.item_key)} 
+                                style={{ display: "none" }} 
+                              />
                               <div style={{ display: "flex", flexWrap: "wrap", gap: "4px", marginTop: "4px" }}>
                                 {images.filter(img => img.key === item.item_key).map((img, idx) => (
                                   <div key={idx} style={{ position: "relative", width: "60px", height: "60px", borderRadius: "4px", overflow: "hidden" }}>
                                     <img src={img.url} alt={`Dok ${idx + 1}`} onClick={() => openImageModal(img.url)} style={{ width: "100%", height: "100%", objectFit: "cover", cursor: "pointer" }} />
                                     <button
                                       onClick={(e) => { e.stopPropagation(); removeImage(images.findIndex(i => i.key === item.item_key && i.url === img.url)); }}
-                                      style={{ position: "absolute", top: "2px", right: "2px", background: "rgba(244,67,54,0.9)", color: "white", border: "none", borderRadius: "50%", width: "18px", height: "18px", fontSize: "12px", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}
+                                      disabled={!isScanned}
+                                      title={!isScanned ? "Harap scan QR code terlebih dahulu" : ""}
+                                      style={{ 
+                                        position: "absolute", 
+                                        top: "2px", 
+                                        right: "2px", 
+                                        background: "rgba(244,67,54,0.9)", 
+                                        color: "white", 
+                                        border: "none", 
+                                        borderRadius: "50%", 
+                                        width: "18px", 
+                                        height: "18px", 
+                                        fontSize: "12px", 
+                                        cursor: "pointer", 
+                                        display: "flex", 
+                                        alignItems: "center", 
+                                        justifyContent: "center" 
+                                      }}
                                     >×</button>
                                   </div>
                                 ))}
@@ -512,10 +675,18 @@ export function EChecksheetTgListrikForm({
                             <textarea
                               value={answers[`${item.item_key}_tindakan`] || ""}
                               onChange={(e) => handleInputChange(`${item.item_key}_tindakan`, e.target.value)}
-                              disabled={!selectedDate}
+                              disabled={!selectedDate || !isScanned}
+                              title={!isScanned ? "Harap scan QR code terlebih dahulu" : ""}
                               placeholder="Tindakan..."
                               rows={2}
-                              style={{ width: "100%", padding: "4px", fontSize: "11px", resize: "vertical" }}
+                              style={{ 
+                                width: "100%", 
+                                padding: "4px", 
+                                fontSize: "11px", 
+                                resize: "vertical",
+                                background: (selectedDate && isScanned) ? "white" : "#f5f5f5",
+                                cursor: (selectedDate && isScanned) ? "text" : "not-allowed"
+                              }}
                             />
                           </td>
                           {/* ✅ PIC - otomatis terisi nama user, masih bisa diedit */}
@@ -524,9 +695,16 @@ export function EChecksheetTgListrikForm({
                               type="text"
                               value={answers[`${item.item_key}_pic`] !== undefined ? answers[`${item.item_key}_pic`] : (selectedDate ? user.fullName : "")}
                               onChange={(e) => handleInputChange(`${item.item_key}_pic`, e.target.value)}
-                              disabled={!selectedDate}
+                              disabled={!selectedDate || !isScanned}
+                              title={!isScanned ? "Harap scan QR code terlebih dahulu" : ""}
                               placeholder="PIC"
-                              style={{ width: "100%", padding: "4px", fontSize: "11px" }}
+                              style={{ 
+                                width: "100%", 
+                                padding: "4px", 
+                                fontSize: "11px",
+                                background: (selectedDate && isScanned) ? "white" : "#f5f5f5",
+                                cursor: (selectedDate && isScanned) ? "text" : "not-allowed"
+                              }}
                             />
                           </td>
                           {/* DUE DATE */}
@@ -535,8 +713,15 @@ export function EChecksheetTgListrikForm({
                               type="date"
                               value={answers[`${item.item_key}_dueDate`] || ""}
                               onChange={(e) => handleInputChange(`${item.item_key}_dueDate`, e.target.value)}
-                              disabled={!selectedDate}
-                              style={{ width: "100%", padding: "4px", fontSize: "11px" }}
+                              disabled={!selectedDate || !isScanned}
+                              title={!isScanned ? "Harap scan QR code terlebih dahulu" : ""}
+                              style={{ 
+                                width: "100%", 
+                                padding: "4px", 
+                                fontSize: "11px",
+                                background: (selectedDate && isScanned) ? "white" : "#f5f5f5",
+                                cursor: (selectedDate && isScanned) ? "text" : "not-allowed"
+                              }}
                             />
                           </td>
                           {/* ✅ Kolom VERIFIKASI dihapus */}
@@ -560,16 +745,17 @@ export function EChecksheetTgListrikForm({
           </button>
           <button
             onClick={handleSave}
-            disabled={!selectedDate || isLoading || !areaId}
+            disabled={!selectedDate || isLoading || !areaId || !isScanned}
+            title={!isScanned ? "Harap scan QR code terlebih dahulu" : ""}
             style={{
               padding: "12px 28px",
-              background: (selectedDate && !isLoading && areaId) ? "linear-gradient(135deg, #1e88e5, #0d47a1)" : "#bdbdbd",
-              color: "white",
+              background: (selectedDate && !isLoading && areaId && isScanned) ? "linear-gradient(135deg, #1e88e5, #0d47a1)" : "#bdbdbd",
+              color: (selectedDate && !isLoading && areaId && isScanned) ? "white" : "#9e9e9e",
               border: "none",
               borderRadius: "8px",
               fontWeight: "600",
-              cursor: (selectedDate && !isLoading && areaId) ? "pointer" : "not-allowed",
-              opacity: (selectedDate && !isLoading && areaId) ? 1 : 0.6
+              cursor: (selectedDate && !isLoading && areaId && isScanned) ? "pointer" : "not-allowed",
+              opacity: (selectedDate && !isLoading && areaId && isScanned) ? 1 : 0.6
             }}
           >
             {isLoading ? "⏳ Menyimpan..." : "✓ Simpan Data"}
@@ -604,7 +790,63 @@ export function EChecksheetTgListrikForm({
           </div>
         )}
 
+        {/* ✅ CSS UNTUK BANNER */}
         <style jsx>{`
+          .banner {
+            border-radius: 10px;
+            padding: 12px 18px;
+            margin-bottom: 18px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-weight: 500;
+          }
+          .banner-warning {
+            background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
+            border: 1px solid #f59e0b;
+            color: #92400e;
+            box-shadow: 0 2px 8px rgba(245,158,11,0.12);
+          }
+          .banner-btn {
+            margin-left: auto;
+            background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+            color: white;
+            border: none;
+            border-radius: 7px;
+            padding: 8px 16px;
+            cursor: pointer;
+            font-size: 0.85rem;
+            font-weight: 600;
+            transition: all 0.2s;
+            box-shadow: 0 2px 6px rgba(245,158,11,0.3);
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            min-height: 36px;
+          }
+          .banner-btn:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 4px 10px rgba(245,158,11,0.4);
+          }
+          .banner-btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+          }
+          .scan-warning {
+            background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
+            border-left: 4px solid #f59e0b;
+            justify-content: space-between;
+          }
+          .scan-warning .banner-btn {
+            background: linear-gradient(135deg, #7c3aed 0%, #5b21b6 100%);
+            padding: 8px 16px;
+          }
+          .scan-warning .banner-btn:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 4px 10px rgba(124, 58, 237, 0.4);
+          }
+
           @media (max-width: 768px) {
             div[style*="paddingLeft"] { padding-left: 25px !important; padding-right: 15px !important; }
           }

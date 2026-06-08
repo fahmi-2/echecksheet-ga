@@ -5,6 +5,12 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
 import { Sidebar } from "@/components/Sidebar";
 
+// ✅ TAMBAHKAN IMPORT OFFLINE & SCAN VERIFICATION
+import { useConnection } from "@/lib/connection-context";
+import { smartFetch } from "@/lib/smart-fetch";
+import { useScanVerification } from "@/lib/hooks/useScanVerification";
+import { QrCode } from "lucide-react";
+
 interface ChecklistItem {
   id: number;
   item_key: string;
@@ -78,6 +84,10 @@ export function EChecksheetSmokeDetectorForm() {
   const searchParams = useSearchParams();
   const { user, loading: authLoading, isInitialized } = useAuth();
   
+  // ✅ TAMBAHKAN HOOK CONNECTION & SCAN
+  const { isOnline, pendingCount } = useConnection();
+  const { isScanned, isLoading: scanLoading } = useScanVerification();
+  
   // ✅ Ambil areaId dari query string
   const areaId = searchParams.get('areaId');
   const locationParam = searchParams.get('location');
@@ -129,7 +139,7 @@ export function EChecksheetSmokeDetectorForm() {
       console.log('⏳ Waiting for user data...');
       return;
     }
-    if (user.role !== "inspector-ga" && user.role !== "group-leader-qa") {
+    if (user.role !== "inspector-ga-fire" && user.role !== "group-leader-qa") {
       console.warn('⚠️ Unauthorized - wrong role:', user.role);
       router.replace("/login-page");
       return;
@@ -347,6 +357,7 @@ export function EChecksheetSmokeDetectorForm() {
     }));
   };
 
+  // ✅ MODIFIKASI handleSave MENGGUNAKAN SMARTFETCH
   const handleSave = async () => {
     if (!selectedDate) {
       alert("Silakan pilih tanggal inspeksi");
@@ -370,20 +381,32 @@ export function EChecksheetSmokeDetectorForm() {
     try {
       setSaving(true);
       console.log('💾 Saving checklist data...');
+
+      const submitData = {
+        checklistData,
+        inspectorId: user?.id || '',
+        inspectorName: user?.fullName || '',
+        status: 'submitted',
+        // Data tambahan untuk metadata
+        areaId: areaId,
+        date: selectedDate,
+        location: areaInfo?.location || locationParam || ''
+      };
       
-      const response = await fetch(
+      // ✅ GUNAKAN SMARTFETCH UNTUK OFFLINE MODE
+      const response = await smartFetch(
         `/e-checksheet-ga/api/ga/checksheet/${TYPE_SLUG}/by-area/${areaId}/${selectedDate}`,
         {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
           },
-          body: JSON.stringify({
-            checklistData,
-            inspectorId: user?.id || '',
-            inspectorName: user?.fullName || '',
-            status: 'submitted'
-          }),
+          body: JSON.stringify(submitData),
+          queueType: 'smoke_detector_inspeksi',
+          metadata: { 
+            areaCode: `smoke-detector-${areaId}`,
+            areaType: 'general'
+          }
         }
       );
 
@@ -468,7 +491,7 @@ export function EChecksheetSmokeDetectorForm() {
     }
   };
 
-  // ✅ Image Upload Functions
+  // ✅ Image Upload Functions - sudah base64, kompatibel offline
   const handleImageUpload = (event: React.ChangeEvent<HTMLInputElement>, itemKey: string) => {
     if (!selectedDate) {
       alert("Pilih tanggal terlebih dahulu!");
@@ -600,6 +623,20 @@ export function EChecksheetSmokeDetectorForm() {
           </div>
         </div>
 
+        {/* ✅ SCAN WARNING BANNER - TAMBAHAN BARU */}
+        {!isScanned && (
+          <div className="banner banner-warning scan-warning">
+            <span>🔒 Akses melalui scan QR code terlebih dahulu untuk mengisi checksheet ini.</span>
+            <button 
+              onClick={() => router.push("/scan")} 
+              className="banner-btn"
+              disabled={saving || isLoading}
+            >
+              <QrCode size={14} /> Scan Sekarang
+            </button>
+          </div>
+        )}
+
         {/* Area Info */}
         <div style={{ background: "white", border: "1px solid #e8e8e8", borderRadius: "10px", padding: "16px 20px", boxShadow: "0 2px 6px rgba(0,0,0,0.05)", marginBottom: "20px" }}>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: "12px" }}>
@@ -630,13 +667,17 @@ export function EChecksheetSmokeDetectorForm() {
                 setSelectedDate(e.target.value);
               }}
               max={new Date().toISOString().split('T')[0]}
+              disabled={!isScanned}
+              title={!isScanned ? "Harap scan QR code terlebih dahulu" : ""}
               style={{
                 color: "#0d47a1",
                 padding: "8px 12px",
                 border: "2px solid #1e88e5",
                 borderRadius: "6px",
                 fontSize: "14px",
-                minWidth: "160px"
+                minWidth: "160px",
+                background: isScanned ? "white" : "#f5f5f5",
+                cursor: isScanned ? "text" : "not-allowed"
               }}
             />
           </div>
@@ -667,6 +708,8 @@ export function EChecksheetSmokeDetectorForm() {
                   setSelectedDate(""); // Reset date when year changes
                   console.log('📅 Year changed:', year);
                 }}
+                disabled={!isScanned}
+                title={!isScanned ? "Harap scan QR code terlebih dahulu" : ""}
                 style={{
                   color: "#0d47a1",
                   padding: "8px 12px",
@@ -674,8 +717,8 @@ export function EChecksheetSmokeDetectorForm() {
                   borderRadius: "6px",
                   fontSize: "14px",
                   minWidth: "100px",
-                  background: "white",
-                  cursor: "pointer",
+                  background: isScanned ? "white" : "#f5f5f5",
+                  cursor: isScanned ? "pointer" : "not-allowed",
                   fontWeight: "500"
                 }}
               >
@@ -694,16 +737,17 @@ export function EChecksheetSmokeDetectorForm() {
                   setSelectedDate(""); // Reset date when month changes
                   console.log('📅 Month changed:', month);
                 }}
-                disabled={selectedYear === ""}
+                disabled={selectedYear === "" || !isScanned}
+                title={!isScanned ? "Harap scan QR code terlebih dahulu" : ""}
                 style={{
-                  color: selectedYear === "" ? "#999" : "#0d47a1",
+                  color: (selectedYear === "" || !isScanned) ? "#999" : "#0d47a1",
                   padding: "8px 12px",
                   border: "2px solid #1e88e5",
                   borderRadius: "6px",
                   fontSize: "14px",
                   minWidth: "140px",
-                  background: "white",
-                  cursor: selectedYear === "" ? "not-allowed" : "pointer",
+                  background: (selectedYear !== "" && isScanned) ? "white" : "#f5f5f5",
+                  cursor: (selectedYear !== "" && isScanned) ? "pointer" : "not-allowed",
                   fontWeight: "500"
                 }}
               >
@@ -722,6 +766,8 @@ export function EChecksheetSmokeDetectorForm() {
                     setSelectedDate(date);
                     console.log('📅 Date selected from filter:', date);
                   }}
+                  disabled={!isScanned}
+                  title={!isScanned ? "Harap scan QR code terlebih dahulu" : ""}
                   style={{
                     color: "#0d47a1",
                     padding: "8px 12px",
@@ -729,8 +775,8 @@ export function EChecksheetSmokeDetectorForm() {
                     borderRadius: "6px",
                     fontSize: "14px",
                     minWidth: "160px",
-                    background: "white",
-                    cursor: "pointer",
+                    background: isScanned ? "white" : "#f5f5f5",
+                    cursor: isScanned ? "pointer" : "not-allowed",
                     fontWeight: "500"
                   }}
                 >
@@ -792,14 +838,15 @@ export function EChecksheetSmokeDetectorForm() {
                     setIsLoading(false);
                   }
                 }}
-                disabled={!selectedDate || isLoading}
+                disabled={!selectedDate || isLoading || !isScanned}
+                title={!isScanned ? "Harap scan QR code terlebih dahulu" : ""}
                 style={{
                   padding: "8px 16px",
-                  background: (selectedDate && !isLoading) ? "#ff9800" : "#bdbdbd",
-                  color: "white",
+                  background: (selectedDate && !isLoading && isScanned) ? "#ff9800" : "#bdbdbd",
+                  color: (selectedDate && !isLoading && isScanned) ? "white" : "#9e9e9e",
                   border: "none",
                   borderRadius: "6px",
-                  cursor: (selectedDate && !isLoading) ? "pointer" : "not-allowed",
+                  cursor: (selectedDate && !isLoading && isScanned) ? "pointer" : "not-allowed",
                   fontWeight: "600",
                   fontSize: "14px"
                 }}
@@ -872,7 +919,8 @@ export function EChecksheetSmokeDetectorForm() {
                           <select
                             value={data.hasilPemeriksaan || ''}
                             onChange={(e) => updateItemData(item.item_key, 'hasilPemeriksaan', e.target.value)}
-                            disabled={!selectedDate}
+                            disabled={!selectedDate || !isScanned}
+                            title={!isScanned ? "Harap scan QR code terlebih dahulu" : ""}
                             style={{ 
                               width: "100%", 
                               padding: "6px", 
@@ -881,7 +929,8 @@ export function EChecksheetSmokeDetectorForm() {
                               fontWeight: "500",
                               fontSize: "14px",
                               outline: "none",
-                              background: "white"
+                              background: (selectedDate && isScanned) ? "white" : "#f5f5f5",
+                              cursor: (selectedDate && isScanned) ? "pointer" : "not-allowed"
                             }}
                           >
                             <option value="">-</option>
@@ -893,7 +942,8 @@ export function EChecksheetSmokeDetectorForm() {
                           <textarea
                             value={data.keteranganTemuan || ''}
                             onChange={(e) => updateItemData(item.item_key, 'keteranganTemuan', e.target.value)}
-                            disabled={!selectedDate}
+                            disabled={!selectedDate || !isScanned}
+                            title={!isScanned ? "Harap scan QR code terlebih dahulu" : ""}
                             placeholder="Describe any issues..."
                             rows={2}
                             style={{ 
@@ -904,7 +954,9 @@ export function EChecksheetSmokeDetectorForm() {
                               border: "1px solid #d0d0d0",
                               borderRadius: "4px",
                               outline: "none",
-                              fontFamily: "inherit"
+                              fontFamily: "inherit",
+                              background: (selectedDate && isScanned) ? "white" : "#f5f5f5",
+                              cursor: (selectedDate && isScanned) ? "text" : "not-allowed"
                             }}
                           />
                         </td>
@@ -912,14 +964,15 @@ export function EChecksheetSmokeDetectorForm() {
                           <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
                             <button
                               onClick={() => openCamera(item.item_key)}
-                              disabled={!selectedDate}
+                              disabled={!selectedDate || !isScanned}
+                              title={!isScanned ? "Harap scan QR code terlebih dahulu" : ""}
                               style={{
                                 padding: "4px 8px",
-                                background: selectedDate ? "#1e88e5" : "#bdbdbd",
+                                background: (selectedDate && isScanned) ? "#1e88e5" : "#bdbdbd",
                                 color: "white",
                                 borderRadius: "4px",
                                 fontSize: "11px",
-                                cursor: selectedDate ? "pointer" : "not-allowed",
+                                cursor: (selectedDate && isScanned) ? "pointer" : "not-allowed",
                                 textAlign: "center",
                                 border: "none"
                               }}
@@ -930,13 +983,14 @@ export function EChecksheetSmokeDetectorForm() {
                               htmlFor={`file-${item.item_key}`}
                               style={{
                                 padding: "4px 8px",
-                                background: selectedDate ? "#4caf50" : "#bdbdbd",
+                                background: (selectedDate && isScanned) ? "#4caf50" : "#bdbdbd",
                                 color: "white",
                                 borderRadius: "4px",
                                 fontSize: "11px",
-                                cursor: selectedDate ? "pointer" : "not-allowed",
+                                cursor: (selectedDate && isScanned) ? "pointer" : "not-allowed",
                                 textAlign: "center"
                               }}
+                              title={!isScanned ? "Harap scan QR code terlebih dahulu" : ""}
                             >
                               🖼️ File
                             </label>
@@ -945,7 +999,7 @@ export function EChecksheetSmokeDetectorForm() {
                               type="file"
                               accept="image/*"
                               multiple
-                              disabled={!selectedDate}
+                              disabled={!selectedDate || !isScanned}
                               onChange={(e) => handleImageUpload(e, item.item_key)}
                               style={{ display: "none" }}
                             />
@@ -968,6 +1022,8 @@ export function EChecksheetSmokeDetectorForm() {
                                       e.stopPropagation();
                                       removeImage(images.findIndex(i => i.key === item.item_key && i.url === img.url), item.item_key);
                                     }}
+                                    disabled={!isScanned}
+                                    title={!isScanned ? "Harap scan QR code terlebih dahulu" : ""}
                                     style={{
                                       position: "absolute",
                                       top: "2px",
@@ -996,7 +1052,8 @@ export function EChecksheetSmokeDetectorForm() {
                           <textarea
                             value={data.tindakanPerbaikan || ''}
                             onChange={(e) => updateItemData(item.item_key, 'tindakanPerbaikan', e.target.value)}
-                            disabled={!selectedDate}
+                            disabled={!selectedDate || !isScanned}
+                            title={!isScanned ? "Harap scan QR code terlebih dahulu" : ""}
                             placeholder="Action taken..."
                             rows={2}
                             style={{ 
@@ -1007,7 +1064,9 @@ export function EChecksheetSmokeDetectorForm() {
                               border: "1px solid #d0d0d0",
                               borderRadius: "4px",
                               outline: "none",
-                              fontFamily: "inherit"
+                              fontFamily: "inherit",
+                              background: (selectedDate && isScanned) ? "white" : "#f5f5f5",
+                              cursor: (selectedDate && isScanned) ? "text" : "not-allowed"
                             }}
                           />
                         </td>
@@ -1016,7 +1075,8 @@ export function EChecksheetSmokeDetectorForm() {
                             type="text"
                             value={data.pic || user?.fullName || ''}
                             onChange={(e) => updateItemData(item.item_key, 'pic', e.target.value)}
-                            disabled={!selectedDate}
+                            disabled={!selectedDate || !isScanned}
+                            title={!isScanned ? "Harap scan QR code terlebih dahulu" : ""}
                             placeholder="Name"
                             style={{ 
                               width: "100%", 
@@ -1024,7 +1084,9 @@ export function EChecksheetSmokeDetectorForm() {
                               fontSize: "12px",
                               border: "1px solid #d0d0d0",
                               borderRadius: "4px",
-                              outline: "none"
+                              outline: "none",
+                              background: (selectedDate && isScanned) ? "white" : "#f5f5f5",
+                              cursor: (selectedDate && isScanned) ? "text" : "not-allowed"
                             }}
                           />
                         </td>
@@ -1033,14 +1095,17 @@ export function EChecksheetSmokeDetectorForm() {
                             type="date"
                             value={data.dueDate || ''}
                             onChange={(e) => updateItemData(item.item_key, 'dueDate', e.target.value)}
-                            disabled={!selectedDate}
+                            disabled={!selectedDate || !isScanned}
+                            title={!isScanned ? "Harap scan QR code terlebih dahulu" : ""}
                             style={{ 
                               width: "100%", 
                               padding: "6px",
                               border: "1px solid #d0d0d0",
                               borderRadius: "4px",
                               outline: "none",
-                              fontSize: "12px"
+                              fontSize: "12px",
+                              background: (selectedDate && isScanned) ? "white" : "#f5f5f5",
+                              cursor: (selectedDate && isScanned) ? "text" : "not-allowed"
                             }}
                           />
                         </td>
@@ -1049,7 +1114,8 @@ export function EChecksheetSmokeDetectorForm() {
                             type="text"
                             value={data.verify || ''}
                             onChange={(e) => updateItemData(item.item_key, 'verify', e.target.value)}
-                            disabled={!selectedDate}
+                            disabled={!selectedDate || !isScanned}
+                            title={!isScanned ? "Harap scan QR code terlebih dahulu" : ""}
                             placeholder="Name"
                             style={{ 
                               width: "100%", 
@@ -1057,7 +1123,9 @@ export function EChecksheetSmokeDetectorForm() {
                               fontSize: "12px",
                               border: "1px solid #d0d0d0",
                               borderRadius: "4px",
-                              outline: "none"
+                              outline: "none",
+                              background: (selectedDate && isScanned) ? "white" : "#f5f5f5",
+                              cursor: (selectedDate && isScanned) ? "text" : "not-allowed"
                             }}
                           />
                         </td>
@@ -1088,16 +1156,17 @@ export function EChecksheetSmokeDetectorForm() {
           </button>
           <button
             onClick={handleSave}
-            disabled={!selectedDate || saving}
+            disabled={!selectedDate || saving || !isScanned}
+            title={!isScanned ? "Harap scan QR code terlebih dahulu" : ""}
             style={{
               padding: "12px 28px",
-              background: (selectedDate && !saving) ? "linear-gradient(135deg, #1e88e5, #0d47a1)" : "#bdbdbd",
-              color: "white",
+              background: (selectedDate && !saving && isScanned) ? "linear-gradient(135deg, #1e88e5, #0d47a1)" : "#bdbdbd",
+              color: (selectedDate && !saving && isScanned) ? "white" : "#9e9e9e",
               border: "none",
               borderRadius: "8px",
               fontWeight: "600",
-              cursor: (selectedDate && !saving) ? "pointer" : "not-allowed",
-              opacity: (selectedDate && !saving) ? 1 : 0.6
+              cursor: (selectedDate && !saving && isScanned) ? "pointer" : "not-allowed",
+              opacity: (selectedDate && !saving && isScanned) ? 1 : 0.6
             }}
           >
             {saving ? "⏳ Menyimpan..." : "✓ Simpan Data"}
@@ -1227,7 +1296,63 @@ export function EChecksheetSmokeDetectorForm() {
           </div>
         )}
 
+        {/* ✅ CSS UNTUK BANNER */}
         <style jsx>{`
+          .banner {
+            border-radius: 10px;
+            padding: 12px 18px;
+            margin-bottom: 18px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-weight: 500;
+          }
+          .banner-warning {
+            background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
+            border: 1px solid #f59e0b;
+            color: #92400e;
+            box-shadow: 0 2px 8px rgba(245,158,11,0.12);
+          }
+          .banner-btn {
+            margin-left: auto;
+            background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+            color: white;
+            border: none;
+            border-radius: 7px;
+            padding: 8px 16px;
+            cursor: pointer;
+            font-size: 0.85rem;
+            font-weight: 600;
+            transition: all 0.2s;
+            box-shadow: 0 2px 6px rgba(245,158,11,0.3);
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            min-height: 36px;
+          }
+          .banner-btn:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 4px 10px rgba(245,158,11,0.4);
+          }
+          .banner-btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+          }
+          .scan-warning {
+            background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
+            border-left: 4px solid #f59e0b;
+            justify-content: space-between;
+          }
+          .scan-warning .banner-btn {
+            background: linear-gradient(135deg, #7c3aed 0%, #5b21b6 100%);
+            padding: 8px 16px;
+          }
+          .scan-warning .banner-btn:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 4px 10px rgba(124, 58, 237, 0.4);
+          }
+
           @media (max-width: 1200px) {
             div[style*="paddingLeft"] {
               padding-left: 80px !important;

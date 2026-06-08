@@ -4,6 +4,8 @@ import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
 import { Sidebar } from "@/components/Sidebar";
+import { useConnection } from "@/lib/connection-context";
+import { smartFetch } from "@/lib/smart-fetch";
 import QrScanner from 'qr-scanner';
 import { ArrowLeft, Plus, Trash2, Edit2, X } from "lucide-react";
 import {
@@ -37,6 +39,7 @@ const parseLocationName = (fullName: string): string => {
 export function GaLiftBarangContent() {
   const router = useRouter();
   const { user, loading: authLoading, isInitialized } = useAuth();
+  const { isOnline, pendingCount } = useConnection();
 
   // ✅ FIX: Use native URL API instead of useSearchParams hook to avoid conflicts
   const getQueryParam = (name: string): string => {
@@ -337,7 +340,7 @@ export function GaLiftBarangContent() {
       const newName = `${addFormData.namaLift} \x07 ${addFormData.area} \x07 ${addFormData.lokasiDetail}`;
       
       // Call API
-      const response = await fetch(`/e-checksheet-ga/api/ga/checksheet/${TYPE_SLUG}/areas`, {
+      const response = await smartFetch(`/e-checksheet-ga/api/ga/checksheet/${TYPE_SLUG}/areas`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -349,6 +352,8 @@ export function GaLiftBarangContent() {
           type_id: 6, // lift-barang type_id = 6
           is_active: true
         }),
+        queueType: 'lift_barang',
+        metadata: { areaCode: TYPE_SLUG }
       });
 
       const result = await response.json();
@@ -387,8 +392,10 @@ export function GaLiftBarangContent() {
     try {
       setIsDeleting(true);
       
-      const response = await fetch(`/e-checksheet-ga/api/ga/checksheet/${TYPE_SLUG}/areas/${deleteTarget.id}`, {
+      const response = await smartFetch(`/e-checksheet-ga/api/ga/checksheet/${TYPE_SLUG}/areas/${deleteTarget.id}`, {
         method: 'DELETE',
+        queueType: 'lift_barang',
+        metadata: { areaCode: TYPE_SLUG }
       });
 
       const result = await response.json();
@@ -664,7 +671,7 @@ export function GaLiftBarangContent() {
                         <td style={{ padding: "14px 16px" }}>
                           <div style={{ display: "flex", gap: "8px", justifyContent: "center" }}>
                             <button onClick={() => openDetail(group.areas[0])} disabled={isDeleteMode} style={{ padding: "7px 14px", borderRadius: "5px", fontSize: "13px", fontWeight: "500", background: isDeleteMode ? "#bdbdbd" : "#1976d2", color: "white", border: "none", cursor: isDeleteMode ? "not-allowed" : "pointer" }}>View</button>
-                            <a href={`/e-checksheet-lift-barang?liftName=${encodeURIComponent(group.locationName)}&area=${encodeURIComponent(group.areaName)}&lokasi=${encodeURIComponent(group.locationDetail)}`} style={{ padding: "7px 14px", borderRadius: "5px", fontSize: "13px", fontWeight: "500", background: isDeleteMode ? "#bdbdbd" : "#43a047", color: "white", textDecoration: "none", display: "inline-block", pointerEvents: isDeleteMode ? "none" : "auto" }}>Inspect</a>
+                            <a href={`/e-checksheet-ga/e-checksheet-lift-barang?liftName=${encodeURIComponent(group.locationName)}&area=${encodeURIComponent(group.areaName)}&lokasi=${encodeURIComponent(group.locationDetail)}`} style={{ padding: "7px 14px", borderRadius: "5px", fontSize: "13px", fontWeight: "500", background: isDeleteMode ? "#bdbdbd" : "#43a047", color: "white", textDecoration: "none", display: "inline-block", pointerEvents: isDeleteMode ? "none" : "auto" }}>Inspect</a>
                           </div>
                         </td>
                         {isDeleteMode && (

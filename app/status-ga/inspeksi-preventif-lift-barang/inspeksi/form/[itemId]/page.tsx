@@ -4,7 +4,8 @@ import { useEffect, useState, ChangeEvent } from "react";
 import { useRouter, useSearchParams, useParams } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
 import { Sidebar } from "@/components/Sidebar";
-import { format } from "date-fns";
+import { useConnection } from "@/lib/connection-context";
+import { smartFetch } from "@/lib/smart-fetch";
 import { QrCode } from "lucide-react";
 
 // ✅ TAMBAHKAN IMPORT HOOK SCAN VERIFICATION
@@ -192,7 +193,6 @@ type FormData = Record<
     keterangan?: string;
     solusi?: string;
     foto_path?: string;
-    foto_file?: File | null;
   }
 >;
 
@@ -201,6 +201,7 @@ export default function InspeksiFormDetailPage() {
   const params = useParams();
   const searchParams = useSearchParams();
   const { user } = useAuth();
+  const { isOnline, pendingCount } = useConnection();
   
   // ✅ TAMBAHKAN HOOK INI - WAJIB DI TOP LEVEL
   const { isScanned, isLoading: scanLoading } = useScanVerification();
@@ -233,7 +234,6 @@ export default function InspeksiFormDetailPage() {
         keterangan: "",
         solusi: "",
         foto_path: "",
-        foto_file: null
       };
     });
     setFormData(initialData);
@@ -257,7 +257,6 @@ export default function InspeksiFormDetailPage() {
                   keterangan: itemData?.keterangan || "",
                   solusi: itemData?.solusi || "",
                   foto_path: itemData?.foto_path || "",
-                  foto_file: null
                 };
               });
               setFormData(loadedData);
@@ -302,7 +301,8 @@ export default function InspeksiFormDetailPage() {
     }));
   };
 
-  const handleImageUpload = async (subId: string, e: ChangeEvent<HTMLInputElement>) => {
+  // ✅ UPLOAD FOTO MENGGUNAKAN BASE64 (KONSISTEN DENGAN OFFLINE MODE)
+  const handleImageUpload = (subId: string, e: ChangeEvent<HTMLInputElement>) => {
     if (isViewMode) return;
     
     const file = e.target.files?.[0];
@@ -318,41 +318,18 @@ export default function InspeksiFormDetailPage() {
       return;
     }
 
-    try {
-      setLoading(true);
-      
-      const formDataUpload = new FormData();
-      formDataUpload.append('file', file);
-      formDataUpload.append('itemId', itemId);
-      formDataUpload.append('subItemId', subId);
-
-      const response = await fetch('/e-checksheet-ga/api/lift-barang/upload', {
-        method: 'POST',
-        body: formDataUpload,
-      });
-
-      const result = await response.json();
-
-      if (response.ok && result.success) {
-        setFormData((prev) => ({
-          ...prev,
-          [subId]: { 
-            ...prev[subId], 
-            foto_path: result.data.path,
-            foto_file: file
-          },
-        }));
-        alert('✅ Foto berhasil diupload!');
-      } else {
-        alert('❌ Gagal upload foto: ' + (result.message || 'Error tidak diketahui'));
-      }
-    } catch (error) {
-      console.error('Upload error:', error);
-      alert('❌ Terjadi kesalahan saat upload foto');
-    } finally {
-      setLoading(false);
-      e.target.value = '';
-    }
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      setFormData((prev) => ({
+        ...prev,
+        [subId]: { 
+          ...prev[subId], 
+          foto_path: reader.result as string,
+        },
+      }));
+    };
+    reader.readAsDataURL(file);
+    e.target.value = '';
   };
 
   const handleSubmit = async () => {
@@ -407,6 +384,7 @@ export default function InspeksiFormDetailPage() {
       }
 
       const submitData = {
+        itemId,
         inspection_date: new Date().toISOString().split('T')[0],
         inspector: user?.fullName || 'Unknown Inspector',
         inspector_nik: user?.nik || '',
@@ -414,16 +392,20 @@ export default function InspeksiFormDetailPage() {
       };
 
       console.log('📤 Data yang akan dikirim ke API:', {
+        itemId: submitData.itemId,
         inspection_date: submitData.inspection_date,
         inspector: submitData.inspector,
         data_count: Object.keys(submitData.data).length,
         sample_item: submitData.data[Object.keys(submitData.data)[0]]
       });
 
-      const response = await fetch('/e-checksheet-ga/api/lift-barang/inspeksi/submit', {
+      // ✅ PENGGUNAAN SMARTFETCH UNTUK OFFLINE MODE
+      const response = await smartFetch('/e-checksheet-ga/api/lift-barang/inspeksi/submit', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(submitData),
+        queueType: 'lift_barang_inspeksi',
+        metadata: { itemId: itemId }
       });
 
       const result = await response.json();
@@ -442,6 +424,15 @@ export default function InspeksiFormDetailPage() {
     } finally {
       setLoading(false);
     }
+  };
+
+  // Helper function untuk mendapatkan URL gambar (mendukung base64 dan path server)
+  const getImageUrl = (fotoPath: string) => {
+    if (!fotoPath) return '';
+    if (fotoPath.startsWith('data:') || fotoPath.startsWith('http')) {
+      return fotoPath;
+    }
+    return `${process.env.NEXT_PUBLIC_BASE_URL || ''}${fotoPath}`;
   };
 
   return (
@@ -550,9 +541,7 @@ export default function InspeksiFormDetailPage() {
                         {entry?.foto_path ? (
                           <div className="image-preview">
                             <img 
-                              src={entry.foto_path.startsWith('http') 
-                                ? entry.foto_path 
-                                : `${process.env.NEXT_PUBLIC_BASE_URL || ''}${entry.foto_path}`} 
+                              src={getImageUrl(entry.foto_path)}
                               alt="Foto inspeksi" 
                               className="uploaded-image" 
                             />
@@ -601,9 +590,7 @@ export default function InspeksiFormDetailPage() {
                           {entry?.foto_path && (
                             <div className="image-preview">
                               <img 
-                                src={entry.foto_path.startsWith('http') 
-                                  ? entry.foto_path 
-                                  : `${process.env.NEXT_PUBLIC_BASE_URL || ''}${entry.foto_path}`} 
+                                src={getImageUrl(entry.foto_path)}
                                 alt="Preview" 
                                 className="uploaded-image" 
                               />
@@ -729,9 +716,7 @@ export default function InspeksiFormDetailPage() {
                           {entry?.foto_path && (
                             <div className="image-preview-mobile">
                               <img 
-                                src={entry.foto_path.startsWith('http') 
-                                  ? entry.foto_path 
-                                  : `${process.env.NEXT_PUBLIC_BASE_URL || ''}${entry.foto_path}`} 
+                                src={getImageUrl(entry.foto_path)}
                                 alt="Preview" 
                                 className="uploaded-image-mobile" 
                               />
@@ -748,9 +733,7 @@ export default function InspeksiFormDetailPage() {
                             <label className="form-label">Foto</label>
                             <div className="image-preview-mobile">
                               <img 
-                                src={entry.foto_path.startsWith('http') 
-                                  ? entry.foto_path 
-                                  : `${process.env.NEXT_PUBLIC_BASE_URL || ''}${entry.foto_path}`} 
+                                src={getImageUrl(entry.foto_path)}
                                 alt="Foto inspeksi" 
                                 className="uploaded-image-mobile" 
                               />

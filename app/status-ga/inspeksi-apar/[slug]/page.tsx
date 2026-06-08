@@ -4,6 +4,8 @@ import { useState, useEffect, use } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
 import { Sidebar } from "@/components/Sidebar";
+import { useConnection } from "@/lib/connection-context";
+import { smartFetch } from "@/lib/smart-fetch";
 import { ArrowLeft, QrCode } from "lucide-react";
 import { format, parse, isBefore, isValid } from "date-fns";
 import { aparDataBySlug, type AparDataItem } from "@/lib/apar-data";
@@ -67,6 +69,7 @@ export default function InspeksiAparForm({ params }: { params: Promise<{ slug: s
 
   // ✅ TAMBAHKAN HOOK INI UNTUK SCAN VERIFICATION
   const { isScanned, isLoading: scanLoading } = useScanVerification();
+  const { isOnline, pendingCount } = useConnection();
   
   const today = new Date();
   const date = format(today, "yyyy-MM-dd");
@@ -131,7 +134,10 @@ export default function InspeksiAparForm({ params }: { params: Promise<{ slug: s
     
     const autoLoadMasterData = async () => {
       try {
-        const response = await fetch(`/e-checksheet-ga/api/apar/master?slug=${slug}`);
+        const response = await smartFetch(`/e-checksheet-ga/api/apar/master?slug=${slug}`, {
+          queueType: 'apar',
+          metadata: { areaCode: 'apar' }
+        });
         const result = await response.json();
         
         if (response.ok && result.success && result.data && result.data.length > 0) {
@@ -186,7 +192,10 @@ export default function InspeksiAparForm({ params }: { params: Promise<{ slug: s
   const loadMasterData = async () => {
     try {
       setLoadingMaster(true);
-      const response = await fetch(`/e-checksheet-ga/api/apar/master?slug=${slug}`);
+      const response = await smartFetch(`/e-checksheet-ga/api/apar/master?slug=${slug}`, {
+        queueType: 'apar',
+        metadata: { areaCode: 'apar' }
+      });
       const result = await response.json();
 
       if (response.ok && result.success) {
@@ -273,7 +282,12 @@ export default function InspeksiAparForm({ params }: { params: Promise<{ slug: s
       formData.append('slug', slug);
       formData.append('lokasi', items[index].lokasi);
 
-      const response = await fetch('/e-checksheet-ga/api/apar/upload', { method: 'POST', body: formData });
+      const response = await smartFetch('/e-checksheet-ga/api/apar/upload', { 
+        method: 'POST', 
+        body: formData,
+        queueType: 'apar',
+        metadata: { areaCode: 'apar' }
+      });
       const result = await response.json();
 
       if (response.ok && result.success) {
@@ -404,14 +418,16 @@ export default function InspeksiAparForm({ params }: { params: Promise<{ slug: s
         }))
       };
       
-      const response = await fetch('/e-checksheet-ga/api/apar/submit', {
+      const response = await smartFetch('/e-checksheet-ga/api/apar/submit', {
         method: 'POST',
         headers: { 
           'Content-Type': 'application/json', 
           'Accept': 'application/json' 
         },
         body: JSON.stringify(submitData),
-        credentials: 'include'
+        credentials: 'include',
+        queueType: 'apar',
+        metadata: { areaCode: 'apar' }
       });
       
       const result = await response.json();
