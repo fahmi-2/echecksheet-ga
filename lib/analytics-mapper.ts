@@ -154,7 +154,7 @@ export async function fetchAnalytics(
 // ============================================
 
 export async function fetchTopUsers(
-  endpoint: string = '/e-checksheet-ga/analytics/top-users',
+  endpoint: string = '/analytics/top-users',
   params: Record<string, string | undefined>
 ): Promise<TopUsersResponse['data']> {
   try {
@@ -213,11 +213,11 @@ export async function fetchHistory(
 ): Promise<{ data: DashboardData['historyData']; total: number; totalPages: number }> {
   try {
     // Selalu gunakan unified endpoint
-    const UNIFIED = '/api/analytics/history';
+    const UNIFIED = '/e-checksheet-ga/api/analytics/history';
 
     const params = new URLSearchParams({
       slug:  slug.toLowerCase().trim(),
-      limit: String(Math.min(Math.max(limit, 1), 100)), // Clamp: 1-100
+      limit: String(Math.max(limit, 1)), // Allow fetching all records for PDF download
       page:  String(Math.max(page, 1)), // Min: 1
     });
 

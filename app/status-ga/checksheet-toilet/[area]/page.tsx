@@ -65,6 +65,7 @@ const AREA_MAP: Record<string, { title: string; desc: string; type: FormType }> 
   "toilet-a": { title: "TOILET - A", desc: "Toilet laki & perempuan", type: "mixed" },
   "toilet-lobby": { title: "TOILET - LOBBY", desc: "Toilet laki & perempuan", type: "mixed" },
   "toilet-office-main": { title: "TOILET - OFFICE MAIN", desc: "Toilet laki & perempuan", type: "mixed" },
+  "toilet-b": { title: "TOILET - OFFICE BACK", desc: "Toilet wanita", type: "wanita" },
 };
 
 // Helper untuk mendapatkan label dan warna berdasarkan tipe

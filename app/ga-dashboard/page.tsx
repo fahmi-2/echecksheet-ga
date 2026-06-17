@@ -1,6 +1,8 @@
 'use client';
 
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
+import { jsPDF } from 'jspdf';
+import autoTable from 'jspdf-autotable';
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -104,6 +106,11 @@ export default function GADashboard() {
   const [scrollPosition, setScrollPosition] = useState<number>(0);
   const itemsPerPage = 10;
 
+  const [detailModalOpen, setDetailModalOpen] = useState(false);
+  const [detailModalType, setDetailModalType] = useState<'total' | 'ok' | 'ng'>('total');
+  const [detailData, setDetailData] = useState<DashboardData['historyData']>([]);
+  const [isDetailLoading, setIsDetailLoading] = useState(false);
+
   // ── Load data ──────────────────────────────────────────────
   const loadDashboardData = useCallback(async () => {
     setIsLoading(true);
@@ -121,9 +128,9 @@ export default function GADashboard() {
       };
 
       const [analyticsResult, topUsersResult, historyResult] = await Promise.allSettled([
-        fetchAnalytics(formConfig.analyticsEndpoint ?? '/e-checksheet-ga/api/analytics', analyticsParams),
-        fetchTopUsers('/e-checksheet-ga/analytics/top-users', analyticsParams),
-        fetchHistory('/e-checksheet-ga/analytics/history', form.slug, undefined, itemsPerPage, dateFrom, dateTo, currentPage),
+        fetchAnalytics(formConfig.analyticsEndpoint ?? '/analytics', analyticsParams),
+        fetchTopUsers('/analytics/top-users', analyticsParams),
+        fetchHistory('/analytics/history', form.slug, undefined, itemsPerPage, dateFrom, dateTo, currentPage),
       ]);
 
       let analytics: AnalyticsResponse | null = null;
@@ -271,6 +278,73 @@ export default function GADashboard() {
     if (m < 0)  { m = 11; y--; }
     if (m > 11) { m = 0;  y++; }
     setActiveMonth(m); setActiveYear(y); setCurrentPage(1);
+  };
+
+  const openDetailModal = async (type: 'total' | 'ok' | 'ng') => {
+    setDetailModalType(type);
+    setDetailModalOpen(true);
+    setIsDetailLoading(true);
+    
+    try {
+      const form = findForm(selectedForm);
+      const firstDay = new Date(activeYear, activeMonth, 1);
+      const lastDay  = new Date(activeYear, activeMonth + 1, 0);
+      const dateFrom = firstDay.toISOString().split('T')[0];
+      const dateTo   = lastDay.toISOString().split('T')[0];
+
+      const res = await fetchHistory(
+        '/e-checksheet-ga/analytics/history', 
+        form.slug, 
+        undefined, 
+        9999,
+        dateFrom, 
+        dateTo, 
+        1
+      );
+      
+      let filtered = res.data || [];
+      if (type === 'ok') filtered = filtered.filter(item => item.status === 'OK' && item.ngCount === 0);
+      if (type === 'ng') filtered = filtered.filter(item => item.ngCount > 0 || item.status === 'NG');
+      
+      setDetailData(filtered);
+    } catch (err) {
+      console.error(err);
+      setDetailData([]);
+    } finally {
+      setIsDetailLoading(false);
+    }
+  };
+
+  const downloadDetailPDF = () => {
+    const doc = new jsPDF();
+    const formName = findForm(selectedForm).label.replace(/[^a-zA-Z0-9 ]/g, "").trim();
+    const title = `Detail ${detailModalType === 'total' ? 'Total Inspeksi' : detailModalType === 'ok' ? 'Item OK' : 'Item NG'} - ${formName}`;
+    
+    doc.setFontSize(14);
+    doc.text(title, 14, 15);
+    doc.setFontSize(10);
+    doc.text(`Periode: ${MONTHS[activeMonth]} ${activeYear}`, 14, 22);
+
+    const tableColumn = ["No", "Waktu", "Area", "Status", "Item NG", "PIC"];
+    const tableRows = detailData.map((item, i) => [
+      i + 1,
+      formatDateTime(item.filledAt),
+      item.area,
+      item.status,
+      item.ngCount,
+      item.filledBy || '-'
+    ]);
+
+    autoTable(doc, {
+      head: [tableColumn],
+      body: tableRows,
+      startY: 28,
+      theme: 'grid',
+      styles: { fontSize: 8 },
+      headStyles: { fillColor: [21, 101, 192] }
+    });
+
+    doc.save(`${title.replace(/\s+/g, '_')}_${activeMonth+1}_${activeYear}.pdf`);
   };
 
   const currentFormLabel = findForm(selectedForm).label;
@@ -525,6 +599,50 @@ export default function GADashboard() {
         .db-hcard-key { color: #9ca3af; font-weight: 600; text-transform: uppercase; letter-spacing: .3px; }
         .db-hcard-val { color: #334155; font-weight: 500; }
 
+        /* ── MODAL ── */
+        .db-modal-overlay {
+          position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+          background: rgba(0,0,0,0.5); z-index: 1000;
+          display: flex; align-items: center; justify-content: center;
+          padding: 20px;
+        }
+        .db-modal {
+          background: #fff; border-radius: 12px; width: 100%; max-width: 900px;
+          max-height: 90vh; display: flex; flex-direction: column;
+          box-shadow: 0 10px 25px rgba(0,0,0,0.2);
+        }
+        .db-modal-header {
+          padding: 16px 20px; border-bottom: 1px solid #e5e7eb;
+          display: flex; justify-content: space-between; align-items: center;
+        }
+        .db-modal-title { font-size: 18px; font-weight: 700; margin: 0; color: #1e293b; }
+        .db-modal-close {
+          background: none; border: none; font-size: 24px; cursor: pointer; color: #6b7280; line-height: 1;
+        }
+        .db-modal-body {
+          padding: 20px; overflow-y: auto; flex: 1;
+        }
+        .db-modal-footer {
+          padding: 16px 20px; border-top: 1px solid #e5e7eb;
+          display: flex; justify-content: flex-end;
+        }
+        .db-btn {
+          padding: 8px 16px; border-radius: 6px; font-weight: 600; cursor: pointer;
+          border: none; font-size: 14px;
+        }
+        .db-btn-primary {
+          background: #1565c0; color: #fff; transition: background .2s;
+        }
+        .db-btn-primary:hover:not(:disabled) { background: #0d47a1; }
+        .db-btn-primary:disabled { background: #9ca3af; cursor: not-allowed; opacity: .7; }
+
+        .db-detail-btn {
+          margin-top: 12px; padding: 6px 10px; background: rgba(255,255,255,0.2);
+          color: #fff; border: 1px solid rgba(255,255,255,0.4); border-radius: 6px;
+          font-size: 12px; font-weight: 600; cursor: pointer; transition: all 0.2s; width: 100%;
+        }
+        .db-detail-btn:hover { background: rgba(255,255,255,0.3); transform: translateY(-1px); }
+
         /* ── RESPONSIVE ── */
         @media (max-width: 1200px) {
           .db-main { padding: 20px 16px 48px; }
@@ -654,16 +772,19 @@ export default function GADashboard() {
                   <div className="db-stat-icon">📋</div>
                   <div className="db-stat-val">{stats.total}</div>
                   <div className="db-stat-lbl">Total Inspeksi</div>
+                  <button className="db-detail-btn" onClick={() => openDetailModal('total')}>Lihat Detail</button>
                 </div>
                 <div className="db-stat db-stat--green">
                   <div className="db-stat-icon">✓</div>
                   <div className="db-stat-val">{stats.completed}</div>
                   <div className="db-stat-lbl">Item OK</div>
+                  <button className="db-detail-btn" onClick={() => openDetailModal('ok')}>Lihat Detail</button>
                 </div>
                 <div className="db-stat db-stat--amber">
                   <div className="db-stat-icon">✗</div>
                   <div className="db-stat-val">{stats.pending}</div>
                   <div className="db-stat-lbl">Item NG</div>
+                  <button className="db-detail-btn" onClick={() => openDetailModal('ng')}>Lihat Detail</button>
                 </div>
                 <div className="db-stat db-stat--violet">
                   <div className="db-stat-icon">📊</div>
@@ -858,6 +979,74 @@ export default function GADashboard() {
                 )}
               </div>
             </>
+          )}
+
+          {/* ── DETAIL MODAL ── */}
+          {detailModalOpen && (
+            <div className="db-modal-overlay" onClick={() => setDetailModalOpen(false)}>
+              <div className="db-modal" onClick={e => e.stopPropagation()}>
+                <div className="db-modal-header">
+                  <h3 className="db-modal-title">
+                    Detail {detailModalType === 'total' ? 'Total Inspeksi' : detailModalType === 'ok' ? 'Item OK' : 'Item NG'}
+                  </h3>
+                  <button className="db-modal-close" onClick={() => setDetailModalOpen(false)}>&times;</button>
+                </div>
+                <div className="db-modal-body">
+                  {isDetailLoading ? (
+                    <div style={{ textAlign: 'center', padding: '40px' }}>
+                      <div className="db-spinner" />
+                      <p>Memuat detail...</p>
+                    </div>
+                  ) : detailData.length > 0 ? (
+                    <div className="db-table-scroll" style={{ maxHeight: '60vh', display: 'block' }}>
+                      <table className="db-table">
+                        <thead>
+                          <tr>
+                            <th style={{ width: 48, textAlign: 'center' }}>No</th>
+                            <th>Waktu</th>
+                            <th>Area</th>
+                            <th>Status</th>
+                            <th>Item NG</th>
+                            <th>PIC</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {detailData.map((item, i) => (
+                            <tr key={i} className={item.ngCount > 0 ? 'db-row-warn' : ''}>
+                              <td className="db-td-no">{i + 1}</td>
+                              <td style={{ whiteSpace: 'nowrap' }}>{formatDateTime(item.filledAt)}</td>
+                              <td>{item.area}</td>
+                              <td>
+                                <span className={`db-badge ${item.status === 'OK' ? 'db-badge--ok' : 'db-badge--ng'}`}>
+                                  {item.status}
+                                </span>
+                              </td>
+                              <td>
+                                {item.ngCount > 0
+                                  ? <span className="db-ng-count">{item.ngCount} ⚠️</span>
+                                  : <span className="db-ok-count">0</span>}
+                              </td>
+                              <td>{item.filledBy || '–'}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  ) : (
+                    <div className="db-empty">Tidak ada data untuk ditampilkan.</div>
+                  )}
+                </div>
+                <div className="db-modal-footer">
+                  <button 
+                    className="db-btn db-btn-primary" 
+                    onClick={downloadDetailPDF}
+                    disabled={isDetailLoading || detailData.length === 0}
+                  >
+                    📥 Download PDF
+                  </button>
+                </div>
+              </div>
+            </div>
           )}
         </main>
       </div>
