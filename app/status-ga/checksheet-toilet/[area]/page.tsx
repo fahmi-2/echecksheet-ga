@@ -65,7 +65,7 @@ const AREA_MAP: Record<string, { title: string; desc: string; type: FormType }> 
   "toilet-a": { title: "TOILET - A", desc: "Toilet laki & perempuan", type: "mixed" },
   "toilet-lobby": { title: "TOILET - LOBBY", desc: "Toilet laki & perempuan", type: "mixed" },
   "toilet-office-main": { title: "TOILET - OFFICE MAIN", desc: "Toilet laki & perempuan", type: "mixed" },
-  "toilet-b": { title: "TOILET - OFFICE BACK", desc: "Toilet wanita", type: "wanita" },
+  "toilet-b": { title: "TOILET - B", desc: "Toilet wanita", type: "wanita" },
 };
 
 // Helper untuk mendapatkan label dan warna berdasarkan tipe
@@ -992,335 +992,210 @@ export default function ChecksheetToiletForm({ params }: { params: Promise<{ are
         .cs-textarea,
         .cs-input-text {
           width: 100%;
-          border: 1px solid #cdd5de;
-          border-radius: 5px;
-          font-size: 12px;
-          box-sizing: border-box;
-          transition: border-color 0.2s, background 0.2s;
+          padding: 8px 10px;
+          border: 1.5px solid #c9d8ea;
+          border-radius: 6px;
+          font-size: 13px;
+          outline: none;
+          transition: border-color 0.2s, box-shadow 0.2s;
           background: #fff;
-          font-family: inherit;
-        }
-
-        .cs-select {
-          padding: 8px 6px;
-          font-weight: 600;
-          cursor: pointer;
-          border-width: 2px;
-        }
-
-        .cs-select--male   { border-color: #2196f3; }
-        .cs-select--female { border-color: #e91e63; }
-        .cs-select--wanita { border-color: #e91e63; }
-        .cs-select--general { border-color: #1565c0; }
-
-        .cs-select:disabled,
-        .cs-textarea:disabled,
-        .cs-input-text:disabled {
-          background: #f5f5f5;
-          cursor: not-allowed;
-          color: #888;
-          border-color: #ccc;
+          box-sizing: border-box;
         }
 
         .cs-select:focus,
-        .cs-textarea:focus {
-          outline: none;
+        .cs-textarea:focus,
+        .cs-input-text:focus {
           border-color: var(--cs-blue);
+          box-shadow: 0 0 0 3px rgba(6,93,208,0.12);
+        }
+
+        .cs-select {
+          cursor: pointer;
+          appearance: none;
+          background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23065dd0' d='M6 8L1 3h10z'/%3E%3C/svg%3E");
+          background-repeat: no-repeat;
+          background-position: right 10px center;
+          padding-right: 30px;
         }
 
         .cs-textarea {
-          padding: 6px;
           resize: vertical;
-          min-height: 56px;
+          min-height: 60px;
+          font-family: inherit;
+          line-height: 1.4;
         }
 
-        .cs-input-text {
-          padding: 6px;
-          font-weight: 600;
+        /* ─── RADIO BUTTONS ─── */
+        .cs-radio-group {
+          display: flex;
+          gap: 8px;
+          justify-content: center;
         }
 
-        .cs-input-text--male   { background: #e8f4fd; color: var(--cs-male); }
-        .cs-input-text--female { background: #fde4ee; color: var(--cs-female); }
-        .cs-input-text--wanita { background: #fde4ee; color: var(--cs-female); }
-        .cs-input-text--general { background: #e3f2fd; color: var(--cs-general); }
-
-        /* ─── FILE INPUT ─── */
-        .cs-file-input {
-          margin-top: 6px;
-          font-size: 11px;
-          width: 100%;
+        .cs-radio-label {
+          display: flex;
+          align-items: center;
+          gap: 4px;
           cursor: pointer;
+          font-size: 13px;
+          font-weight: 600;
+          padding: 6px 14px;
+          border-radius: 20px;
+          border: 2px solid #e0e0e0;
+          transition: all 0.2s;
+          user-select: none;
         }
 
-        .cs-file-input:disabled {
-          cursor: not-allowed;
-          opacity: 0.6;
+        .cs-radio-label:hover {
+          border-color: #90caf9;
         }
 
-        .cs-foto-preview {
-          margin-top: 6px;
-          text-align: center;
+        .cs-radio-label input[type="radio"] {
+          display: none;
         }
 
-        .cs-foto-preview img {
-          max-width: 80px;
-          max-height: 80px;
+        .cs-radio-label--ok:has(input:checked) {
+          background: #e8f5e9;
+          border-color: #43a047;
+          color: #2e7d32;
+        }
+
+        .cs-radio-label--ng:has(input:checked) {
+          background: #ffebee;
+          border-color: #e53935;
+          color: #c62828;
+        }
+
+        /* ─── FILE UPLOAD ─── */
+        .cs-file-upload {
+          display: flex;
+          flex-direction: column;
+          gap: 6px;
+        }
+
+        .cs-file-label {
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          gap: 6px;
+          padding: 8px 12px;
+          background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%);
+          border: 1.5px dashed #90caf9;
+          border-radius: 6px;
+          cursor: pointer;
+          font-size: 12px;
+          font-weight: 600;
+          color: #0d47a1;
+          transition: all 0.2s;
+        }
+
+        .cs-file-label:hover {
+          background: linear-gradient(135deg, #bbdefb 0%, #90caf9 100%);
+          border-color: #42a5f5;
+        }
+
+        .cs-file-input {
+          display: none;
+        }
+
+        .cs-file-preview {
+          max-width: 100%;
+          max-height: 120px;
+          border-radius: 6px;
           border: 1px solid #ddd;
-          border-radius: 4px;
           object-fit: cover;
         }
 
-        /* ─── LOADING SCREEN ─── */
+        .cs-file-remove {
+          background: #ef5350;
+          color: white;
+          border: none;
+          border-radius: 4px;
+          padding: 4px 10px;
+          font-size: 11px;
+          cursor: pointer;
+          transition: background 0.2s;
+        }
+
+        .cs-file-remove:hover { background: #c62828; }
+
+        /* ─── LOADING ─── */
         .cs-loading-screen {
           display: flex;
           flex-direction: column;
-          justify-content: center;
           align-items: center;
+          justify-content: center;
           min-height: 100vh;
-          background: #f0f4f8;
           gap: 16px;
-          color: #555;
         }
 
         .cs-loading-spinner {
-          width: 36px;
-          height: 36px;
-          border: 3px solid #cdd5de;
+          width: 40px;
+          height: 40px;
+          border: 4px solid #e3f2fd;
           border-top-color: var(--cs-blue);
           border-radius: 50%;
           animation: cs-spin 0.8s linear infinite;
         }
 
-        /* ─── SCROLL HINT (mobile) ─── */
-        .cs-scroll-hint {
-          display: none;
-          font-size: 11px;
-          color: #888;
-          text-align: center;
-          padding: 6px 0;
-          font-style: italic;
-        }
-
-        /* ─── MOBILE CARDS VIEW ─── */
-        .cs-mobile-cards {
-          display: none;
-        }
-
-        .cs-mobile-card {
-          background: #fff;
-          border-radius: 8px;
-          border: 1px solid var(--cs-border);
-          box-shadow: var(--cs-shadow);
-          padding: 12px 14px;
-          margin-bottom: 12px;
-        }
-
-        .cs-mobile-card-header {
-          display: flex;
-          align-items: flex-start;
-          gap: 10px;
-          margin-bottom: 12px;
-          padding-bottom: 10px;
-          border-bottom: 1px solid #f0f0f0;
-        }
-
-        .cs-mobile-card-no {
-          background: var(--cs-blue);
-          color: #fff;
-          border-radius: 50%;
-          width: 28px;
-          height: 28px;
+        /* ─── STEP INDICATOR ─── */
+        .cs-step-indicator {
           display: flex;
           align-items: center;
           justify-content: center;
-          font-weight: 700;
-          font-size: 13px;
-          flex-shrink: 0;
-        }
-
-        .cs-mobile-card-item {
-          font-size: 13px;
-          font-weight: 500;
-          color: #333;
-          line-height: 1.5;
-        }
-
-        .cs-mobile-gender-block {
-          margin-bottom: 12px;
-          border: 1px solid var(--cs-border);
-          border-radius: 6px;
-          overflow: hidden;
-        }
-
-        .cs-mobile-gender-title {
-          padding: 6px 12px;
-          font-size: 12px;
-          font-weight: 700;
-          text-transform: uppercase;
-          letter-spacing: 0.5px;
-        }
-
-        .cs-mobile-gender-title--male {
-          background: var(--cs-male-bg);
-          color: var(--cs-male);
-        }
-
-        .cs-mobile-gender-title--female {
-          background: var(--cs-female-bg);
-          color: var(--cs-female);
-        }
-
-        .cs-mobile-gender-title--wanita {
-          background: var(--cs-female-bg);
-          color: var(--cs-female);
-        }
-
-        .cs-mobile-gender-title--general {
-          background: var(--cs-general-bg);
-          color: var(--cs-general);
-        }
-
-        .cs-mobile-fields {
-          padding: 10px 12px;
-          display: flex;
-          flex-direction: column;
-          gap: 8px;
-        }
-
-        .cs-mobile-field-label {
-          font-size: 11px;
-          font-weight: 600;
-          color: #666;
-          text-transform: uppercase;
-          letter-spacing: 0.3px;
-          margin-bottom: 3px;
-        }
-
-        /* ─── STEP INDICATOR ─── */
-        .cs-step-bar {
-          display: flex;
-          align-items: center;
-          gap: 0;
+          gap: 12px;
           margin-bottom: 16px;
-          background: #fff;
-          border: 1px solid var(--cs-border);
-          border-radius: var(--cs-radius);
-          overflow: hidden;
-          box-shadow: var(--cs-shadow);
         }
 
         .cs-step {
-          flex: 1;
           display: flex;
           align-items: center;
-          justify-content: center;
           gap: 8px;
-          padding: 14px 16px;
-          font-size: 14px;
+          padding: 8px 18px;
+          border-radius: 20px;
+          font-size: 13px;
           font-weight: 700;
-          cursor: pointer;
-          transition: all 0.2s;
-          border: none;
-          background: #f7f9fc;
+          transition: all 0.3s;
+        }
+
+        .cs-step--active {
+          background: linear-gradient(135deg, var(--cs-blue), var(--cs-blue-light));
+          color: #fff;
+          box-shadow: 0 2px 8px rgba(6,93,208,0.3);
+        }
+
+        .cs-step--inactive {
+          background: #f0f0f0;
           color: #999;
-          position: relative;
-        }
-
-        .cs-step--active-male {
-          background: linear-gradient(135deg, #1565c0, #1e88e5);
-          color: #fff;
-          box-shadow: inset 0 -3px 0 rgba(0,0,0,0.15);
-        }
-
-        .cs-step--active-female {
-          background: linear-gradient(135deg, #ad1457, #e91e63);
-          color: #fff;
-          box-shadow: inset 0 -3px 0 rgba(0,0,0,0.15);
         }
 
         .cs-step--done {
           background: #e8f5e9;
           color: #2e7d32;
-          cursor: pointer;
         }
 
-        .cs-step--locked {
-          cursor: not-allowed;
-          opacity: 0.5;
+        .cs-step-arrow {
+          color: #ccc;
+          font-size: 18px;
         }
 
-        .cs-step-divider {
-          width: 1px;
-          height: 48px;
-          background: #dde3ea;
-          flex-shrink: 0;
-        }
-
-        .cs-step-badge {
-          display: inline-flex;
-          align-items: center;
-          justify-content: center;
-          width: 22px;
-          height: 22px;
-          border-radius: 50%;
-          font-size: 12px;
-          font-weight: 700;
-          background: rgba(255,255,255,0.3);
-          flex-shrink: 0;
-        }
-
-        .cs-step--done .cs-step-badge {
-          background: #2e7d32;
-          color: #fff;
-        }
-
-        .cs-step--active-male .cs-step-badge,
-        .cs-step--active-female .cs-step-badge {
-          background: rgba(255,255,255,0.3);
-          color: #fff;
-        }
-
-        .cs-step-nav {
-          display: flex;
-          gap: 10px;
-          justify-content: space-between;
-          margin-bottom: 16px;
-          flex-wrap: wrap;
-        }
-
-        /* ─── RESPONSIVE BREAKPOINTS ─── */
-        @media (max-width: 1024px) {
-          .cs-main {
-            margin-left: 80px;
-            padding: 16px 14px 40px;
-          }
-        }
-
+        /* ─── RESPONSIVE ─── */
         @media (max-width: 768px) {
           .cs-main {
+            padding: 12px 10px 30px;
             margin-left: 0;
-            padding: 12px 12px 60px;
           }
 
           .cs-header {
-            padding: 14px 16px;
-            margin-bottom: 14px;
+            padding: 16px;
           }
 
-          .cs-header-top {
-            flex-direction: column;
-            align-items: flex-start;
-            gap: 8px;
+          .cs-header h1 {
+            font-size: 18px;
           }
 
-          .cs-type-badge {
-            margin-left: 0;
-            margin-top: 8px;
-          }
-
-          .cs-card {
-            padding: 12px 14px;
-            margin-bottom: 12px;
+          .cs-info-grid {
+            grid-template-columns: 1fr;
           }
 
           .cs-date-row {
@@ -1328,156 +1203,123 @@ export default function ChecksheetToiletForm({ params }: { params: Promise<{ are
             align-items: stretch;
           }
 
-          .cs-date-label {
-            font-size: 13px;
-          }
-
           .cs-date-input {
-            width: 180px;
-            max-width: 180px;
-          }
-
-          .cs-btn--load {
             width: 100%;
-            text-align: center;
-            padding: 12px;
+            max-width: 100%;
           }
 
           .cs-btn-row {
             flex-direction: column;
-            gap: 10px;
-            padding: 16px 0;
-          }
-
-          .cs-btn--back,
-          .cs-btn--save {
-            width: 100%;
-            min-width: unset;
-            padding: 14px;
-            font-size: 14px;
-          }
-
-          .cs-scroll-hint {
-            display: block;
-          }
-        }
-
-        @media (max-width: 600px) {
-          .cs-table-wrapper {
-            display: none;
-          }
-
-          .cs-mobile-cards {
-            display: block;
-          }
-
-          .cs-info-grid {
-            grid-template-columns: 1fr;
-          }
-
-          .cs-info-row {
-            flex-direction: row;
-          }
-        }
-
-        @media (max-width: 380px) {
-          .cs-main {
-            padding: 10px 8px 60px;
-          }
-
-          .cs-header h1 {
-            font-size: 17px;
-          }
-
-          .cs-mobile-card {
-            padding: 10px;
-          }
-        }
-
-        @media (hover: none) and (pointer: coarse) {
-          .cs-select,
-          .cs-textarea,
-          .cs-input-text,
-          .cs-date-input {
-            font-size: 16px;
           }
 
           .cs-btn {
-            min-height: 44px;
+            width: 100%;
           }
 
-          .cs-select {
-            min-height: 44px;
+          .cs-step-indicator {
+            flex-wrap: wrap;
+          }
+
+          .cs-table {
+            font-size: 12px;
+          }
+
+          .cs-table th,
+          .cs-table td {
+            padding: 8px 6px;
+          }
+
+          .cs-th--item {
+            min-width: 180px;
+          }
+
+          .cs-th--ket {
+            min-width: 150px;
+          }
+
+          .cs-th--tindakan {
+            min-width: 120px;
+          }
+        }
+
+        @media (max-width: 480px) {
+          .cs-header-top {
+            flex-direction: column;
+            align-items: flex-start;
+          }
+
+          .cs-type-badge {
+            margin-left: 0;
+          }
+
+          .cs-radio-group {
+            flex-direction: column;
+          }
+
+          .cs-radio-label {
+            justify-content: center;
           }
         }
       `}</style>
 
-      <div className="cs-page">
-        <Sidebar userName={fullName} />
+      <Sidebar />
 
+      <div className="cs-page">
         <div className="cs-main">
-          {/* ── Header ── */}
+          {/* ─── HEADER ─── */}
           <div className="cs-header">
             <div className="cs-header-top">
-              <button
-                onClick={() => router.push("/status-ga/checksheet-toilet")}
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "6px",
-                  padding: "7px 14px",
-                  background: "rgba(255,255,255,0.2)",
-                  color: "#fff",
-                  border: "none",
-                  borderRadius: "7px",
-                  cursor: "pointer",
-                  fontWeight: 600,
-                  fontSize: "13px",
-                  transition: "background 0.2s",
-                  minHeight: "36px",
-                  flexShrink: 0,
-                }}
-                onMouseEnter={e => (e.currentTarget.style.background = "rgba(255,255,255,0.32)")}
-                onMouseLeave={e => (e.currentTarget.style.background = "rgba(255,255,255,0.2)")}
-              >
-                ← Kembali
-              </button>
-              <div>
-                <h1>🚻 Checksheet Toilet</h1>
-                <p>Form Pemeriksaan Kebersihan &amp; Kelayakan Toilet</p>
-              </div>
+              <h1>📋 {currentArea.title}</h1>
               <span className={`cs-type-badge cs-type-badge--${formType}`}>
-                <span>{typeBadge.label}</span>
-                <span className="cs-type-desc">{typeBadge.desc}</span>
+                {typeBadge.label}
               </span>
             </div>
+            <p>{currentArea.desc} <span className="cs-type-desc">{typeBadge.desc}</span></p>
           </div>
 
-          {/* ✅ SCAN WARNING BANNER - TAMBAHAN BARU */}
-          {!isScanned && (
-            <div className="cs-banner cs-banner-warning cs-scan-warning">
-              <span>🔒 Akses melalui scan QR code terlebih dahulu untuk mengisi checksheet ini.</span>
-              <button 
-                onClick={() => router.push("/scan")} 
+          {/* ─── SCAN VERIFICATION BANNER ─── */}
+          {!isScanned && !scanLoading && (
+            <div className="cs-banner cs-scan-warning">
+              <span>⚠️ QR Code belum discan! Scan QR untuk verifikasi lokasi.</span>
+              <button
                 className="cs-banner-btn"
-                disabled={isSubmitting}
+                onClick={() => router.push(`/scan`)}
               >
-                <QrCode size={14} /> Scan Sekarang
+                <QrCode size={16} /> Scan QR
               </button>
             </div>
           )}
 
-          {/* ── Info Area ── */}
+          {/* ─── OFFLINE BANNER ─── */}
+          {!isOnline && (
+            <div className="cs-banner cs-banner-warning">
+              <span>📴 Anda sedang offline. Data akan disimpan dan dikirim otomatis saat online.</span>
+            </div>
+          )}
+
+          {/* ─── INFO CARD ─── */}
           <div className="cs-card">
             <div className="cs-info-grid">
-              <InfoRow label="Nama Area" value={currentArea.title} />
-              <InfoRow label="Kategori" value={kategori} />
-              <InfoRow label="Lokasi" value={lokasi} />
-              <InfoRow label="PIC Pengecekan" value={fullName} />
+              <div className="cs-info-row">
+                <span className="cs-info-label">📍 Kategori</span>
+                <span className="cs-info-value">{kategori}</span>
+              </div>
+              <div className="cs-info-row">
+                <span className="cs-info-label">🏢 Lokasi</span>
+                <span className="cs-info-value">{lokasi}</span>
+              </div>
+              <div className="cs-info-row">
+                <span className="cs-info-label">👤 Inspector</span>
+                <span className="cs-info-value">{fullName}</span>
+              </div>
+              <div className="cs-info-row">
+                <span className="cs-info-label">🏷️ Tipe</span>
+                <span className="cs-info-value">{typeBadge.label}</span>
+              </div>
             </div>
           </div>
 
-          {/* ── Date Selection ── */}
+          {/* ─── DATE CARD ─── */}
           <div className="cs-card cs-card--date">
             <div className="cs-date-row">
               <span className="cs-date-label">📅 Tanggal Pemeriksaan:</span>
@@ -1485,438 +1327,391 @@ export default function ChecksheetToiletForm({ params }: { params: Promise<{ are
                 type="date"
                 className="cs-date-input"
                 value={selectedDate}
-                onChange={(e) => setSelectedDate(e.target.value)}
                 max={new Date().toISOString().split("T")[0]}
-                disabled={!isScanned}
-                title={!isScanned ? "Harap scan QR code terlebih dahulu" : ""}
+                onChange={(e) => setSelectedDate(e.target.value)}
               />
               <button
                 className="cs-btn cs-btn--load"
                 onClick={handleLoadExisting}
-                disabled={!selectedDate || !isScanned}
-                title={!isScanned ? "Harap scan QR code terlebih dahulu" : ""}
+                disabled={!selectedDate}
               >
                 📂 Muat Data
               </button>
             </div>
             <p className="cs-date-hint">
-              💡 Pilih tanggal pemeriksaan, lalu isi form. Klik &quot;Muat Data&quot; jika ingin mengedit data sebelumnya.
+              * Pilih tanggal lalu klik "Muat Data" untuk mengecek apakah sudah ada data pada tanggal tersebut.
             </p>
           </div>
 
-          {/* ── Step Indicator (only for mixed type) ── */}
+          {/* ─── STEP INDICATOR (only for mixed) ─── */}
           {formType === "mixed" && (
-            <div className="cs-step-bar">
-              <button
-                className={`cs-step ${activeStep === "laki" ? "cs-step--active-male" : "cs-step--done"}`}
-                onClick={() => setActiveStep("laki")}
-                disabled={!isScanned}
-                title={!isScanned ? "Harap scan QR code terlebih dahulu" : ""}
-              >
-                <span className="cs-step-badge">{activeStep === "perempuan" ? "✓" : "1"}</span>
-                🚹 Toilet Laki-laki
-              </button>
-              <div className="cs-step-divider" />
-              <button
-                className={`cs-step ${activeStep === "perempuan" ? "cs-step--active-female" : isLakiComplete ? "cs-step--done" : "cs-step--locked"}`}
-                onClick={() => isLakiComplete ? setActiveStep("perempuan") : undefined}
-                disabled={!isLakiComplete && activeStep !== "perempuan" || !isScanned}
-                title={!isScanned ? "Harap scan QR code terlebih dahulu" : !isLakiComplete ? "Selesaikan isian Laki-laki terlebih dahulu" : ""}
-              >
-                <span className="cs-step-badge">2</span>
-                🚺 Toilet Perempuan
-              </button>
+            <div className="cs-step-indicator">
+              <div className={`cs-step ${activeStep === "laki" ? "cs-step--active" : "cs-step--done"}`}>
+                🚹 Laki-laki
+              </div>
+              <span className="cs-step-arrow">→</span>
+              <div className={`cs-step ${activeStep === "perempuan" ? "cs-step--active" : "cs-step--inactive"}`}>
+                🚺 Perempuan
+              </div>
             </div>
           )}
 
-          {/* ── Table (tablet/desktop) ── */}
-          <div className="cs-table-wrapper">
-            <p className="cs-scroll-hint">← Geser untuk melihat semua kolom →</p>
-            <div className="cs-table-scroll">
-              <ChecksheetTable
-                inspectionItems={INSPECTION_ITEMS}
-                formType={formType}
-                activeStep={activeStep}
-                answers={answers}
-                selectedDate={selectedDate}
-                isScanned={isScanned}
-                onInputChange={handleInputChange}
-                onImageUpload={handleImageUpload}
-              />
+          {/* ─── FORM TABLE ─── */}
+          {isSingleForm ? (
+            // ─── SINGLE FORM (WANITA / GENERAL) ───
+            <div className="cs-table-wrapper">
+              <div className="cs-table-scroll">
+                <table className="cs-table">
+                  <thead>
+                    <tr>
+                      <th className="cs-th--no">No</th>
+                      <th className="cs-th--item">Item Pemeriksaan</th>
+                      <th className={`cs-th--hasil cs-th--${formType}`}>Hasil</th>
+                      <th className="cs-th--ket">Keterangan Temuan</th>
+                      <th className="cs-th--ket">Foto Temuan</th>
+                      <th className="cs-th--tindakan">Tindakan Perbaikan</th>
+                      <th className="cs-th--pic">PIC</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {INSPECTION_ITEMS.map((item) => (
+                      <tr key={item.key}>
+                        <td className="cs-td--no">{item.no}</td>
+                        <td className="cs-td--item">{item.item}</td>
+                        <td className="cs-td">
+                          <div className="cs-radio-group">
+                            <label className="cs-radio-label cs-radio-label--ok">
+                              <input
+                                type="radio"
+                                name={`${item.key}_hasil`}
+                                value="OK"
+                                checked={answers[`${item.key}_hasil`] === "OK"}
+                                onChange={() => handleInputChange(`${item.key}_hasil`, "OK")}
+                              />
+                              OK
+                            </label>
+                            <label className="cs-radio-label cs-radio-label--ng">
+                              <input
+                                type="radio"
+                                name={`${item.key}_hasil`}
+                                value="NG"
+                                checked={answers[`${item.key}_hasil`] === "NG"}
+                                onChange={() => handleInputChange(`${item.key}_hasil`, "NG")}
+                              />
+                              NG
+                            </label>
+                          </div>
+                        </td>
+                        <td className="cs-td">
+                          <textarea
+                            className="cs-textarea"
+                            placeholder={answers[`${item.key}_hasil`] === "NG" ? "Wajib diisi jika NG..." : "Opsional..."}
+                            value={answers[`${item.key}_keterangan`] || ""}
+                            onChange={(e) => handleInputChange(`${item.key}_keterangan`, e.target.value)}
+                          />
+                        </td>
+                        <td className="cs-td">
+                          <div className="cs-file-upload">
+                            {answers[`${item.key}_foto`] ? (
+                              <>
+                                <img
+                                  src={answers[`${item.key}_foto`]}
+                                  alt="Preview"
+                                  className="cs-file-preview"
+                                />
+                                <button
+                                  className="cs-file-remove"
+                                  onClick={() => handleInputChange(`${item.key}_foto`, "")}
+                                >
+                                  ✕ Hapus Foto
+                                </button>
+                              </>
+                            ) : (
+                              <label className="cs-file-label">
+                                📷 Upload Foto
+                                <input
+                                  type="file"
+                                  accept="image/*"
+                                  className="cs-file-input"
+                                  onChange={(e) => handleImageUpload(`${item.key}_foto`, e)}
+                                />
+                              </label>
+                            )}
+                          </div>
+                        </td>
+                        <td className="cs-td">
+                          <textarea
+                            className="cs-textarea"
+                            placeholder={answers[`${item.key}_hasil`] === "NG" ? "Wajib diisi jika NG..." : "Opsional..."}
+                            value={answers[`${item.key}_tindakan`] || ""}
+                            onChange={(e) => handleInputChange(`${item.key}_tindakan`, e.target.value)}
+                          />
+                        </td>
+                        <td className="cs-td">
+                          <input
+                            type="text"
+                            className="cs-input-text"
+                            value={answers[`${item.key}_pic`] || ""}
+                            onChange={(e) => handleInputChange(`${item.key}_pic`, e.target.value)}
+                            placeholder="Nama PIC"
+                          />
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             </div>
-          </div>
-
-          {/* ── Card layout (mobile) ── */}
-          <div className="cs-mobile-cards">
-            {INSPECTION_ITEMS.map((item) => (
-              <MobileCard
-                key={item.key}
-                item={item}
-                formType={formType}
-                activeStep={activeStep}
-                answers={answers}
-                selectedDate={selectedDate}
-                isScanned={isScanned}
-                onInputChange={handleInputChange}
-                onImageUpload={handleImageUpload}
-              />
-            ))}
-          </div>
-
-          {/* ── Step Navigation Buttons (mixed type only) ── */}
-          {formType === "mixed" && (
-            <div className="cs-step-nav">
-              {activeStep === "laki" ? (
-                <>
-                  <button className="cs-btn cs-btn--back" onClick={() => router.push("/status-ga/checksheet-toilet")}>
-                    ← Kembali
-                  </button>
-                  <button
-                    className="cs-btn cs-btn--next-male"
-                    onClick={handleNextStep}
-                    disabled={!selectedDate || !isScanned}
-                    title={!isScanned ? "Harap scan QR code terlebih dahulu" : ""}
-                  >
-                    Lanjut ke Toilet Perempuan 🚺 →
-                  </button>
-                </>
-              ) : (
-                <>
-                  <button className="cs-btn cs-btn--prev-female" onClick={handlePrevStep}>
-                    ← Kembali ke Laki-laki
-                  </button>
-                  <button
-                    className="cs-btn cs-btn--save"
-                    onClick={handleSave}
-                    disabled={!selectedDate || isSubmitting || !isScanned}
-                    title={!isScanned ? "Harap scan QR code terlebih dahulu" : ""}
-                  >
-                    {isSubmitting ? <><span className="cs-spinner" />Menyimpan...</> : "✓ Simpan Data"}
-                  </button>
-                </>
+          ) : (
+            // ─── MIXED FORM (LAKI & PEREMPUAN) ───
+            <>
+              {activeStep === "laki" && (
+                <div className="cs-table-wrapper">
+                  <div className="cs-table-scroll">
+                    <table className="cs-table">
+                      <thead>
+                        <tr>
+                          <th className="cs-th--no">No</th>
+                          <th className="cs-th--item">Item Pemeriksaan</th>
+                          <th className="cs-th--hasil cs-th--male">🚹 Laki-laki</th>
+                          <th className="cs-th--ket">Keterangan Temuan</th>
+                          <th className="cs-th--ket">Foto Temuan</th>
+                          <th className="cs-th--tindakan">Tindakan Perbaikan</th>
+                          <th className="cs-th--pic">PIC</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {INSPECTION_ITEMS.map((item) => (
+                          <tr key={item.key}>
+                            <td className="cs-td--no">{item.no}</td>
+                            <td className="cs-td--item">{item.item}</td>
+                            <td className="cs-td">
+                              <div className="cs-radio-group">
+                                <label className="cs-radio-label cs-radio-label--ok">
+                                  <input
+                                    type="radio"
+                                    name={`${item.key}_L_hasil`}
+                                    value="OK"
+                                    checked={answers[`${item.key}_L_hasil`] === "OK"}
+                                    onChange={() => handleInputChange(`${item.key}_L_hasil`, "OK")}
+                                  />
+                                  OK
+                                </label>
+                                <label className="cs-radio-label cs-radio-label--ng">
+                                  <input
+                                    type="radio"
+                                    name={`${item.key}_L_hasil`}
+                                    value="NG"
+                                    checked={answers[`${item.key}_L_hasil`] === "NG"}
+                                    onChange={() => handleInputChange(`${item.key}_L_hasil`, "NG")}
+                                  />
+                                  NG
+                                </label>
+                              </div>
+                            </td>
+                            <td className="cs-td">
+                              <textarea
+                                className="cs-textarea"
+                                placeholder={answers[`${item.key}_L_hasil`] === "NG" ? "Wajib diisi jika NG..." : "Opsional..."}
+                                value={answers[`${item.key}_L_keterangan`] || ""}
+                                onChange={(e) => handleInputChange(`${item.key}_L_keterangan`, e.target.value)}
+                              />
+                            </td>
+                            <td className="cs-td">
+                              <div className="cs-file-upload">
+                                {answers[`${item.key}_L_foto`] ? (
+                                  <>
+                                    <img
+                                      src={answers[`${item.key}_L_foto`]}
+                                      alt="Preview"
+                                      className="cs-file-preview"
+                                    />
+                                    <button
+                                      className="cs-file-remove"
+                                      onClick={() => handleInputChange(`${item.key}_L_foto`, "")}
+                                    >
+                                      ✕ Hapus Foto
+                                    </button>
+                                  </>
+                                ) : (
+                                  <label className="cs-file-label">
+                                    📷 Upload Foto
+                                    <input
+                                      type="file"
+                                      accept="image/*"
+                                      className="cs-file-input"
+                                      onChange={(e) => handleImageUpload(`${item.key}_L_foto`, e)}
+                                    />
+                                  </label>
+                                )}
+                              </div>
+                            </td>
+                            <td className="cs-td">
+                              <textarea
+                                className="cs-textarea"
+                                placeholder={answers[`${item.key}_L_hasil`] === "NG" ? "Wajib diisi jika NG..." : "Opsional..."}
+                                value={answers[`${item.key}_L_tindakan`] || ""}
+                                onChange={(e) => handleInputChange(`${item.key}_L_tindakan`, e.target.value)}
+                              />
+                            </td>
+                            <td className="cs-td">
+                              <input
+                                type="text"
+                                className="cs-input-text"
+                                value={answers[`${item.key}_L_pic`] || ""}
+                                onChange={(e) => handleInputChange(`${item.key}_L_pic`, e.target.value)}
+                                placeholder="Nama PIC"
+                              />
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
               )}
-            </div>
+
+              {activeStep === "perempuan" && (
+                <div className="cs-table-wrapper">
+                  <div className="cs-table-scroll">
+                    <table className="cs-table">
+                      <thead>
+                        <tr>
+                          <th className="cs-th--no">No</th>
+                          <th className="cs-th--item">Item Pemeriksaan</th>
+                          <th className="cs-th--hasil cs-th--female">🚺 Perempuan</th>
+                          <th className="cs-th--ket">Keterangan Temuan</th>
+                          <th className="cs-th--ket">Foto Temuan</th>
+                          <th className="cs-th--tindakan">Tindakan Perbaikan</th>
+                          <th className="cs-th--pic">PIC</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {INSPECTION_ITEMS.map((item) => (
+                          <tr key={item.key}>
+                            <td className="cs-td--no">{item.no}</td>
+                            <td className="cs-td--item">{item.item}</td>
+                            <td className="cs-td">
+                              <div className="cs-radio-group">
+                                <label className="cs-radio-label cs-radio-label--ok">
+                                  <input
+                                    type="radio"
+                                    name={`${item.key}_P_hasil`}
+                                    value="OK"
+                                    checked={answers[`${item.key}_P_hasil`] === "OK"}
+                                    onChange={() => handleInputChange(`${item.key}_P_hasil`, "OK")}
+                                  />
+                                  OK
+                                </label>
+                                <label className="cs-radio-label cs-radio-label--ng">
+                                  <input
+                                    type="radio"
+                                    name={`${item.key}_P_hasil`}
+                                    value="NG"
+                                    checked={answers[`${item.key}_P_hasil`] === "NG"}
+                                    onChange={() => handleInputChange(`${item.key}_P_hasil`, "NG")}
+                                  />
+                                  NG
+                                </label>
+                              </div>
+                            </td>
+                            <td className="cs-td">
+                              <textarea
+                                className="cs-textarea"
+                                placeholder={answers[`${item.key}_P_hasil`] === "NG" ? "Wajib diisi jika NG..." : "Opsional..."}
+                                value={answers[`${item.key}_P_keterangan`] || ""}
+                                onChange={(e) => handleInputChange(`${item.key}_P_keterangan`, e.target.value)}
+                              />
+                            </td>
+                            <td className="cs-td">
+                              <div className="cs-file-upload">
+                                {answers[`${item.key}_P_foto`] ? (
+                                  <>
+                                    <img
+                                      src={answers[`${item.key}_P_foto`]}
+                                      alt="Preview"
+                                      className="cs-file-preview"
+                                    />
+                                    <button
+                                      className="cs-file-remove"
+                                      onClick={() => handleInputChange(`${item.key}_P_foto`, "")}
+                                    >
+                                      ✕ Hapus Foto
+                                    </button>
+                                  </>
+                                ) : (
+                                  <label className="cs-file-label">
+                                    📷 Upload Foto
+                                    <input
+                                      type="file"
+                                      accept="image/*"
+                                      className="cs-file-input"
+                                      onChange={(e) => handleImageUpload(`${item.key}_P_foto`, e)}
+                                    />
+                                  </label>
+                                )}
+                              </div>
+                            </td>
+                            <td className="cs-td">
+                              <textarea
+                                className="cs-textarea"
+                                placeholder={answers[`${item.key}_P_hasil`] === "NG" ? "Wajib diisi jika NG..." : "Opsional..."}
+                                value={answers[`${item.key}_P_tindakan`] || ""}
+                                onChange={(e) => handleInputChange(`${item.key}_P_tindakan`, e.target.value)}
+                              />
+                            </td>
+                            <td className="cs-td">
+                              <input
+                                type="text"
+                                className="cs-input-text"
+                                value={answers[`${item.key}_P_pic`] || ""}
+                                onChange={(e) => handleInputChange(`${item.key}_P_pic`, e.target.value)}
+                                placeholder="Nama PIC"
+                              />
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+            </>
           )}
 
-          {/* ── Action Buttons (single form: wanita & general) ── */}
-          {isSingleForm && (
-            <div className="cs-btn-row">
-              <button className="cs-btn cs-btn--back" onClick={() => router.push("/status-ga/checksheet-toilet")}>
-                ← Kembali
+          {/* ─── NAVIGATION BUTTONS ─── */}
+          <div className="cs-btn-row">
+            {formType === "mixed" && activeStep === "perempuan" && (
+              <button className="cs-btn cs-btn--prev-female" onClick={handlePrevStep}>
+                ← Kembali ke Laki-laki
               </button>
+            )}
+
+            {formType === "mixed" && activeStep === "laki" && (
+              <button className="cs-btn cs-btn--next-male" onClick={handleNextStep}>
+                Lanjut ke Perempuan →
+              </button>
+            )}
+
+            {(isSingleForm || (formType === "mixed" && activeStep === "perempuan")) && (
               <button
                 className="cs-btn cs-btn--save"
                 onClick={handleSave}
-                disabled={!selectedDate || isSubmitting || !isScanned}
-                title={!isScanned ? "Harap scan QR code terlebih dahulu" : ""}
+                disabled={isSubmitting}
               >
-                {isSubmitting ? <><span className="cs-spinner" />Menyimpan...</> : "✓ Simpan Data"}
+                {isSubmitting ? (
+                  <>
+                    <span className="cs-spinner" />
+                    Menyimpan...
+                  </>
+                ) : (
+                  "💾 Simpan Data"
+                )}
               </button>
-            </div>
-          )}
-          <div className="cs-card">
-            <p style={{ margin: 0, fontSize: 12, color: "#888", fontStyle: "italic" }}>
-              💡 <strong>Tip:</strong> Lampirkan foto pada &quot;Keterangan Temuan&quot; jika diperlukan. Tanggal pemeriksaan mengikuti pilihan di atas.
-            </p>
+            )}
           </div>
         </div>
       </div>
     </>
   );
 }
-
-// ─── SUB-COMPONENTS ──────────────────────────────────────
-
-const InfoRow = ({ label, value }: { label: string; value: string }) => (
-  <div className="cs-info-row">
-    <span className="cs-info-label">{label}</span>
-    <span className="cs-info-value">{value}</span>
-  </div>
-);
-
-// Desktop/Tablet Table
-const ChecksheetTable = ({
-  inspectionItems,
-  formType,
-  activeStep,
-  answers,
-  selectedDate,
-  isScanned,
-  onInputChange,
-  onImageUpload,
-}: {
-  inspectionItems: typeof INSPECTION_ITEMS;
-  formType: FormType;
-  activeStep: "laki" | "perempuan";
-  answers: Record<string, string>;
-  selectedDate: string;
-  isScanned: boolean;
-  onInputChange: (field: string, value: string) => void;
-  onImageUpload: (field: string, e: React.ChangeEvent<HTMLInputElement>) => void;
-}) => {
-  const isSingleForm = formType === "wanita" || formType === "general";
-  
-  return (
-    <table className="cs-table" style={{ minWidth: "820px" }}>
-      <thead>
-        <tr>
-          <th className="cs-th--no cs-th--hasil" rowSpan={2}>No</th>
-          <th className="cs-th--item cs-th--ket" rowSpan={2}>Item Pengecekan</th>
-          {isSingleForm ? (
-            <>
-              <th className={formType === "wanita" ? "cs-th--wanita cs-th--hasil" : "cs-th--general cs-th--hasil"}>HASIL</th>
-              <th className={formType === "wanita" ? "cs-th--wanita cs-th--ket" : "cs-th--general cs-th--ket"}>KETERANGAN + FOTO</th>
-              <th className={formType === "wanita" ? "cs-th--wanita cs-th--tindakan" : "cs-th--general cs-th--tindakan"}>TINDAKAN</th>
-              <th className={formType === "wanita" ? "cs-th--wanita cs-th--pic" : "cs-th--general cs-th--pic"}>PIC</th>
-            </>
-          ) : activeStep === "laki" ? (
-            <>
-              <th className="cs-th--male cs-th--hasil">HASIL</th>
-              <th className="cs-th--male cs-th--ket">KETERANGAN + FOTO</th>
-              <th className="cs-th--male cs-th--tindakan">TINDAKAN</th>
-              <th className="cs-th--male cs-th--pic">PIC</th>
-            </>
-          ) : (
-            <>
-              <th className="cs-th--female cs-th--hasil">HASIL</th>
-              <th className="cs-th--female cs-th--ket">KETERANGAN + FOTO</th>
-              <th className="cs-th--female cs-th--tindakan">TINDAKAN</th>
-              <th className="cs-th--female cs-th--pic">PIC</th>
-            </>
-          )}
-        </tr>
-      </thead>
-      <tbody>
-        {inspectionItems.map((item) => (
-          <TableRow
-            key={item.key}
-            item={item}
-            formType={formType}
-            activeStep={activeStep}
-            answers={answers}
-            selectedDate={selectedDate}
-            isScanned={isScanned}
-            onInputChange={onInputChange}
-            onImageUpload={onImageUpload}
-          />
-        ))}
-      </tbody>
-    </table>
-  );
-};
-
-// Table Row
-const TableRow = ({
-  item,
-  formType,
-  activeStep,
-  answers,
-  selectedDate,
-  isScanned,
-  onInputChange,
-  onImageUpload,
-}: {
-  item: (typeof INSPECTION_ITEMS)[0];
-  formType: FormType;
-  activeStep: "laki" | "perempuan";
-  answers: Record<string, string>;
-  selectedDate: string;
-  isScanned: boolean;
-  onInputChange: (field: string, value: string) => void;
-  onImageUpload: (field: string, e: React.ChangeEvent<HTMLInputElement>) => void;
-}) => {
-  const isSingleForm = formType === "wanita" || formType === "general";
-  
-  const renderCell = (prefix: string, variant: "male" | "female" | "wanita" | "general") => (
-    <>
-      <td className="cs-td">
-        <select
-          className={`cs-select cs-select--${variant}`}
-          value={answers[`${prefix}_hasil`] || ""}
-          onChange={(e) => onInputChange(`${prefix}_hasil`, e.target.value)}
-          disabled={!isScanned}
-          title={!isScanned ? "Harap scan QR code terlebih dahulu" : ""}
-        >
-          <option value="">Pilih</option>
-          <option value="OK">✓ OK</option>
-          <option value="NG">✗ NG</option>
-        </select>
-      </td>
-      <td className="cs-td">
-        <textarea
-          className="cs-textarea"
-          value={answers[`${prefix}_keterangan`] || ""}
-          onChange={(e) => onInputChange(`${prefix}_keterangan`, e.target.value)}
-          disabled={!isScanned}
-          placeholder="Keterangan..."
-          rows={2}
-          title={!isScanned ? "Harap scan QR code terlebih dahulu" : ""}
-        />
-        <input
-          type="file"
-          accept="image/*"
-          className="cs-file-input"
-          onChange={(e) => onImageUpload(`${prefix}_foto`, e)}
-          disabled={!isScanned}
-          title={!isScanned ? "Harap scan QR code terlebih dahulu" : ""}
-        />
-        {answers[`${prefix}_foto`] && (
-          <div className="cs-foto-preview">
-            <img src={answers[`${prefix}_foto`]} alt="Foto temuan" />
-          </div>
-        )}
-      </td>
-      <td className="cs-td">
-        <textarea
-          className="cs-textarea"
-          value={answers[`${prefix}_tindakan`] || ""}
-          onChange={(e) => onInputChange(`${prefix}_tindakan`, e.target.value)}
-          disabled={!isScanned}
-          placeholder="Tindakan..."
-          rows={2}
-          title={!isScanned ? "Harap scan QR code terlebih dahulu" : ""}
-        />
-      </td>
-      <td className="cs-td">
-        <input
-          type="text"
-          className={`cs-input-text cs-input-text--${variant}`}
-          value={answers[`${prefix}_pic`] || ""}
-          disabled
-        />
-      </td>
-    </>
-  );
-
-  return (
-    <tr>
-      <td className="cs-td--no cs-td--item cs-td">{item.no}</td>
-      <td className="cs-td--item">{item.item}</td>
-      {isSingleForm
-        ? renderCell(item.key, formType)
-        : activeStep === "laki"
-          ? renderCell(`${item.key}_L`, "male")
-          : renderCell(`${item.key}_P`, "female")
-      }
-    </tr>
-  );
-};
-
-// Mobile Card (used on small screens instead of table)
-const MobileCard = ({
-  item,
-  formType,
-  activeStep,
-  answers,
-  selectedDate,
-  isScanned,
-  onInputChange,
-  onImageUpload,
-}: {
-  item: (typeof INSPECTION_ITEMS)[0];
-  formType: FormType;
-  activeStep: "laki" | "perempuan";
-  answers: Record<string, string>;
-  selectedDate: string;
-  isScanned: boolean;
-  onInputChange: (field: string, value: string) => void;
-  onImageUpload: (field: string, e: React.ChangeEvent<HTMLInputElement>) => void;
-}) => {
-  const isSingleForm = formType === "wanita" || formType === "general";
-  
-  const renderFields = (prefix: string, variant: "male" | "female" | "wanita" | "general") => (
-    <div className="cs-mobile-fields">
-      <div>
-        <div className="cs-mobile-field-label">Hasil Pemeriksaan</div>
-        <select
-          className={`cs-select cs-select--${variant}`}
-          value={answers[`${prefix}_hasil`] || ""}
-          onChange={(e) => onInputChange(`${prefix}_hasil`, e.target.value)}
-          disabled={!isScanned}
-          title={!isScanned ? "Harap scan QR code terlebih dahulu" : ""}
-        >
-          <option value="">Pilih</option>
-          <option value="OK">✓ OK</option>
-          <option value="NG">✗ NG</option>
-        </select>
-      </div>
-
-      <div>
-        <div className="cs-mobile-field-label">Keterangan + Foto</div>
-        <textarea
-          className="cs-textarea"
-          value={answers[`${prefix}_keterangan`] || ""}
-          onChange={(e) => onInputChange(`${prefix}_keterangan`, e.target.value)}
-          disabled={!isScanned}
-          placeholder="Keterangan temuan..."
-          rows={2}
-          title={!isScanned ? "Harap scan QR code terlebih dahulu" : ""}
-        />
-        <input
-          type="file"
-          accept="image/*"
-          className="cs-file-input"
-          onChange={(e) => onImageUpload(`${prefix}_foto`, e)}
-          disabled={!isScanned}
-          title={!isScanned ? "Harap scan QR code terlebih dahulu" : ""}
-        />
-        {answers[`${prefix}_foto`] && (
-          <div className="cs-foto-preview">
-            <img src={answers[`${prefix}_foto`]} alt="Foto temuan" />
-          </div>
-        )}
-      </div>
-
-      <div>
-        <div className="cs-mobile-field-label">Tindakan Perbaikan</div>
-        <textarea
-          className="cs-textarea"
-          value={answers[`${prefix}_tindakan`] || ""}
-          onChange={(e) => onInputChange(`${prefix}_tindakan`, e.target.value)}
-          disabled={!isScanned}
-          placeholder="Tindakan yang dilakukan..."
-          rows={2}
-          title={!isScanned ? "Harap scan QR code terlebih dahulu" : ""}
-        />
-      </div>
-
-      <div>
-        <div className="cs-mobile-field-label">PIC</div>
-        <input
-          type="text"
-          className={`cs-input-text cs-input-text--${variant}`}
-          value={answers[`${prefix}_pic`] || ""}
-          disabled
-        />
-      </div>
-    </div>
-  );
-
-  const getGenderLabel = () => {
-    if (formType === "wanita") {
-      return <div className="cs-mobile-gender-title cs-mobile-gender-title--wanita">🚺 Wanita</div>;
-    } else if (formType === "general") {
-      return <div className="cs-mobile-gender-title cs-mobile-gender-title--general">🚻 Umum</div>;
-    } else {
-      return activeStep === "laki"
-        ? <div className="cs-mobile-gender-title cs-mobile-gender-title--male">🚹 Laki-laki</div>
-        : <div className="cs-mobile-gender-title cs-mobile-gender-title--female">🚺 Perempuan</div>;
-    }
-  };
-
-  const prefix = isSingleForm ? item.key : activeStep === "laki" ? `${item.key}_L` : `${item.key}_P`;
-  const variant: "male" | "female" | "wanita" | "general" = isSingleForm ? formType : activeStep === "laki" ? "male" : "female";
-
-  return (
-    <div className="cs-mobile-card">
-      <div className="cs-mobile-card-header">
-        <div className="cs-mobile-card-no">{item.no}</div>
-        <div className="cs-mobile-card-item">{item.item}</div>
-      </div>
-      <div className="cs-mobile-gender-block">
-        {getGenderLabel()}
-        {renderFields(prefix, variant)}
-      </div>
-    </div>
-  );
-};

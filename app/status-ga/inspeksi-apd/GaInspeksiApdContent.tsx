@@ -139,13 +139,13 @@ export function GaInspeksiApdContent() {
       return;
     }
 
-    if (user && user.role === "inspector-ga-personal") {
+    if (user && (user.role === "inspector-ga-personal" || user.role === 'admin')) {
       setAuthVerified(true);
       return;
     }
 
     const verificationTimeout = setTimeout(() => {
-      if (!user || user.role !== "inspector-ga") {
+      if (!user || (user.role !== "inspector-ga" && user.role !== 'admin')) {
         router.push("/login-page");
       } else {
         setAuthVerified(true);

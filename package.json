@@ -57,6 +57,7 @@
     "dexie": "^4.4.3",
     "dotenv": "^17.2.3",
     "embla-carousel-react": "8.5.1",
+    "express": "^5.2.1",
     "html5-qrcode": "^2.3.8",
     "input-otp": "1.4.1",
     "jspdf": "^4.2.1",
@@ -101,5 +102,22 @@
     "tailwindcss": "^4.1.9",
     "tw-animate-css": "^1.3.3",
     "typescript": "^5"
-  }
+  },
+  "description": "",
+  "main": "check-db-schema-postgres.js",
+  "directories": {
+    "lib": "lib"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/fahmi-2/echecksheet-ga.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "module",
+  "bugs": {
+    "url": "https://github.com/fahmi-2/echecksheet-ga/issues"
+  },
+  "homepage": "https://github.com/fahmi-2/echecksheet-ga#readme"
 }

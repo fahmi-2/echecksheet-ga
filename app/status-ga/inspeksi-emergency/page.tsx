@@ -18,7 +18,7 @@ export default function InspeksiEmergencyPage() {
   useEffect(() => {
     if (redirected) return;
 
-    if (!user || user.role !== "inspector-ga-fire") {
+    if (!user || (user.role !== "inspector-ga-fire" && user.role !== "admin")) {
       setRedirected(true);
       router.push("/home");
     }

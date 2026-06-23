@@ -326,49 +326,6 @@ CROSS JOIN (
 ) AS v(item_key, no, item_group, item_check, method, image, sort_order)
 WHERE t.slug = 'inf-jalan';
 
---insert areas smoke-detector
-INSERT INTO ga_checksheet_areas (type_id, no, name, location) 
-SELECT t.id, v.no, v.name, v.location
-FROM ga_checksheet_types t
-CROSS JOIN (
-    VALUES
-    (1, 'LOBBY • Zone 1', 'Zone 1'),
-    (2, 'KANTIN • Zone 2', 'Zone 2'),
-    (3, 'RUANG RAPAT • Zone 3', 'Zone 3'),
-    (4, 'RUANG SERVER • Zone 4', 'Zone 4'),
-    (5, 'GUDANG • Zone 5', 'Zone 5'),
-    (6, 'RUANG PRODUKSI A • Zone 6', 'Zone 6'),
-    (7, 'RUANG PRODUKSI B • Zone 7', 'Zone 7'),
-    (8, 'RUANG PRODUKSI C • Zone 8', 'Zone 8'),
-    (9, 'RUANG PRODUKSI D • Zone 9', 'Zone 9'),
-    (10, 'RUANG PRODUKSI E • Zone 10', 'Zone 10'),
-    (11, 'RUANG OFFICE • Zone 11', 'Zone 11'),
-    (12, 'RUANG OFFICE 2 • Zone 12', 'Zone 12'),
-    (13, 'RUANG OFFICE 3 • Zone 13', 'Zone 13'),
-    (14, 'RUANG OFFICE 4 • Zone 14', 'Zone 14'),
-    (15, 'RUANG OFFICE 5 • Zone 15', 'Zone 15'),
-    (16, 'RUANG OFFICE 6 • Zone 16', 'Zone 16'),
-    (17, 'RUANG OFFICE 7 • Zone 17', 'Zone 17'),
-    (18, 'RUANG OFFICE 8 • Zone 18', 'Zone 18'),
-    (19, 'RUANG OFFICE 9 • Zone 19', 'Zone 19'),
-    (20, 'RUANG OFFICE 10 • Zone 20', 'Zone 20')
-) AS v(no, name, location)
-WHERE t.slug = 'smoke-detector';
-
--- insert items smoke-detector
-INSERT INTO ga_checksheet_items 
-(type_id, item_key, no, item_group, item_check, method, image, sort_order)
-SELECT t.id, v.item_key, v.no, v.item_group, v.item_check, v.method, v.image, v.sort_order
-FROM ga_checksheet_types t
-CROSS JOIN (
-    VALUES
-    ('alarm_bell', 1, 'Alarm Bell', 'Bunyi alarm bell', 'Test dengan menekan tombol test', 'smoke-detector/alarm-bell.jpg', 1),
-    ('indicator_lamp', 2, 'Indicator Lamp', 'Lampu indikator menyala', 'Periksa lampu indikator', 'smoke-detector/indicator-lamp.jpg', 2),
-    ('cleanliness', 3, 'Kebersihan', 'Bersih dari debu dan kotoran', 'Periksa kebersihan detector', 'smoke-detector/cleanliness.jpg', 3),
-    ('overall_condition', 4, 'Kondisi Fisik', 'Tidak rusak atau berkarat', 'Periksa kondisi fisik casing', 'smoke-detector/overall-condition.jpg', 4)
-) AS v(item_key, no, item_group, item_check, method, image, sort_order)
-WHERE t.slug = 'smoke-detector';
-
 --insert areas lift-barang
 INSERT INTO ga_checksheet_areas (type_id, no, name, location) 
 SELECT t.id, v.no, v.name, v.location

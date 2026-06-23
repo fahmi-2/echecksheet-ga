@@ -225,12 +225,12 @@ export function GaSmokeDetectorContent() {
       setAuthVerified(false);
       return;
     }
-    if (user && user.role === "inspector-ga-fire") {
+    if (user && (user.role === "inspector-ga-fire" || user.role === 'admin')) {
       setAuthVerified(true);
       return;
     }
     const verificationTimeout = setTimeout(() => {
-      if (!user || user.role !== "inspector-ga-fire") {
+      if (!user || (user.role !== "inspector-ga-fire" && user.role !== 'admin')) {
         router.push("/login-page");
       } else {
         setAuthVerified(true);

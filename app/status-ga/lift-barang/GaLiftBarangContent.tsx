@@ -197,12 +197,12 @@ export function GaLiftBarangContent() {
       setAuthVerified(false);
       return;
     }
-    if (user && user.role === "inspector-ga-equipment") {
+    if (user && (user.role === "inspector-ga-equipment" || user.role === 'admin')) {
       setAuthVerified(true);
       return;
     }
     const verificationTimeout = setTimeout(() => {
-      if (!user || user.role !== "inspector-ga-equipment") {
+      if (!user || (user.role !== "inspector-ga-equipment" && user.role !== 'admin')) {
         router.push("/login-page");
       } else {
         setAuthVerified(true);

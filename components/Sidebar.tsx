@@ -317,7 +317,7 @@ export function Sidebar({ userName = "User", userRole = "Role" }: SidebarProps) 
               {isExpanded && (
                 <div className="user-info">
                   <p className="user-name">{currentUserName}</p>
-                  <p className="user-role">Inspector GA</p>
+                  <p className="user-role">{currentRole}</p>
                 </div>
               )}
             </div>

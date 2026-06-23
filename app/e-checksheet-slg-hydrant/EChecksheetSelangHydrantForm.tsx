@@ -108,7 +108,7 @@ export function EChecksheetSelangHydrantForm() {
       console.log('⏳ Waiting for user data...');
       return;
     }
-    if (user.role !== "inspector-ga") {
+    if (user.role !== "inspector-ga" && user.role !== 'admin') {
       console.warn('⚠️ Unauthorized - wrong role:', user.role);
       router.replace("/login-page");
       return;
@@ -478,7 +478,7 @@ export function EChecksheetSelangHydrantForm() {
     );
   }
 
-  if (user.role !== "inspector-ga") {
+  if (user.role !== "inspector-ga" && user.role !== 'admin') {
     return (
       <div style={{
         display: "flex",

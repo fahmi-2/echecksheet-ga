@@ -140,7 +140,7 @@ export function GaPanelContent() {
       return;
     }
 
-    if (user && user.role === "inspector-ga-electrical") {
+    if (user && (user.role === "inspector-ga-electrical" || user.role === 'admin')) {
       console.log('✅ Auth verified successfully');
       setAuthVerified(true);
       return;
@@ -148,7 +148,7 @@ export function GaPanelContent() {
 
     // Beri waktu 1.5 detik sebelum redirect
     const verificationTimeout = setTimeout(() => {
-      if (!user || user.role !== "inspector-ga-electrical") {
+      if (!user || (user.role !== "inspector-ga-electrical" && user.role !== 'admin')) {
         console.error('❌ Auth verification failed after delay:', { user, authLoading });
         router.push("/login-page");
       } else {
