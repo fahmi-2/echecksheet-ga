@@ -393,7 +393,7 @@ export default function ChecksheetToiletForm({ params }: { params: Promise<{ are
         // ✅ UNTUK GENERAL & WANITA - Gunakan suffix 'p'
         const suffix = "p"; // Selalu gunakan _p untuk single form
         console.log(`📝 [Save] Building payload for ${formType} with suffix: _${suffix}`);
-        
+
         INSPECTION_ITEMS.forEach((item) => {
           const itemNum = item.no;
           const hasilKey = `item_${itemNum}_hasil_${suffix}`;
@@ -420,17 +420,17 @@ export default function ChecksheetToiletForm({ params }: { params: Promise<{ are
       } else {
         // ✅ UNTUK MIXED (LAKI & PEREMPUAN)
         console.log('📝 [Save] Building payload for mixed (L & P)');
-        
+
         INSPECTION_ITEMS.forEach((item) => {
           const itemNum = item.no;
-          
+
           // Laki-laki
           apiPayload[`item_${itemNum}_hasil_l`] = answers[`${item.key}_L_hasil`] || "OK";
           apiPayload[`item_${itemNum}_keterangan_l`] = answers[`${item.key}_L_keterangan`] || "";
           apiPayload[`item_${itemNum}_foto_l`] = answers[`${item.key}_L_foto`] || "";
           apiPayload[`item_${itemNum}_tindakan_l`] = answers[`${item.key}_L_tindakan`] || "";
           apiPayload[`item_${itemNum}_pic_l`] = answers[`${item.key}_L_pic`] || user.fullName || "";
-          
+
           // Perempuan
           apiPayload[`item_${itemNum}_hasil_p`] = answers[`${item.key}_P_hasil`] || "OK";
           apiPayload[`item_${itemNum}_keterangan_p`] = answers[`${item.key}_P_keterangan`] || "";
@@ -466,23 +466,23 @@ export default function ChecksheetToiletForm({ params }: { params: Promise<{ are
         // Mode offline
         const pendingCount = await refreshPendingCount();
         alert(`📴 Data tersimpan offline!\n\n` +
-              `📋 Detail:\n` +
-              `- Area: ${currentArea.title}\n` +
-              `- Tanggal: ${new Date(selectedDate).toLocaleDateString("id-ID")}\n` +
-              `- Items: ${INSPECTION_ITEMS.length} inspection points\n` +
-              `- Antrian: ${pendingCount} data\n\n` +
-              `Data akan otomatis terkirim saat online kembali.`);
+          `📋 Detail:\n` +
+          `- Area: ${currentArea.title}\n` +
+          `- Tanggal: ${new Date(selectedDate).toLocaleDateString("id-ID")}\n` +
+          `- Items: ${INSPECTION_ITEMS.length} inspection points\n` +
+          `- Antrian: ${pendingCount} data\n\n` +
+          `Data akan otomatis terkirim saat online kembali.`);
       } else {
         // Mode online - sukses
         if (!result.success) {
           throw new Error(result.message || "Gagal menyimpan data");
         }
-        
+
         alert(`✅ Data berhasil disimpan!\n\n` +
-              `📋 Detail:\n` +
-              `- Area: ${currentArea.title}\n` +
-              `- Tanggal: ${new Date(selectedDate).toLocaleDateString("id-ID")}\n` +
-              `- Items: ${INSPECTION_ITEMS.length} inspection points`);
+          `📋 Detail:\n` +
+          `- Area: ${currentArea.title}\n` +
+          `- Tanggal: ${new Date(selectedDate).toLocaleDateString("id-ID")}\n` +
+          `- Items: ${INSPECTION_ITEMS.length} inspection points`);
       }
 
       // Backup ke localStorage (tetap jalankan)
@@ -571,13 +571,13 @@ export default function ChecksheetToiletForm({ params }: { params: Promise<{ are
 
     } catch (err) {
       console.error('❌ [Save] Error:', err);
-      if (err instanceof Error && err.name === "AbortError") { 
-        alert("⏰ Request timeout. Silakan coba lagi."); 
-        return; 
+      if (err instanceof Error && err.name === "AbortError") {
+        alert("⏰ Request timeout. Silakan coba lagi.");
+        return;
       }
-      if (err instanceof Error && err.message.includes("Failed to fetch")) { 
-        alert("📴 Gagal terhubung ke server. Data akan disimpan offline."); 
-        return; 
+      if (err instanceof Error && err.message.includes("Failed to fetch")) {
+        alert("📴 Gagal terhubung ke server. Data akan disimpan offline.");
+        return;
       }
       alert(`❌ Gagal menyimpan: ${err instanceof Error ? err.message : "Terjadi kesalahan"}`);
     } finally {
@@ -1277,11 +1277,12 @@ export default function ChecksheetToiletForm({ params }: { params: Promise<{ are
             <p>{currentArea.desc} <span className="cs-type-desc">{typeBadge.desc}</span></p>
           </div>
 
-          {/* ─── SCAN VERIFICATION BANNER ─── */}
-          {!isScanned && !scanLoading && (
-            <div className="cs-banner cs-scan-warning">
-              <span>⚠️ QR Code belum discan! Scan QR untuk verifikasi lokasi.</span>
+          {/* ✅ SCAN WARNING BANNER - TAMBAHAN BARU */}
+          {!isScanned && (
+            <div className="cs-banner cs-banner-warning cs-scan-warning">
+              <span>🔒 Akses melalui scan QR code terlebih dahulu untuk mengisi checksheet ini.</span>
               <button
+                onClick={() => router.push("/scan")}
                 className="cs-banner-btn"
                 onClick={() => router.push(`/scan`)}
               >
@@ -1356,362 +1357,394 @@ export default function ChecksheetToiletForm({ params }: { params: Promise<{ are
             </div>
           )}
 
-          {/* ─── FORM TABLE ─── */}
-          {isSingleForm ? (
-            // ─── SINGLE FORM (WANITA / GENERAL) ───
-            <div className="cs-table-wrapper">
-              <div className="cs-table-scroll">
-                <table className="cs-table">
-                  <thead>
-                    <tr>
-                      <th className="cs-th--no">No</th>
-                      <th className="cs-th--item">Item Pemeriksaan</th>
-                      <th className={`cs-th--hasil cs-th--${formType}`}>Hasil</th>
-                      <th className="cs-th--ket">Keterangan Temuan</th>
-                      <th className="cs-th--ket">Foto Temuan</th>
-                      <th className="cs-th--tindakan">Tindakan Perbaikan</th>
-                      <th className="cs-th--pic">PIC</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {INSPECTION_ITEMS.map((item) => (
-                      <tr key={item.key}>
-                        <td className="cs-td--no">{item.no}</td>
-                        <td className="cs-td--item">{item.item}</td>
-                        <td className="cs-td">
-                          <div className="cs-radio-group">
-                            <label className="cs-radio-label cs-radio-label--ok">
-                              <input
-                                type="radio"
-                                name={`${item.key}_hasil`}
-                                value="OK"
-                                checked={answers[`${item.key}_hasil`] === "OK"}
-                                onChange={() => handleInputChange(`${item.key}_hasil`, "OK")}
-                              />
-                              OK
-                            </label>
-                            <label className="cs-radio-label cs-radio-label--ng">
-                              <input
-                                type="radio"
-                                name={`${item.key}_hasil`}
-                                value="NG"
-                                checked={answers[`${item.key}_hasil`] === "NG"}
-                                onChange={() => handleInputChange(`${item.key}_hasil`, "NG")}
-                              />
-                              NG
-                            </label>
-                          </div>
-                        </td>
-                        <td className="cs-td">
-                          <textarea
-                            className="cs-textarea"
-                            placeholder={answers[`${item.key}_hasil`] === "NG" ? "Wajib diisi jika NG..." : "Opsional..."}
-                            value={answers[`${item.key}_keterangan`] || ""}
-                            onChange={(e) => handleInputChange(`${item.key}_keterangan`, e.target.value)}
-                          />
-                        </td>
-                        <td className="cs-td">
-                          <div className="cs-file-upload">
-                            {answers[`${item.key}_foto`] ? (
-                              <>
-                                <img
-                                  src={answers[`${item.key}_foto`]}
-                                  alt="Preview"
-                                  className="cs-file-preview"
-                                />
-                                <button
-                                  className="cs-file-remove"
-                                  onClick={() => handleInputChange(`${item.key}_foto`, "")}
-                                >
-                                  ✕ Hapus Foto
-                                </button>
-                              </>
-                            ) : (
-                              <label className="cs-file-label">
-                                📷 Upload Foto
-                                <input
-                                  type="file"
-                                  accept="image/*"
-                                  className="cs-file-input"
-                                  onChange={(e) => handleImageUpload(`${item.key}_foto`, e)}
-                                />
-                              </label>
-                            )}
-                          </div>
-                        </td>
-                        <td className="cs-td">
-                          <textarea
-                            className="cs-textarea"
-                            placeholder={answers[`${item.key}_hasil`] === "NG" ? "Wajib diisi jika NG..." : "Opsional..."}
-                            value={answers[`${item.key}_tindakan`] || ""}
-                            onChange={(e) => handleInputChange(`${item.key}_tindakan`, e.target.value)}
-                          />
-                        </td>
-                        <td className="cs-td">
-                          <input
-                            type="text"
-                            className="cs-input-text"
-                            value={answers[`${item.key}_pic`] || ""}
-                            onChange={(e) => handleInputChange(`${item.key}_pic`, e.target.value)}
-                            placeholder="Nama PIC"
-                          />
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+          {/* ── Table (tablet/desktop) ── */}
+          <div className="cs-table-wrapper">
+            <p className="cs-scroll-hint">← Geser untuk melihat semua kolom →</p>
+            <div className="cs-table-scroll">
+              <ChecksheetTable
+                inspectionItems={INSPECTION_ITEMS}
+                formType={formType}
+                activeStep={activeStep}
+                answers={answers}
+                selectedDate={selectedDate}
+                isScanned={isScanned}
+                onInputChange={handleInputChange}
+                onImageUpload={handleImageUpload}
+              />
             </div>
-          ) : (
-            // ─── MIXED FORM (LAKI & PEREMPUAN) ───
-            <>
-              {activeStep === "laki" && (
-                <div className="cs-table-wrapper">
-                  <div className="cs-table-scroll">
-                    <table className="cs-table">
-                      <thead>
-                        <tr>
-                          <th className="cs-th--no">No</th>
-                          <th className="cs-th--item">Item Pemeriksaan</th>
-                          <th className="cs-th--hasil cs-th--male">🚹 Laki-laki</th>
-                          <th className="cs-th--ket">Keterangan Temuan</th>
-                          <th className="cs-th--ket">Foto Temuan</th>
-                          <th className="cs-th--tindakan">Tindakan Perbaikan</th>
-                          <th className="cs-th--pic">PIC</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {INSPECTION_ITEMS.map((item) => (
-                          <tr key={item.key}>
-                            <td className="cs-td--no">{item.no}</td>
-                            <td className="cs-td--item">{item.item}</td>
-                            <td className="cs-td">
-                              <div className="cs-radio-group">
-                                <label className="cs-radio-label cs-radio-label--ok">
-                                  <input
-                                    type="radio"
-                                    name={`${item.key}_L_hasil`}
-                                    value="OK"
-                                    checked={answers[`${item.key}_L_hasil`] === "OK"}
-                                    onChange={() => handleInputChange(`${item.key}_L_hasil`, "OK")}
-                                  />
-                                  OK
-                                </label>
-                                <label className="cs-radio-label cs-radio-label--ng">
-                                  <input
-                                    type="radio"
-                                    name={`${item.key}_L_hasil`}
-                                    value="NG"
-                                    checked={answers[`${item.key}_L_hasil`] === "NG"}
-                                    onChange={() => handleInputChange(`${item.key}_L_hasil`, "NG")}
-                                  />
-                                  NG
-                                </label>
-                              </div>
-                            </td>
-                            <td className="cs-td">
-                              <textarea
-                                className="cs-textarea"
-                                placeholder={answers[`${item.key}_L_hasil`] === "NG" ? "Wajib diisi jika NG..." : "Opsional..."}
-                                value={answers[`${item.key}_L_keterangan`] || ""}
-                                onChange={(e) => handleInputChange(`${item.key}_L_keterangan`, e.target.value)}
-                              />
-                            </td>
-                            <td className="cs-td">
-                              <div className="cs-file-upload">
-                                {answers[`${item.key}_L_foto`] ? (
-                                  <>
-                                    <img
-                                      src={answers[`${item.key}_L_foto`]}
-                                      alt="Preview"
-                                      className="cs-file-preview"
-                                    />
-                                    <button
-                                      className="cs-file-remove"
-                                      onClick={() => handleInputChange(`${item.key}_L_foto`, "")}
-                                    >
-                                      ✕ Hapus Foto
-                                    </button>
-                                  </>
-                                ) : (
-                                  <label className="cs-file-label">
-                                    📷 Upload Foto
-                                    <input
-                                      type="file"
-                                      accept="image/*"
-                                      className="cs-file-input"
-                                      onChange={(e) => handleImageUpload(`${item.key}_L_foto`, e)}
-                                    />
-                                  </label>
-                                )}
-                              </div>
-                            </td>
-                            <td className="cs-td">
-                              <textarea
-                                className="cs-textarea"
-                                placeholder={answers[`${item.key}_L_hasil`] === "NG" ? "Wajib diisi jika NG..." : "Opsional..."}
-                                value={answers[`${item.key}_L_tindakan`] || ""}
-                                onChange={(e) => handleInputChange(`${item.key}_L_tindakan`, e.target.value)}
-                              />
-                            </td>
-                            <td className="cs-td">
-                              <input
-                                type="text"
-                                className="cs-input-text"
-                                value={answers[`${item.key}_L_pic`] || ""}
-                                onChange={(e) => handleInputChange(`${item.key}_L_pic`, e.target.value)}
-                                placeholder="Nama PIC"
-                              />
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-              )}
+          </div>
 
-              {activeStep === "perempuan" && (
-                <div className="cs-table-wrapper">
-                  <div className="cs-table-scroll">
-                    <table className="cs-table">
-                      <thead>
-                        <tr>
-                          <th className="cs-th--no">No</th>
-                          <th className="cs-th--item">Item Pemeriksaan</th>
-                          <th className="cs-th--hasil cs-th--female">🚺 Perempuan</th>
-                          <th className="cs-th--ket">Keterangan Temuan</th>
-                          <th className="cs-th--ket">Foto Temuan</th>
-                          <th className="cs-th--tindakan">Tindakan Perbaikan</th>
-                          <th className="cs-th--pic">PIC</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {INSPECTION_ITEMS.map((item) => (
-                          <tr key={item.key}>
-                            <td className="cs-td--no">{item.no}</td>
-                            <td className="cs-td--item">{item.item}</td>
-                            <td className="cs-td">
-                              <div className="cs-radio-group">
-                                <label className="cs-radio-label cs-radio-label--ok">
-                                  <input
-                                    type="radio"
-                                    name={`${item.key}_P_hasil`}
-                                    value="OK"
-                                    checked={answers[`${item.key}_P_hasil`] === "OK"}
-                                    onChange={() => handleInputChange(`${item.key}_P_hasil`, "OK")}
-                                  />
-                                  OK
-                                </label>
-                                <label className="cs-radio-label cs-radio-label--ng">
-                                  <input
-                                    type="radio"
-                                    name={`${item.key}_P_hasil`}
-                                    value="NG"
-                                    checked={answers[`${item.key}_P_hasil`] === "NG"}
-                                    onChange={() => handleInputChange(`${item.key}_P_hasil`, "NG")}
-                                  />
-                                  NG
-                                </label>
-                              </div>
-                            </td>
-                            <td className="cs-td">
-                              <textarea
-                                className="cs-textarea"
-                                placeholder={answers[`${item.key}_P_hasil`] === "NG" ? "Wajib diisi jika NG..." : "Opsional..."}
-                                value={answers[`${item.key}_P_keterangan`] || ""}
-                                onChange={(e) => handleInputChange(`${item.key}_P_keterangan`, e.target.value)}
-                              />
-                            </td>
-                            <td className="cs-td">
-                              <div className="cs-file-upload">
-                                {answers[`${item.key}_P_foto`] ? (
-                                  <>
-                                    <img
-                                      src={answers[`${item.key}_P_foto`]}
-                                      alt="Preview"
-                                      className="cs-file-preview"
-                                    />
-                                    <button
-                                      className="cs-file-remove"
-                                      onClick={() => handleInputChange(`${item.key}_P_foto`, "")}
-                                    >
-                                      ✕ Hapus Foto
-                                    </button>
-                                  </>
-                                ) : (
-                                  <label className="cs-file-label">
-                                    📷 Upload Foto
-                                    <input
-                                      type="file"
-                                      accept="image/*"
-                                      className="cs-file-input"
-                                      onChange={(e) => handleImageUpload(`${item.key}_P_foto`, e)}
-                                    />
-                                  </label>
-                                )}
-                              </div>
-                            </td>
-                            <td className="cs-td">
-                              <textarea
-                                className="cs-textarea"
-                                placeholder={answers[`${item.key}_P_hasil`] === "NG" ? "Wajib diisi jika NG..." : "Opsional..."}
-                                value={answers[`${item.key}_P_tindakan`] || ""}
-                                onChange={(e) => handleInputChange(`${item.key}_P_tindakan`, e.target.value)}
-                              />
-                            </td>
-                            <td className="cs-td">
-                              <input
-                                type="text"
-                                className="cs-input-text"
-                                value={answers[`${item.key}_P_pic`] || ""}
-                                onChange={(e) => handleInputChange(`${item.key}_P_pic`, e.target.value)}
-                                placeholder="Nama PIC"
-                              />
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
+          {/* ── Card layout (mobile) ── */}
+          <div className="cs-mobile-cards">
+            {INSPECTION_ITEMS.map((item) => (
+              <MobileCard
+                key={item.key}
+                item={item}
+                formType={formType}
+                activeStep={activeStep}
+                answers={answers}
+                selectedDate={selectedDate}
+                isScanned={isScanned}
+                onInputChange={handleInputChange}
+                onImageUpload={handleImageUpload}
+              />
+            ))}
+          </div>
+
+          {/* ── Step Navigation Buttons (mixed type only) ── */}
+          {formType === "mixed" && (
+            <div className="cs-step-nav">
+              {activeStep === "laki" ? (
+                <>
+                  <button className="cs-btn cs-btn--back" onClick={() => router.push("/status-ga/checksheet-toilet")}>
+                    ← Kembali
+                  </button>
+                  <button
+                    className="cs-btn cs-btn--next-male"
+                    onClick={handleNextStep}
+                    disabled={!selectedDate || !isScanned}
+                    title={!isScanned ? "Harap scan QR code terlebih dahulu" : ""}
+                  >
+                    Lanjut ke Toilet Perempuan 🚺 →
+                  </button>
+                </>
+              ) : (
+                <>
+                  <button className="cs-btn cs-btn--prev-female" onClick={handlePrevStep}>
+                    ← Kembali ke Laki-laki
+                  </button>
+                  <button
+                    className="cs-btn cs-btn--save"
+                    onClick={handleSave}
+                    disabled={!selectedDate || isSubmitting || !isScanned}
+                    title={!isScanned ? "Harap scan QR code terlebih dahulu" : ""}
+                  >
+                    {isSubmitting ? <><span className="cs-spinner" />Menyimpan...</> : "✓ Simpan Data"}
+                  </button>
+                </>
               )}
-            </>
+            </div>
           )}
 
-          {/* ─── NAVIGATION BUTTONS ─── */}
-          <div className="cs-btn-row">
-            {formType === "mixed" && activeStep === "perempuan" && (
-              <button className="cs-btn cs-btn--prev-female" onClick={handlePrevStep}>
-                ← Kembali ke Laki-laki
+          {/* ── Action Buttons (single form: wanita & general) ── */}
+          {isSingleForm && (
+            <div className="cs-btn-row">
+              <button className="cs-btn cs-btn--back" onClick={() => router.push("/status-ga/checksheet-toilet")}>
+                ← Kembali
               </button>
-            )}
-
-            {formType === "mixed" && activeStep === "laki" && (
-              <button className="cs-btn cs-btn--next-male" onClick={handleNextStep}>
-                Lanjut ke Perempuan →
-              </button>
-            )}
-
-            {(isSingleForm || (formType === "mixed" && activeStep === "perempuan")) && (
               <button
                 className="cs-btn cs-btn--save"
                 onClick={handleSave}
-                disabled={isSubmitting}
+                disabled={!selectedDate || isSubmitting || !isScanned}
+                title={!isScanned ? "Harap scan QR code terlebih dahulu" : ""}
               >
-                {isSubmitting ? (
-                  <>
-                    <span className="cs-spinner" />
-                    Menyimpan...
-                  </>
-                ) : (
-                  "💾 Simpan Data"
-                )}
+                {isSubmitting ? <><span className="cs-spinner" />Menyimpan...</> : "✓ Simpan Data"}
               </button>
-            )}
+            </div>
+          )}
+          <div className="cs-card">
+            <p style={{ margin: 0, fontSize: 12, color: "#888", fontStyle: "italic" }}>
+              💡 <strong>Tip:</strong> Lampirkan foto pada &quot;Keterangan Temuan&quot; jika diperlukan. Tanggal pemeriksaan mengikuti pilihan di atas.
+            </p>
           </div>
         </div>
       </div>
     </>
+  );
+}
+
+// ─── SUB-COMPONENTS ──────────────────────────────────────
+
+const InfoRow = ({ label, value }: { label: string; value: string }) => (
+  <div className="cs-info-row">
+    <span className="cs-info-label">{label}</span>
+    <span className="cs-info-value">{value}</span>
+  </div>
+);
+
+// Desktop/Tablet Table
+const ChecksheetTable = ({
+  inspectionItems,
+  formType,
+  activeStep,
+  answers,
+  selectedDate,
+  isScanned,
+  onInputChange,
+  onImageUpload,
+}: {
+  inspectionItems: typeof INSPECTION_ITEMS;
+  formType: FormType;
+  activeStep: "laki" | "perempuan";
+  answers: Record<string, string>;
+  selectedDate: string;
+  isScanned: boolean;
+  onInputChange: (field: string, value: string) => void;
+  onImageUpload: (field: string, e: React.ChangeEvent<HTMLInputElement>) => void;
+}) => {
+  const isSingleForm = formType === "wanita" || formType === "general";
+
+  return (
+    <table className="cs-table" style={{ minWidth: "820px" }}>
+      <thead>
+        <tr>
+          <th className="cs-th--no cs-th--hasil" rowSpan={2}>No</th>
+          <th className="cs-th--item cs-th--ket" rowSpan={2}>Item Pengecekan</th>
+          {isSingleForm ? (
+            <>
+              <th className={formType === "wanita" ? "cs-th--wanita cs-th--hasil" : "cs-th--general cs-th--hasil"}>HASIL</th>
+              <th className={formType === "wanita" ? "cs-th--wanita cs-th--ket" : "cs-th--general cs-th--ket"}>KETERANGAN + FOTO</th>
+              <th className={formType === "wanita" ? "cs-th--wanita cs-th--tindakan" : "cs-th--general cs-th--tindakan"}>TINDAKAN</th>
+              <th className={formType === "wanita" ? "cs-th--wanita cs-th--pic" : "cs-th--general cs-th--pic"}>PIC</th>
+            </>
+          ) : activeStep === "laki" ? (
+            <>
+              <th className="cs-th--male cs-th--hasil">HASIL</th>
+              <th className="cs-th--male cs-th--ket">KETERANGAN + FOTO</th>
+              <th className="cs-th--male cs-th--tindakan">TINDAKAN</th>
+              <th className="cs-th--male cs-th--pic">PIC</th>
+            </>
+          ) : (
+            <>
+              <th className="cs-th--female cs-th--hasil">HASIL</th>
+              <th className="cs-th--female cs-th--ket">KETERANGAN + FOTO</th>
+              <th className="cs-th--female cs-th--tindakan">TINDAKAN</th>
+              <th className="cs-th--female cs-th--pic">PIC</th>
+            </>
+          )}
+        </tr>
+      </thead>
+      <tbody>
+        {inspectionItems.map((item) => (
+          <TableRow
+            key={item.key}
+            item={item}
+            formType={formType}
+            activeStep={activeStep}
+            answers={answers}
+            selectedDate={selectedDate}
+            isScanned={isScanned}
+            onInputChange={onInputChange}
+            onImageUpload={onImageUpload}
+          />
+        ))}
+      </tbody>
+    </table>
+  );
+};
+
+// Table Row
+const TableRow = ({
+  item,
+  formType,
+  activeStep,
+  answers,
+  selectedDate,
+  isScanned,
+  onInputChange,
+  onImageUpload,
+}: {
+  item: (typeof INSPECTION_ITEMS)[0];
+  formType: FormType;
+  activeStep: "laki" | "perempuan";
+  answers: Record<string, string>;
+  selectedDate: string;
+  isScanned: boolean;
+  onInputChange: (field: string, value: string) => void;
+  onImageUpload: (field: string, e: React.ChangeEvent<HTMLInputElement>) => void;
+}) => {
+  const isSingleForm = formType === "wanita" || formType === "general";
+
+  const renderCell = (prefix: string, variant: "male" | "female" | "wanita" | "general") => (
+    <>
+      <td className="cs-td">
+        <select
+          className={`cs-select cs-select--${variant}`}
+          value={answers[`${prefix}_hasil`] || ""}
+          onChange={(e) => onInputChange(`${prefix}_hasil`, e.target.value)}
+          disabled={!isScanned}
+          title={!isScanned ? "Harap scan QR code terlebih dahulu" : ""}
+        >
+          <option value="">Pilih</option>
+          <option value="OK">✓ OK</option>
+          <option value="NG">✗ NG</option>
+        </select>
+      </td>
+      <td className="cs-td">
+        <textarea
+          className="cs-textarea"
+          value={answers[`${prefix}_keterangan`] || ""}
+          onChange={(e) => onInputChange(`${prefix}_keterangan`, e.target.value)}
+          disabled={!isScanned}
+          placeholder="Keterangan..."
+          rows={2}
+          title={!isScanned ? "Harap scan QR code terlebih dahulu" : ""}
+        />
+        <input
+          type="file"
+          accept="image/*"
+          className="cs-file-input"
+          onChange={(e) => onImageUpload(`${prefix}_foto`, e)}
+          disabled={!isScanned}
+          title={!isScanned ? "Harap scan QR code terlebih dahulu" : ""}
+        />
+        {answers[`${prefix}_foto`] && (
+          <div className="cs-foto-preview">
+            <img src={answers[`${prefix}_foto`]} alt="Foto temuan" />
+          </div>
+        )}
+      </td>
+      <td className="cs-td">
+        <textarea
+          className="cs-textarea"
+          value={answers[`${prefix}_tindakan`] || ""}
+          onChange={(e) => onInputChange(`${prefix}_tindakan`, e.target.value)}
+          disabled={!isScanned}
+          placeholder="Tindakan..."
+          rows={2}
+          title={!isScanned ? "Harap scan QR code terlebih dahulu" : ""}
+        />
+      </td>
+      <td className="cs-td">
+        <input
+          type="text"
+          className={`cs-input-text cs-input-text--${variant}`}
+          value={answers[`${prefix}_pic`] || ""}
+          disabled
+        />
+      </td>
+    </>
+  );
+
+  return (
+    <tr>
+      <td className="cs-td--no cs-td--item cs-td">{item.no}</td>
+      <td className="cs-td--item">{item.item}</td>
+      {isSingleForm
+        ? renderCell(item.key, formType)
+        : activeStep === "laki"
+          ? renderCell(`${item.key}_L`, "male")
+          : renderCell(`${item.key}_P`, "female")
+      }
+    </tr>
+  );
+};
+
+// Mobile Card (used on small screens instead of table)
+const MobileCard = ({
+  item,
+  formType,
+  activeStep,
+  answers,
+  selectedDate,
+  isScanned,
+  onInputChange,
+  onImageUpload,
+}: {
+  item: (typeof INSPECTION_ITEMS)[0];
+  formType: FormType;
+  activeStep: "laki" | "perempuan";
+  answers: Record<string, string>;
+  selectedDate: string;
+  isScanned: boolean;
+  onInputChange: (field: string, value: string) => void;
+  onImageUpload: (field: string, e: React.ChangeEvent<HTMLInputElement>) => void;
+}) => {
+  const isSingleForm = formType === "wanita" || formType === "general";
+
+  const renderFields = (prefix: string, variant: "male" | "female" | "wanita" | "general") => (
+    <div className="cs-mobile-fields">
+      <div>
+        <div className="cs-mobile-field-label">Hasil Pemeriksaan</div>
+        <select
+          className={`cs-select cs-select--${variant}`}
+          value={answers[`${prefix}_hasil`] || ""}
+          onChange={(e) => onInputChange(`${prefix}_hasil`, e.target.value)}
+          disabled={!isScanned}
+          title={!isScanned ? "Harap scan QR code terlebih dahulu" : ""}
+        >
+          <option value="">Pilih</option>
+          <option value="OK">✓ OK</option>
+          <option value="NG">✗ NG</option>
+        </select>
+      </div>
+
+      <div>
+        <div className="cs-mobile-field-label">Keterangan + Foto</div>
+        <textarea
+          className="cs-textarea"
+          value={answers[`${prefix}_keterangan`] || ""}
+          onChange={(e) => onInputChange(`${prefix}_keterangan`, e.target.value)}
+          disabled={!isScanned}
+          placeholder="Keterangan temuan..."
+          rows={2}
+          title={!isScanned ? "Harap scan QR code terlebih dahulu" : ""}
+        />
+        <input
+          type="file"
+          accept="image/*"
+          className="cs-file-input"
+          onChange={(e) => onImageUpload(`${prefix}_foto`, e)}
+          disabled={!isScanned}
+          title={!isScanned ? "Harap scan QR code terlebih dahulu" : ""}
+        />
+        {answers[`${prefix}_foto`] && (
+          <div className="cs-foto-preview">
+            <img src={answers[`${prefix}_foto`]} alt="Foto temuan" />
+          </div>
+        )}
+      </div>
+
+      <div>
+        <div className="cs-mobile-field-label">Tindakan Perbaikan</div>
+        <textarea
+          className="cs-textarea"
+          value={answers[`${prefix}_tindakan`] || ""}
+          onChange={(e) => onInputChange(`${prefix}_tindakan`, e.target.value)}
+          disabled={!isScanned}
+          placeholder="Tindakan yang dilakukan..."
+          rows={2}
+          title={!isScanned ? "Harap scan QR code terlebih dahulu" : ""}
+        />
+      </div>
+
+      <div>
+        <div className="cs-mobile-field-label">PIC</div>
+        <input
+          type="text"
+          className={`cs-input-text cs-input-text--${variant}`}
+          value={answers[`${prefix}_pic`] || ""}
+          disabled
+        />
+      </div>
+    </div>
+  );
+
+  const getGenderLabel = () => {
+    if (formType === "wanita") {
+      return <div className="cs-mobile-gender-title cs-mobile-gender-title--wanita">🚺 Wanita</div>;
+    } else if (formType === "general") {
+      return <div className="cs-mobile-gender-title cs-mobile-gender-title--general">🚻 Umum</div>;
+    } else {
+      return activeStep === "laki"
+        ? <div className="cs-mobile-gender-title cs-mobile-gender-title--male">🚹 Laki-laki</div>
+        : <div className="cs-mobile-gender-title cs-mobile-gender-title--female">🚺 Perempuan</div>;
+    }
+  };
+
+  const prefix = isSingleForm ? item.key : activeStep === "laki" ? `${item.key}_L` : `${item.key}_P`;
+  const variant: "male" | "female" | "wanita" | "general" = isSingleForm ? formType : activeStep === "laki" ? "male" : "female";
+
+  return (
+    <div className="cs-mobile-card">
+      <div className="cs-mobile-card-header">
+        <div className="cs-mobile-card-no">{item.no}</div>
+        <div className="cs-mobile-card-item">{item.item}</div>
+      </div>
+      <div className="cs-mobile-gender-block">
+        {getGenderLabel()}
+        {renderFields(prefix, variant)}
+      </div>
+    </div>
   );
 }
