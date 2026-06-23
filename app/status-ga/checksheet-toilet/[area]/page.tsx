@@ -65,7 +65,7 @@ const AREA_MAP: Record<string, { title: string; desc: string; type: FormType }> 
   "toilet-a": { title: "TOILET - A", desc: "Toilet laki & perempuan", type: "mixed" },
   "toilet-lobby": { title: "TOILET - LOBBY", desc: "Toilet laki & perempuan", type: "mixed" },
   "toilet-office-main": { title: "TOILET - OFFICE MAIN", desc: "Toilet laki & perempuan", type: "mixed" },
-  "toilet-b": { title: "TOILET - OFFICE BACK", desc: "Toilet wanita", type: "wanita" },
+  "toilet-b": { title: "TOILET - B", desc: "Toilet wanita", type: "wanita" },
 };
 
 // Helper untuk mendapatkan label dan warna berdasarkan tipe
@@ -393,7 +393,7 @@ export default function ChecksheetToiletForm({ params }: { params: Promise<{ are
         // ✅ UNTUK GENERAL & WANITA - Gunakan suffix 'p'
         const suffix = "p"; // Selalu gunakan _p untuk single form
         console.log(`📝 [Save] Building payload for ${formType} with suffix: _${suffix}`);
-        
+
         INSPECTION_ITEMS.forEach((item) => {
           const itemNum = item.no;
           const hasilKey = `item_${itemNum}_hasil_${suffix}`;
@@ -420,17 +420,17 @@ export default function ChecksheetToiletForm({ params }: { params: Promise<{ are
       } else {
         // ✅ UNTUK MIXED (LAKI & PEREMPUAN)
         console.log('📝 [Save] Building payload for mixed (L & P)');
-        
+
         INSPECTION_ITEMS.forEach((item) => {
           const itemNum = item.no;
-          
+
           // Laki-laki
           apiPayload[`item_${itemNum}_hasil_l`] = answers[`${item.key}_L_hasil`] || "OK";
           apiPayload[`item_${itemNum}_keterangan_l`] = answers[`${item.key}_L_keterangan`] || "";
           apiPayload[`item_${itemNum}_foto_l`] = answers[`${item.key}_L_foto`] || "";
           apiPayload[`item_${itemNum}_tindakan_l`] = answers[`${item.key}_L_tindakan`] || "";
           apiPayload[`item_${itemNum}_pic_l`] = answers[`${item.key}_L_pic`] || user.fullName || "";
-          
+
           // Perempuan
           apiPayload[`item_${itemNum}_hasil_p`] = answers[`${item.key}_P_hasil`] || "OK";
           apiPayload[`item_${itemNum}_keterangan_p`] = answers[`${item.key}_P_keterangan`] || "";
@@ -466,23 +466,23 @@ export default function ChecksheetToiletForm({ params }: { params: Promise<{ are
         // Mode offline
         const pendingCount = await refreshPendingCount();
         alert(`📴 Data tersimpan offline!\n\n` +
-              `📋 Detail:\n` +
-              `- Area: ${currentArea.title}\n` +
-              `- Tanggal: ${new Date(selectedDate).toLocaleDateString("id-ID")}\n` +
-              `- Items: ${INSPECTION_ITEMS.length} inspection points\n` +
-              `- Antrian: ${pendingCount} data\n\n` +
-              `Data akan otomatis terkirim saat online kembali.`);
+          `📋 Detail:\n` +
+          `- Area: ${currentArea.title}\n` +
+          `- Tanggal: ${new Date(selectedDate).toLocaleDateString("id-ID")}\n` +
+          `- Items: ${INSPECTION_ITEMS.length} inspection points\n` +
+          `- Antrian: ${pendingCount} data\n\n` +
+          `Data akan otomatis terkirim saat online kembali.`);
       } else {
         // Mode online - sukses
         if (!result.success) {
           throw new Error(result.message || "Gagal menyimpan data");
         }
-        
+
         alert(`✅ Data berhasil disimpan!\n\n` +
-              `📋 Detail:\n` +
-              `- Area: ${currentArea.title}\n` +
-              `- Tanggal: ${new Date(selectedDate).toLocaleDateString("id-ID")}\n` +
-              `- Items: ${INSPECTION_ITEMS.length} inspection points`);
+          `📋 Detail:\n` +
+          `- Area: ${currentArea.title}\n` +
+          `- Tanggal: ${new Date(selectedDate).toLocaleDateString("id-ID")}\n` +
+          `- Items: ${INSPECTION_ITEMS.length} inspection points`);
       }
 
       // Backup ke localStorage (tetap jalankan)
@@ -571,13 +571,13 @@ export default function ChecksheetToiletForm({ params }: { params: Promise<{ are
 
     } catch (err) {
       console.error('❌ [Save] Error:', err);
-      if (err instanceof Error && err.name === "AbortError") { 
-        alert("⏰ Request timeout. Silakan coba lagi."); 
-        return; 
+      if (err instanceof Error && err.name === "AbortError") {
+        alert("⏰ Request timeout. Silakan coba lagi.");
+        return;
       }
-      if (err instanceof Error && err.message.includes("Failed to fetch")) { 
-        alert("📴 Gagal terhubung ke server. Data akan disimpan offline."); 
-        return; 
+      if (err instanceof Error && err.message.includes("Failed to fetch")) {
+        alert("📴 Gagal terhubung ke server. Data akan disimpan offline.");
+        return;
       }
       alert(`❌ Gagal menyimpan: ${err instanceof Error ? err.message : "Terjadi kesalahan"}`);
     } finally {
@@ -1457,8 +1457,8 @@ export default function ChecksheetToiletForm({ params }: { params: Promise<{ are
           {!isScanned && (
             <div className="cs-banner cs-banner-warning cs-scan-warning">
               <span>🔒 Akses melalui scan QR code terlebih dahulu untuk mengisi checksheet ini.</span>
-              <button 
-                onClick={() => router.push("/scan")} 
+              <button
+                onClick={() => router.push("/scan")}
                 className="cs-banner-btn"
                 disabled={isSubmitting}
               >
@@ -1655,7 +1655,7 @@ const ChecksheetTable = ({
   onImageUpload: (field: string, e: React.ChangeEvent<HTMLInputElement>) => void;
 }) => {
   const isSingleForm = formType === "wanita" || formType === "general";
-  
+
   return (
     <table className="cs-table" style={{ minWidth: "820px" }}>
       <thead>
@@ -1726,7 +1726,7 @@ const TableRow = ({
   onImageUpload: (field: string, e: React.ChangeEvent<HTMLInputElement>) => void;
 }) => {
   const isSingleForm = formType === "wanita" || formType === "general";
-  
+
   const renderCell = (prefix: string, variant: "male" | "female" | "wanita" | "general") => (
     <>
       <td className="cs-td">
@@ -1823,7 +1823,7 @@ const MobileCard = ({
   onImageUpload: (field: string, e: React.ChangeEvent<HTMLInputElement>) => void;
 }) => {
   const isSingleForm = formType === "wanita" || formType === "general";
-  
+
   const renderFields = (prefix: string, variant: "male" | "female" | "wanita" | "general") => (
     <div className="cs-mobile-fields">
       <div>
